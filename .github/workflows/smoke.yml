@@ -47,7 +47,7 @@ jobs:
         run: cargo build --release -p remem-cli -p remem-api -p remem-mcp
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-binaries
           path: |
