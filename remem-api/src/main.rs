@@ -101,6 +101,14 @@ fn default_20() -> usize {
 fn default_delete() -> String {
     "delete".into()
 }
+#[derive(Deserialize)]
+struct DecayBody {
+    #[serde(default = "default_factor")]
+    factor: f32,
+}
+fn default_factor() -> f32 {
+    0.9
+}
 
 // --- Auth middleware ---
 
@@ -295,6 +303,29 @@ async fn forget_memory(
     Ok(Json(serde_json::json!({ "success": success })))
 }
 
+async fn apply_decay(
+    State(engine): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<DecayBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    check_auth(&headers)?;
+
+    let archived_count = engine.apply_decay(body.factor).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+    })?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "archived_count": archived_count,
+        "factor": body.factor
+    })))
+}
+
 async fn consolidate_session(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -405,6 +436,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/memories", post(store_memory))
         .route("/v1/memories/recall", get(recall_memories))
         .route("/v1/memories/search", get(search_memories))
+        .route("/v1/memories/decay", post(apply_decay))
         .route("/v1/memories/{id}", patch(update_memory))
         .route("/v1/memories/{id}", delete(forget_memory))
         .route("/v1/sessions/{id}/consolidate", post(consolidate_session))

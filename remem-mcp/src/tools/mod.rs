@@ -4,6 +4,7 @@ mod recall;
 mod search;
 mod store;
 mod update;
+mod decay;
 
 use remem_core::reasoning::ReasoningEngine;
 use serde_json::Value;
@@ -18,6 +19,7 @@ pub fn list_tools() -> Vec<Value> {
         update::schema(),
         forget::schema(),
         consolidate::schema(),
+        decay::schema(),
     ]
 }
 
@@ -40,6 +42,7 @@ pub async fn call_tool(engine: &Arc<ReasoningEngine>, params: &Value) -> anyhow:
         "mem_update" => update::handle(engine, &arguments).await,
         "mem_forget" => forget::handle(engine, &arguments).await,
         "mem_consolidate" => consolidate::handle(engine, &arguments).await,
+        "mem_decay" => decay::handle(engine, &arguments).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }

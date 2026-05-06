@@ -134,6 +134,8 @@ pub struct MemoryResult {
     pub source_session: Option<String>,
     /// Relevance score from vector similarity (0.0 - 1.0).
     pub similarity: f32,
+    /// Decay score — decreases over time, importance-weighted.
+    pub decay_score: f32,
     /// LLM reasoning about why this result is relevant (only in guided recall).
     pub reasoning: Option<String>,
 }
@@ -149,6 +151,7 @@ impl From<MemoryRecord> for MemoryResult {
             created_at: record.created_at,
             source_session: record.source_session,
             similarity: 0.0,
+            decay_score: record.decay_score,
             reasoning: None,
         }
     }

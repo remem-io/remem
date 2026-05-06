@@ -453,6 +453,23 @@ impl MemoryStore for SqliteStore {
         )?;
         Ok(rows)
     }
+
+    async fn get_decayed_ids(&self, threshold: f32) -> anyhow::Result<Vec<Uuid>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id FROM memories WHERE archived = 0 AND decay_score < ?1",
+        )?;
+
+        let ids = stmt
+            .query_map(params![threshold as f64], |row| {
+                let id_str: String = row.get(0)?;
+                Ok(Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(ids)
+    }
 }
 
 // We need rusqlite::OptionalExtension

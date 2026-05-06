@@ -77,6 +77,12 @@ enum Commands {
     },
     /// Show database statistics
     Inspect,
+    /// Apply importance-weighted decay to all active memories
+    Decay {
+        /// Decay factor (0.0 to 1.0, lower means faster decay)
+        #[arg(long, default_value = "0.9")]
+        factor: f32,
+    },
     /// Model management
     Models {
         #[command(subcommand)]
@@ -185,9 +191,10 @@ async fn main() -> anyhow::Result<()> {
                 println!("Found {} memories:\n", results.len());
                 for (i, r) in results.iter().enumerate() {
                     println!(
-                        "  {}. [importance: {:.1}] {}",
+                        "  {}. [imp: {:.1}, decay: {:.2}] {}",
                         i + 1,
                         r.importance,
+                        r.decay_score,
                         r.content
                     );
                     if let Some(reasoning) = &r.reasoning {
@@ -209,10 +216,11 @@ async fn main() -> anyhow::Result<()> {
                 println!("Found {} memories:\n", results.len());
                 for (i, r) in results.iter().enumerate() {
                     println!(
-                        "  {}. [sim: {:.3}, imp: {:.1}] {}",
+                        "  {}. [sim: {:.3}, imp: {:.1}, decay: {:.2}] {}",
                         i + 1,
                         r.similarity,
                         r.importance,
+                        r.decay_score,
                         r.content
                     );
                 }
@@ -231,6 +239,16 @@ async fn main() -> anyhow::Result<()> {
             for (k, v) in &stats.by_type {
                 println!("    {}: {}", k, v);
             }
+            Ok(())
+        }
+        Commands::Decay { factor } => {
+            let engine = build_engine(&config).await?;
+            let archived_count = engine.apply_decay(factor).await?;
+            println!("✓ Applied decay with factor {}", factor);
+            println!("  Archived {} memories", archived_count);
+
+            // Save index since we removed archived items
+            engine.index.save(&config.index_path()).await?;
             Ok(())
         }
 

@@ -69,6 +69,9 @@ pub trait MemoryStore: Send + Sync {
 
     /// Apply decay to all memories based on importance weighting.
     async fn apply_decay(&self, decay_factor: f32) -> anyhow::Result<usize>;
+
+    /// Get list of memory IDs that have decayed below the threshold.
+    async fn get_decayed_ids(&self, threshold: f32) -> anyhow::Result<Vec<Uuid>>;
 }
 
 /// Database statistics.

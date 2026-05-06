@@ -90,16 +90,97 @@ impl GoogleEmbeddings {
 
 #[async_trait::async_trait]
 impl EmbeddingProvider for GoogleEmbeddings {
-    async fn embed(&self, _text: &str) -> anyhow::Result<Vec<f32>> {
-        // Return dummy embeddings to bypass API error for testing
-        Ok(vec![0.1; 768])
+    async fn embed(&self, text: &str) -> anyhow::Result<Vec<f32>> {
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={}",
+            self.api_key
+        );
+
+        let body = json!({
+            "model": "models/text-embedding-004",
+            "content": {
+                "parts": [{"text": text}]
+            }
+        });
+
+        let resp = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to send embedding request to Google API")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("Google Embedding API error {}: {}", status, text));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        let values = json["embedding"]["values"]
+            .as_array()
+            .ok_or_else(|| anyhow!("Unexpected Google embedding response format"))?;
+
+        let embedding: Vec<f32> = values
+            .iter()
+            .map(|v| v.as_f64().unwrap_or(0.0) as f32)
+            .collect();
+
+        Ok(embedding)
     }
 
     async fn embed_batch(&self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
-        let mut results = Vec::with_capacity(texts.len());
-        for _ in texts {
-            results.push(vec![0.1; 768]);
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key={}",
+            self.api_key
+        );
+
+        let requests: Vec<serde_json::Value> = texts
+            .iter()
+            .map(|t| {
+                json!({
+                    "model": "models/text-embedding-004",
+                    "content": { "parts": [{"text": t}] }
+                })
+            })
+            .collect();
+
+        let body = json!({ "requests": requests });
+
+        let resp = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to send batch embedding request to Google API")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("Google Batch Embedding API error {}: {}", status, text));
         }
+
+        let json: serde_json::Value = resp.json().await?;
+        let embeddings_json = json["embeddings"]
+            .as_array()
+            .ok_or_else(|| anyhow!("Unexpected Google batch embedding response format"))?;
+
+        let mut results = Vec::with_capacity(texts.len());
+        for emb_json in embeddings_json {
+            let values = emb_json["values"]
+                .as_array()
+                .ok_or_else(|| anyhow!("Missing values in batch embedding response"))?;
+            
+            let embedding: Vec<f32> = values
+                .iter()
+                .map(|v| v.as_f64().unwrap_or(0.0) as f32)
+                .collect();
+            
+            results.push(embedding);
+        }
+
         Ok(results)
     }
 

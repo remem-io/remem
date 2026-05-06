@@ -10,7 +10,7 @@
 
 ---
 
-> **⚠️ Active Development** — remem is evolving rapidly. APIs are subject to change. Not yet recommended for mission-critical production workloads.
+> **⚠️ In Active Development** — remem is evolving rapidly. APIs are subject to change. Not yet recommended for mission-critical production workloads.
 
 remem provides agents with **persistent, reasoned memory** that spans across sessions. Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning step at every stage of the memory lifecycle: from initial importance scoring and guided retrieval to session-wide consolidation and contradiction detection.
 

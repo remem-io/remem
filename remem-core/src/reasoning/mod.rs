@@ -233,4 +233,30 @@ impl ReasoningEngine {
             }
         }
     }
+
+    /// Apply decay to all active memories and archive those that fall below the threshold.
+    pub async fn apply_decay(&self, decay_factor: f32) -> anyhow::Result<usize> {
+        // 1. Update decay scores in the database
+        let updated_count = self.store.apply_decay(decay_factor).await?;
+
+        // 2. Get memories that have decayed below the threshold (0.05)
+        let to_archive = self.store.get_decayed_ids(0.05).await?;
+
+        let mut archived_count = 0;
+        for id in to_archive {
+            if self.store.archive(id).await? {
+                // Remove from vector index if archived
+                let _ = self.index.remove(id).await;
+                archived_count += 1;
+            }
+        }
+
+        tracing::info!(
+            updated = updated_count,
+            archived = archived_count,
+            "Applied memory decay"
+        );
+
+        Ok(archived_count)
+    }
 }
