@@ -1,10 +1,10 @@
 mod consolidate;
+mod decay;
 mod forget;
 mod recall;
 mod search;
 mod store;
 mod update;
-mod decay;
 
 use remem_core::reasoning::ReasoningEngine;
 use serde_json::Value;

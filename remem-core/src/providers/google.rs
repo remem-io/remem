@@ -159,7 +159,11 @@ impl EmbeddingProvider for GoogleEmbeddings {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("Google Batch Embedding API error {}: {}", status, text));
+            return Err(anyhow!(
+                "Google Batch Embedding API error {}: {}",
+                status,
+                text
+            ));
         }
 
         let json: serde_json::Value = resp.json().await?;
@@ -172,12 +176,12 @@ impl EmbeddingProvider for GoogleEmbeddings {
             let values = emb_json["values"]
                 .as_array()
                 .ok_or_else(|| anyhow!("Missing values in batch embedding response"))?;
-            
+
             let embedding: Vec<f32> = values
                 .iter()
                 .map(|v| v.as_f64().unwrap_or(0.0) as f32)
                 .collect();
-            
+
             results.push(embedding);
         }
 

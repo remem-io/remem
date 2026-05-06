@@ -456,9 +456,8 @@ impl MemoryStore for SqliteStore {
 
     async fn get_decayed_ids(&self, threshold: f32) -> anyhow::Result<Vec<Uuid>> {
         let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
-            "SELECT id FROM memories WHERE archived = 0 AND decay_score < ?1",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT id FROM memories WHERE archived = 0 AND decay_score < ?1")?;
 
         let ids = stmt
             .query_map(params![threshold as f64], |row| {
