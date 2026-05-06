@@ -1,6 +1,6 @@
 import asyncio
 from uuid import uuid4
-from remem import Memory
+from rememhq import Memory
 
 
 async def run_simulation():

@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from remem.models import MemoryType, MemoryResult
+from rememhq.models import MemoryType, MemoryResult
 
 
 class TestMemoryType:
@@ -32,6 +32,7 @@ class TestMemoryResult:
         assert result.content == "test content"
         assert result.importance == 5.0
         assert result.similarity == 0.0
+        assert result.decay_score == 1.0
         assert result.reasoning is None
 
     def test_create_with_tags(self):

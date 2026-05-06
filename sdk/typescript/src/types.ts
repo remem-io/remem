@@ -46,6 +46,7 @@ export interface MemoryResult {
   created_at: string;
   source_session?: string;
   similarity: number;
+  decay_score: number;
   reasoning?: string;
 }
 

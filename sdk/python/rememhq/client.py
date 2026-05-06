@@ -7,8 +7,8 @@ from uuid import UUID
 
 import httpx
 
-from remem.config import RememConfig
-from remem.models import (
+from rememhq.config import RememConfig
+from rememhq.models import (
     ConsolidationReport,
     ForgetMode,
     MemoryResult,
@@ -169,6 +169,12 @@ class Memory:
         )
         resp.raise_for_status()
         return ConsolidationReport.model_validate(resp.json())
+
+    async def decay(self, factor: float = 0.9) -> dict:
+        """Apply importance-weighted decay to all active memories."""
+        resp = await self._client.post("/v1/memories/decay", json={"factor": factor})
+        resp.raise_for_status()
+        return resp.json()
 
     async def close(self) -> None:
         """Close the HTTP client."""

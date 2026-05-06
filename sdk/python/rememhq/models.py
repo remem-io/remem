@@ -39,6 +39,7 @@ class MemoryResult(BaseModel):
     created_at: datetime
     source_session: Optional[str] = None
     similarity: float = 0.0
+    decay_score: float = 1.0
     reasoning: Optional[str] = None
 
 

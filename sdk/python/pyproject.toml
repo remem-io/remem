@@ -1,5 +1,5 @@
 [project]
-name = "remem"
+name = "rememhq"
 version = "0.1.0"
 description = "Reasoning memory layer for AI agents — Python SDK"
 readme = "README.md"
@@ -14,6 +14,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "respx>=0.21",
 ]
 langchain = ["langchain-core>=0.3"]
 llamaindex = ["llama-index-core>=0.11"]

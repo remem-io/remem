@@ -73,11 +73,11 @@ remem is designed to work seamlessly with MCP-compliant environments. Add the fo
 ### Python SDK
 
 ```bash
-pip install remem
+pip install rememhq
 ```
 
 ```python
-from remem import Memory
+from rememhq import Memory
 
 m = Memory(project="my-agent", reasoning_model="claude-sonnet-4-6")
 
@@ -94,11 +94,11 @@ for r in results:
 ### TypeScript SDK
 
 ```bash
-npm install @remem/sdk
+npm install @rememhq/sdk
 ```
 
 ```typescript
-import { Memory } from "@remem/sdk";
+import { Memory } from "@rememhq/sdk";
 
 const m = new Memory({ project: "my-agent", reasoningModel: "gpt-5.3" });
 await m.store("This repository uses trunk-based development", { tags: ["workflow"] });

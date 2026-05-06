@@ -49,3 +49,19 @@ describe('StoreRequest', () => {
     assert.equal(req.ttl_days, 30);
   });
 });
+
+describe('MemoryResult', () => {
+  it('should have decay_score field', () => {
+    const res = {
+      id: 'uuid',
+      content: 'test',
+      importance: 5.0,
+      tags: [],
+      memory_type: 'fact',
+      created_at: '2026-01-01',
+      similarity: 0.5,
+      decay_score: 1.0,
+    };
+    assert.equal(res.decay_score, 1.0);
+  });
+});

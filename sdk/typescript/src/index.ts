@@ -119,6 +119,16 @@ export class Memory {
     ) as Promise<ConsolidationReport>;
   }
 
+  /**
+   * Apply importance-weighted decay to all active memories.
+   */
+  async decay(factor: number = 0.9): Promise<{ success: boolean; archived_count: number }> {
+    return this.request("POST", "/v1/memories/decay", { factor }) as Promise<{
+      success: boolean;
+      archived_count: number;
+    }>;
+  }
+
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {
     const url = `${this.baseUrl}${path}`;
     const init: RequestInit = {

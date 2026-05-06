@@ -6,12 +6,13 @@ Thin async wrapper around `remem-core` for direct Rust integration.
 
 ```toml
 [dependencies]
-remem = "0.1"
+[dependencies]
+rememhq = "0.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
 ```rust
-use remem::{Memory, ReasoningModel};
+use rememhq::{Memory, ReasoningModel};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
