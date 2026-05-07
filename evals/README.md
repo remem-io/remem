@@ -25,5 +25,5 @@ remem eval compare results/
 
 ## Status
 🚧 **Evaluation harness is planned for v0.2.** The benchmark tasks will be
-based on LongMemEval with remem-specific additions for consolidation
+based on LongMemEval with rememhq-specific additions for consolidation
 and contradiction detection quality.

@@ -1,11 +1,10 @@
 # Rust SDK
 
-Thin async wrapper around `remem-core` for direct Rust integration.
+Thin async wrapper around `rememhq-core` for direct Rust integration.
 
 ## Usage
 
 ```toml
-[dependencies]
 [dependencies]
 rememhq = "0.1"
 tokio = { version = "1", features = ["full"] }
@@ -34,5 +33,5 @@ async fn main() -> anyhow::Result<()> {
 ```
 
 ## Status
-🚧 The Rust SDK is a re-export of `remem-core` types with a builder API.
+🚧 The Rust SDK is a re-export of `rememhq-core` types with a builder API.
 Full implementation coming alongside the stable v1.0 API.

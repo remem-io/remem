@@ -14,12 +14,12 @@ remem is a reasoning memory layer for AI agents. Unlike simple vector stores, re
            │ MCP stdio        │ REST API / SDK
 ┌──────────▼──────────────────▼───────────────────────┐
 │              Interface Layer  (Rust)                 │
-│     remem-mcp (stdio)  ·  remem-api (Axum REST)     │
-│     Python SDK (httpx)  ·  TypeScript SDK (fetch)   │
+│     rememhq-mcp (stdio) · rememhq-api (Axum REST)   │
+│     Python SDK (httpx)  · TypeScript SDK (fetch)    │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────┐
-│          Reasoning Engine  (remem-core)              │
+│          Reasoning Engine  (rememhq-core)            │
 │  Consolidation · Guided Retrieval · Contradiction   │
 │  Detection · Importance Scoring · Knowledge Graph   │
 └──────┬──────────────────────────┬───────────────────┘
@@ -33,7 +33,7 @@ remem is a reasoning memory layer for AI agents. Unlike simple vector stores, re
 
 ## Crate Structure
 
-### remem-core
+### rememhq-core
 The central library. Contains:
 - **memory/** — Core types (MemoryRecord, MemoryType, request/response structs)
 - **storage/** — SQLite persistence (WAL + FTS5) and vector index
@@ -41,15 +41,15 @@ The central library. Contains:
 - **reasoning/** — The differentiator: scoring, guided retrieval, consolidation, contradiction detection
 - **config** — TOML + env var configuration
 
-### remem-mcp
+### rememhq-mcp
 MCP server exposing 6 tools over stdio JSON-RPC:
 `mem_store`, `mem_recall`, `mem_search`, `mem_update`, `mem_forget`, `mem_consolidate`
 
-### remem-api
+### rememhq-api
 REST API server (Axum) mirroring the MCP tools as HTTP endpoints.
 Includes bearer auth, CORS, and request tracing.
 
-### remem-cli
+### rememhq-cli
 CLI binary (`remem`) with subcommands: serve, mcp, store, recall, search, inspect, models.
 
 ## Data Flow

@@ -1,0 +1,27 @@
+[package]
+name = "rememhq-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "REST API server for remem (Axum)"
+
+[[bin]]
+name = "rememhq-api"
+path = "src/main.rs"
+
+[dependencies]
+rememhq-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+clap = { workspace = true }
+async-trait = { workspace = true }
+dotenvy = "0.15.7"

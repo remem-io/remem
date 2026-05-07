@@ -11,29 +11,29 @@ WORKDIR /build
 
 # Cache dependency builds
 COPY Cargo.toml Cargo.lock* rust-toolchain.toml ./
-COPY remem-core/Cargo.toml remem-core/Cargo.toml
-COPY remem-mcp/Cargo.toml remem-mcp/Cargo.toml
-COPY remem-api/Cargo.toml remem-api/Cargo.toml
-COPY remem-cli/Cargo.toml remem-cli/Cargo.toml
+COPY rememhq-core/Cargo.toml rememhq-core/Cargo.toml
+COPY rememhq-mcp/Cargo.toml rememhq-mcp/Cargo.toml
+COPY rememhq-api/Cargo.toml rememhq-api/Cargo.toml
+COPY rememhq-cli/Cargo.toml rememhq-cli/Cargo.toml
 
 # Create dummy src files for dependency caching
-RUN mkdir -p remem-core/src remem-mcp/src remem-api/src remem-cli/src && \
-    echo "pub fn main() {}" > remem-core/src/lib.rs && \
-    echo "fn main() {}" > remem-mcp/src/main.rs && \
-    echo "fn main() {}" > remem-api/src/main.rs && \
-    echo "fn main() {}" > remem-cli/src/main.rs
+RUN mkdir -p rememhq-core/src rememhq-mcp/src rememhq-api/src rememhq-cli/src && \
+    echo "pub fn main() {}" > rememhq-core/src/lib.rs && \
+    echo "fn main() {}" > rememhq-mcp/src/main.rs && \
+    echo "fn main() {}" > rememhq-api/src/main.rs && \
+    echo "fn main() {}" > rememhq-cli/src/main.rs
 
 RUN cargo build --release --workspace 2>/dev/null || true
 
 # Copy real source and build
 COPY libremem/ libremem/
-COPY remem-core/ remem-core/
-COPY remem-mcp/ remem-mcp/
-COPY remem-api/ remem-api/
-COPY remem-cli/ remem-cli/
+COPY rememhq-core/ rememhq-core/
+COPY rememhq-mcp/ rememhq-mcp/
+COPY rememhq-api/ rememhq-api/
+COPY rememhq-cli/ rememhq-cli/
 
 # Touch source files to invalidate cache
-RUN touch remem-core/src/lib.rs remem-mcp/src/main.rs remem-api/src/main.rs remem-cli/src/main.rs
+RUN touch rememhq-core/src/lib.rs rememhq-mcp/src/main.rs rememhq-api/src/main.rs rememhq-cli/src/main.rs
 
 RUN cargo build --release --workspace
 
@@ -50,8 +50,8 @@ RUN groupadd --gid 1000 remem && \
     useradd --uid 1000 --gid remem --shell /bin/bash --create-home remem
 
 COPY --from=builder /build/target/release/remem /usr/local/bin/remem
-COPY --from=builder /build/target/release/remem-api /usr/local/bin/remem-api
-COPY --from=builder /build/target/release/remem-mcp /usr/local/bin/remem-mcp
+COPY --from=builder /build/target/release/rememhq-api /usr/local/bin/rememhq-api
+COPY --from=builder /build/target/release/rememhq-mcp /usr/local/bin/rememhq-mcp
 
 USER remem
 WORKDIR /home/remem

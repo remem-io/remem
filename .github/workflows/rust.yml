@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "remem-core/**"
-      - "remem-api/**"
-      - "remem-cli/**"
-      - "remem-mcp/**"
+      - "rememhq-core/**"
+      - "rememhq-api/**"
+      - "rememhq-cli/**"
+      - "rememhq-mcp/**"
       - "libremem/**"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -16,10 +16,10 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "remem-core/**"
-      - "remem-api/**"
-      - "remem-cli/**"
-      - "remem-mcp/**"
+      - "rememhq-core/**"
+      - "rememhq-api/**"
+      - "rememhq-cli/**"
+      - "rememhq-mcp/**"
       - "libremem/**"
       - "Cargo.toml"
       - "Cargo.lock"

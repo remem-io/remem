@@ -7,7 +7,7 @@
  * 3. Consolidate: The agent processes its working memory into long-term graphs and resolves contradictions.
  * 
  * Usage:
- * Ensure the remem API is running locally: `cargo run -p remem-api`
+ * Ensure the remem API is running locally: `cargo run -p rememhq-api`
  * Then run this script: `npx tsx examples/agent_loop.ts`
  */
 

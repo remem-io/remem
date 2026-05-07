@@ -77,12 +77,12 @@ npm run build
 
 | Area | Directory | Language |
 |---|---|---|
-| Core reasoning engine | `remem-core/src/reasoning/` | Rust |
-| Storage layer | `remem-core/src/storage/` | Rust |
-| Cloud providers | `remem-core/src/providers/` | Rust |
-| MCP server | `remem-mcp/src/` | Rust |
-| REST API | `remem-api/src/` | Rust |
-| CLI | `remem-cli/src/` | Rust |
+| Core reasoning engine | `rememhq-core/src/reasoning/` | Rust |
+| Storage layer | `rememhq-core/src/storage/` | Rust |
+| Cloud providers | `rememhq-core/src/providers/` | Rust |
+| MCP server | `rememhq-mcp/src/` | Rust |
+| REST API | `rememhq-api/src/` | Rust |
+| CLI | `rememhq-cli/src/` | Rust |
 | Python SDK | `sdk/python/` | Python |
 | TypeScript SDK | `sdk/typescript/` | TypeScript |
 | C++ core (v0.2+) | `libremem/` | C++ |

@@ -4,20 +4,20 @@ on:
   push:
     branches: [main]
     paths:
-      - "remem-core/**"
-      - "remem-api/**"
-      - "remem-cli/**"
-      - "remem-mcp/**"
+      - "rememhq-core/**"
+      - "rememhq-api/**"
+      - "rememhq-cli/**"
+      - "rememhq-mcp/**"
       - "libremem/**"
       - "Cargo.toml"
       - ".github/workflows/smoke.yml"
   pull_request:
     branches: [main]
     paths:
-      - "remem-core/**"
-      - "remem-api/**"
-      - "remem-cli/**"
-      - "remem-mcp/**"
+      - "rememhq-core/**"
+      - "rememhq-api/**"
+      - "rememhq-cli/**"
+      - "rememhq-mcp/**"
       - "libremem/**"
       - "Cargo.toml"
       - ".github/workflows/smoke.yml"
@@ -44,7 +44,7 @@ jobs:
           key: smoke
 
       - name: Build all binaries
-        run: cargo build --release -p remem-cli -p remem-api -p remem-mcp
+        run: cargo build --release -p rememhq-cli -p rememhq-api -p rememhq-mcp
 
       - name: Upload binaries
         uses: actions/upload-artifact@v7
@@ -52,8 +52,8 @@ jobs:
           name: smoke-binaries
           path: |
             target/release/remem
-            target/release/remem-api
-            target/release/remem-mcp
+            target/release/rememhq-api
+            target/release/rememhq-mcp
           retention-days: 1
 
   # ──────────────────────────────────────────────
@@ -88,8 +88,8 @@ jobs:
 
       - name: Verify API
         run: |
-          chmod +x remem-api
-          timeout 5 ./remem-api --help || true
+          chmod +x rememhq-api
+          timeout 5 ./rememhq-api --help || true
           echo "✅ API binary runs"
 
   # ──────────────────────────────────────────────
@@ -106,8 +106,8 @@ jobs:
 
       - name: Verify MCP
         run: |
-          chmod +x remem-mcp
-          timeout 5 ./remem-mcp --help || true
+          chmod +x rememhq-mcp
+          timeout 5 ./rememhq-mcp --help || true
           echo "✅ MCP binary runs"
 
   # ──────────────────────────────────────────────

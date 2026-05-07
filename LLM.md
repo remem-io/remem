@@ -39,7 +39,7 @@ MemoryType    { Fact, Procedure, Preference, Decision }
 
 ## FFI Boundary (C++ ↔ Rust)
 
-All C++ interop lives in `remem-core/src/storage/vector.rs::remem_ffi`:
+All C++ interop lives in `rememhq-core/src/storage/vector.rs::remem_ffi`:
 - `remem_index_*` — HNSW vector index operations
 - `remem_embedder_*` — ONNX embedding engine operations
 - C++ side: `libremem/src/ffi/remem.h` and `remem.cpp`

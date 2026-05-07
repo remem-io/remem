@@ -91,5 +91,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Simulation failed: {e}")
         print(
-            "\nTip: Make sure the remem server is running with 'cargo run -p remem-api -- --project simulation-alice'"
+            "\nTip: Make sure the remem server is running with 'cargo run -p rememhq-api -- --project simulation-alice'"
         )

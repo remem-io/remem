@@ -1,0 +1,24 @@
+[package]
+name = "rememhq-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MCP server for remem — exposes memory tools over stdio/HTTP"
+
+[[bin]]
+name = "rememhq-mcp"
+path = "src/main.rs"
+
+[dependencies]
+rememhq-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dotenvy = "0.15"
+uuid = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+async-trait = { workspace = true }

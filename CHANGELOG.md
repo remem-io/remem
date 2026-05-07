@@ -24,10 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dev container configuration
 
 ### Architecture
-- `remem-core` — storage, providers, reasoning engine
-- `remem-mcp` — MCP server (stdio JSON-RPC)
-- `remem-api` — REST API (Axum)
-- `remem-cli` — CLI binary
+- `rememhq-core` — storage, providers, reasoning engine
+- `rememhq-mcp` — MCP server (stdio JSON-RPC)
+- `rememhq-api` — REST API (Axum)
+- `rememhq-cli` — CLI binary
 - `sdk/python` — Python SDK
 - `sdk/typescript` — TypeScript SDK
 

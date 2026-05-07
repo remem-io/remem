@@ -18,26 +18,26 @@ remem provides agents with **persistent, reasoned memory** that spans across ses
 
 ```text
 ┌─────────────────────────────────────────────────────┐
-│                  Agent Consumers                     │
+│                  Agent Consumers                    │
 │  Claude Code · Cursor · Codex · Python/TS agents    │
 └──────────┬──────────────────┬───────────────────────┘
            │ MCP stdio        │ REST API / SDK
 ┌──────────▼──────────────────▼───────────────────────┐
-│              Interface Layer (Rust)                  │
-│     remem-mcp (stdio)  ·  remem-api (Axum REST)      │
-│     Python SDK (httpx)  ·  TypeScript SDK (fetch)    │
+│              Interface Layer (Rust)                 │
+│     rememhq-mcp (stdio) · rememhq-api (Axum REST)   │
+│     Python SDK (httpx)  · TypeScript SDK (fetch)    │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────┐
-│          Reasoning Engine (remem-core)               │
+│          Reasoning Engine (rememhq-core)            │
 │  Consolidation · Guided Retrieval · Contradiction   │
 │  Detection · Importance Scoring · Knowledge Graph   │
 └──────┬──────────────────────────┬───────────────────┘
        │                          │
 ┌──────▼──────┐          ┌────────▼────────────────────┐
-│ Cloud APIs  │          │  Storage Layer               │
-│ Anthropic   │          │  SQLite + WAL (metadata)     │
-│ OpenAI      │          │  Vector Index (HNSW)         │
+│ Cloud APIs  │          │  Storage Layer              │
+│ Anthropic   │          │  SQLite + WAL (metadata)    │
+│ OpenAI      │          │  Vector Index (HNSW)        │
 └─────────────┘          └─────────────────────────────┘
 ```
 

@@ -10,29 +10,29 @@
 
 ```
 remem (workspace root)
-├── remem-core/       # Core library: config, memory types, providers, reasoning, storage
-├── remem-api/        # REST API server (Axum)
-├── remem-cli/        # Command-line interface
-├── remem-mcp/        # Model Context Protocol server
-├── libremem/         # C++ core: HNSW vector index + ONNX embedding engine (FFI bridge)
+├── rememhq-core/       # Core library: config, memory types, providers, reasoning, storage
+├── rememhq-api/        # REST API server (Axum)
+├── rememhq-cli/        # Command-line interface
+├── rememhq-mcp/        # Model Context Protocol server
+├── libremem/           # C++ core: HNSW vector index + ONNX embedding engine (FFI bridge)
 ├── sdk/
-│   ├── python/       # Python SDK (httpx + pydantic)
-│   ├── typescript/   # TypeScript SDK
-│   └── rust/         # Rust SDK (re-export of remem-core, planned)
-├── evals/            # Evaluation benchmarks
-├── docs/             # Architecture, provider, and reasoning documentation
-└── .github/          # CI/CD workflows, issue templates, dependabot
+│   ├── python/         # Python SDK (httpx + pydantic)
+│   ├── typescript/     # TypeScript SDK
+│   └── rust/           # Rust SDK (re-export of rememhq-core, planned)
+├── evals/              # Evaluation benchmarks
+├── docs/               # Architecture, provider, and reasoning documentation
+└── .github/            # CI/CD workflows, issue templates, dependabot
 ```
 
 ### Key Abstractions
 
 | Trait / Interface | Location | Purpose |
 |---|---|---|
-| `Provider` | `remem-core/src/providers/mod.rs` | Cloud LLM completion (Anthropic, OpenAI, Google, Mock) |
-| `EmbeddingProvider` | `remem-core/src/providers/mod.rs` | Embedding generation (OpenAI, Google, Local ONNX, Mock) |
-| `MemoryStore` | `remem-core/src/storage/mod.rs` | Persistent storage (SQLite) |
-| `VectorIndex` | `remem-core/src/storage/vector.rs` | Vector similarity search (HNSW via C++ FFI) |
-| `ReasoningEngine` | `remem-core/src/reasoning/mod.rs` | Orchestrates store, recall, consolidate |
+| `Provider` | `rememhq-core/src/providers/mod.rs` | Cloud LLM completion (Anthropic, OpenAI, Google, Mock) |
+| `EmbeddingProvider` | `rememhq-core/src/providers/mod.rs` | Embedding generation (OpenAI, Google, Local ONNX, Mock) |
+| `MemoryStore` | `rememhq-core/src/storage/mod.rs` | Persistent storage (SQLite) |
+| `VectorIndex` | `rememhq-core/src/storage/vector.rs` | Vector similarity search (HNSW via C++ FFI) |
+| `ReasoningEngine` | `rememhq-core/src/reasoning/mod.rs` | Orchestrates store, recall, consolidate |
 
 ## Build & Run
 
@@ -51,13 +51,13 @@ cargo build --workspace
 cargo test --workspace
 
 # Run the API server
-cargo run -p remem-api -- --project myproject
+cargo run -p rememhq-api -- --project myproject
 
 # Run the MCP server
-cargo run -p remem-mcp
+cargo run -p rememhq-mcp
 
 # Run the CLI
-cargo run -p remem-cli -- --help
+cargo run -p rememhq-cli -- --help
 
 # Python SDK
 cd sdk/python && pip install -e ".[dev]" && pytest tests/ -v
@@ -75,11 +75,11 @@ cd sdk/typescript && npm install && npm run build
 - **Error handling**: Use `anyhow::Result` for application code; `thiserror` for library error types
 - **Async**: All I/O-bound operations use `async/await` with Tokio
 - **Naming**: snake_case for functions/variables, PascalCase for types, SCREAMING_SNAKE for constants
-- **FFI**: All C++ interop goes through `remem-core/src/storage/vector.rs::remem_ffi` module. Use opaque `*mut c_void` handles. **Every FFI call must be wrapped in try-catch on the C++ side.**
+- **FFI**: All C++ interop goes through `rememhq-core/src/storage/vector.rs::remem_ffi` module. Use opaque `*mut c_void` handles. **Every FFI call must be wrapped in try-catch on the C++ side.**
 
 ### C++ (`libremem`)
 - **Standard**: C++17
-- **Build**: Compiled via `cc` crate in `remem-core/build.rs` — NOT standalone CMake
+- **Build**: Compiled via `cc` crate in `rememhq-core/build.rs` — NOT standalone CMake
 - **FFI safety**: All exported functions must catch exceptions and return null/zero on failure
 - **Headers**: Public API in `libremem/src/ffi/remem.h`
 
@@ -95,7 +95,7 @@ cd sdk/typescript && npm install && npm run build
 ## Testing Requirements
 
 - **All new Rust code** must include unit tests in the same file (`#[cfg(test)] mod tests`)
-- **Integration tests** go in `remem-core/tests/`
+- **Integration tests** go in `rememhq-core/tests/`
 - **SDK changes** must include corresponding test updates
 - **C++ FFI changes** must be verified with `cargo build --workspace` at minimum
 
@@ -118,9 +118,9 @@ test(core): add sqlite store archival tests
 
 ## Architecture Boundaries
 
-- **`remem-core`** is the only crate that touches SQLite, the vector index, or cloud providers. All other crates depend on it.
-- **`remem-api`** and **`remem-mcp`** are thin transport layers — business logic belongs in `remem-core`.
-- **`libremem`** C++ code is accessed **only** through the FFI bridge in `remem-core/src/storage/vector.rs`. No other crate should import C++ symbols directly.
+- **`rememhq-core`** is the only crate that touches SQLite, the vector index, or cloud providers. All other crates depend on it.
+- **`rememhq-api`** and **`rememhq-mcp`** are thin transport layers — business logic belongs in `rememhq-core`.
+- **`libremem`** C++ code is accessed **only** through the FFI bridge in `rememhq-core/src/storage/vector.rs`. No other crate should import C++ symbols directly.
 - **SDKs** are pure HTTP clients — they do not embed any Rust code.
 
 ## Environment Variables

@@ -1,9 +1,9 @@
 [workspace]
 members = [
-    "remem-core",
-    "remem-mcp",
-    "remem-api",
-    "remem-cli",
+    "rememhq-core",
+    "rememhq-mcp",
+    "rememhq-api",
+    "rememhq-cli",
 ]
 resolver = "2"
 
@@ -68,4 +68,4 @@ ndarray = "0.17"
 cc = "1.0"
 
 # Internal crates
-remem-core = { path = "remem-core" }
+rememhq-core = { path = "rememhq-core" }

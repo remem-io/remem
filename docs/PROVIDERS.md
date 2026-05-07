@@ -48,7 +48,7 @@ scoring_model = "claude-haiku-4-5"
 
 ## Adding a New Provider
 
-1. Implement the `Provider` trait in `remem-core/src/providers/`
+1. Implement the `Provider` trait in `rememhq-core/src/providers/`
 2. Add the provider variant to the config enum
 3. Register the provider in the engine initialization (MCP server, REST API, CLI)
 4. Add integration tests in `evals/`

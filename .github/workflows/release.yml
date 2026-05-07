@@ -62,15 +62,15 @@ jobs:
           key: release-${{ matrix.target }}
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }} -p remem-cli -p remem-api -p remem-mcp
+        run: cargo build --release --target ${{ matrix.target }} -p rememhq-cli -p rememhq-api -p rememhq-mcp
 
       - name: Package (Unix)
         if: matrix.archive == 'tar.gz'
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/remem dist/ 2>/dev/null || true
-          cp target/${{ matrix.target }}/release/remem-api dist/ 2>/dev/null || true
-          cp target/${{ matrix.target }}/release/remem-mcp dist/ 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/rememhq-api dist/ 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/rememhq-mcp dist/ 2>/dev/null || true
           cp README.md LICENSE dist/
           cd dist && tar czf ../remem-${{ github.ref_name }}-${{ matrix.target }}.tar.gz *
 
@@ -80,8 +80,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist
           Copy-Item target/${{ matrix.target }}/release/remem.exe dist/ -ErrorAction SilentlyContinue
-          Copy-Item target/${{ matrix.target }}/release/remem-api.exe dist/ -ErrorAction SilentlyContinue
-          Copy-Item target/${{ matrix.target }}/release/remem-mcp.exe dist/ -ErrorAction SilentlyContinue
+          Copy-Item target/${{ matrix.target }}/release/rememhq-api.exe dist/ -ErrorAction SilentlyContinue
+          Copy-Item target/${{ matrix.target }}/release/rememhq-mcp.exe dist/ -ErrorAction SilentlyContinue
           Copy-Item README.md, LICENSE dist/
           Compress-Archive -Path dist/* -DestinationPath remem-${{ github.ref_name }}-${{ matrix.target }}.zip
 

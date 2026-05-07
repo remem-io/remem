@@ -8,10 +8,10 @@ on:
     branches: [main]
     paths:
       - "Dockerfile"
-      - "remem-core/**"
-      - "remem-mcp/**"
-      - "remem-api/**"
-      - "remem-cli/**"
+      - "rememhq-core/**"
+      - "rememhq-mcp/**"
+      - "rememhq-api/**"
+      - "rememhq-cli/**"
       - ".github/workflows/docker-ghcr.yml"
 
 concurrency:
