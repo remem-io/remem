@@ -1,4 +1,5 @@
 """Tests for the remem Python SDK."""
+
 import pytest
 
 
@@ -40,7 +41,9 @@ class TestMemoryClient:
 
         async with respx.mock(base_url=base_url) as respx_mock:
             respx_mock.post("/v1/memories/decay").mock(
-                return_value=httpx.Response(200, json={"success": True, "archived_count": 5})
+                return_value=httpx.Response(
+                    200, json={"success": True, "archived_count": 5}
+                )
             )
 
             async with Memory(base_url=base_url) as m:
