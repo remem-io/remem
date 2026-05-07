@@ -382,24 +382,26 @@ async fn main() -> anyhow::Result<()> {
     let reasoning_provider_name = std::env::var("REMEM_REASONING_PROVIDER")
         .unwrap_or_else(|_| config.reasoning.provider.clone());
 
-    let provider: Arc<dyn rememhq_core::providers::Provider> = match reasoning_provider_name.as_str()
-    {
-        "openai" => Arc::new(OpenAIProvider::new(None)?),
-        "anthropic" => Arc::new(AnthropicProvider::new(None)?),
-        "google" => Arc::new(rememhq_core::providers::google::GoogleProvider::new(None)?),
-        "mock" | "local" => Arc::new(rememhq_core::providers::mock::MockProvider),
-        _ => match std::env::var("GOOGLE_API_KEY") {
-            Ok(_) => Arc::new(rememhq_core::providers::google::GoogleProvider::new(None)?),
-            Err(_) => Arc::new(OpenAIProvider::new(None)?),
-        },
-    };
+    let provider: Arc<dyn rememhq_core::providers::Provider> =
+        match reasoning_provider_name.as_str() {
+            "openai" => Arc::new(OpenAIProvider::new(None)?),
+            "anthropic" => Arc::new(AnthropicProvider::new(None)?),
+            "google" => Arc::new(rememhq_core::providers::google::GoogleProvider::new(None)?),
+            "mock" | "local" => Arc::new(rememhq_core::providers::mock::MockProvider),
+            _ => match std::env::var("GOOGLE_API_KEY") {
+                Ok(_) => Arc::new(rememhq_core::providers::google::GoogleProvider::new(None)?),
+                Err(_) => Arc::new(OpenAIProvider::new(None)?),
+            },
+        };
 
     let embedding_provider_name = std::env::var("REMEM_EMBEDDING_PROVIDER")
         .unwrap_or_else(|_| config.reasoning.provider.clone());
 
     let embeddings: Arc<dyn rememhq_core::providers::EmbeddingProvider> =
         match embedding_provider_name.as_str() {
-            "google" => Arc::new(rememhq_core::providers::google::GoogleEmbeddings::new(None)?),
+            "google" => Arc::new(rememhq_core::providers::google::GoogleEmbeddings::new(
+                None,
+            )?),
             "mock" => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
             "local" => {
                 let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
@@ -412,7 +414,9 @@ async fn main() -> anyhow::Result<()> {
                 )?)
             }
             _ => match std::env::var("GOOGLE_API_KEY") {
-                Ok(_) => Arc::new(rememhq_core::providers::google::GoogleEmbeddings::new(None)?),
+                Ok(_) => Arc::new(rememhq_core::providers::google::GoogleEmbeddings::new(
+                    None,
+                )?),
                 Err(_) => Arc::new(OpenAIEmbeddings::new(None, Some(768))?),
             },
         };
