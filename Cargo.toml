@@ -65,7 +65,7 @@ rmcp = { version = "0.1", features = ["server", "transport-io"] }
 ndarray = "0.17"
 
 # FFI and Build
-cc = "1.0"
+cc = "1.2"
 
 # Internal crates
 rememhq-core = { path = "rememhq-core" }
