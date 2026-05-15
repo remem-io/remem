@@ -35,9 +35,9 @@ remem provides agents with **persistent, reasoned memory** that spans across ses
 └──────┬──────────────────────────┬───────────────────┘
        │                          │
 ┌──────▼──────┐          ┌────────▼────────────────────┐
-│ Cloud APIs  │          │  Storage Layer              │
+│ OpenAI      │          │  Storage Layer              │
 │ Anthropic   │          │  SQLite + WAL (metadata)    │
-│ OpenAI      │          │  Vector Index (HNSW)        │
+│ Gemini      │          │  Vector Index (HNSW)        │
 └─────────────┘          └─────────────────────────────┘
 ```
 
