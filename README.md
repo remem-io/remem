@@ -113,19 +113,12 @@ const results = await m.recall("how do we manage branches?");
 3.  **Knowledge Graph & Contradiction Detection**: Facts are stored as structured nodes and edges (triples) in a knowledge graph. When new information is added that conflicts with existing knowledge, remem flags the contradiction, allowing the agent to clarify or archive the stale memory.
 4.  **Local First (v0.2+)**: Using `libremem`, a custom C++ engine, remem supports local HNSW indexing and BERT-compatible tokenization for privacy-first, offline embedding generation.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Rust**: Core reasoning engine, REST API (Axum), and MCP server.
 - **C++17**: High-performance vector index (HNSW) and ONNX embedding engine (`libremem`).
 - **SQLite**: Reliable metadata storage with WAL mode for high concurrency.
 - **Python & TypeScript**: Modern, type-safe SDKs for rapid integration.
-
-## Roadmap
-
-- [x] **v0.1** — MCP support, REST API, Python/TS SDKs, basic consolidation.
-- [ ] **v0.2** — Knowledge Graph queries, Contradiction Detection, Gemini provider, C++ Tokenizer integration.
-- [ ] **v0.3** — Swift/Kotlin bindings, Local LLM reasoning support (llama.cpp).
-- [ ] **v0.4** — Shared memory namespaces, access control, and team collaboration features.
 
 ## 🤝 Contributing
 
