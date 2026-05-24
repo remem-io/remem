@@ -94,3 +94,34 @@ async fn test_mock_embeddings_dimension() {
     let e768 = MockEmbeddings::new(768);
     assert_eq!(e768.dimension(), 768);
 }
+
+#[test]
+fn test_provider_initialization_failures_when_keys_missing() {
+    // Clear out env keys temporarily to guarantee failure
+    let prev_anthropic = std::env::var("ANTHROPIC_API_KEY");
+    let prev_openai = std::env::var("OPENAI_API_KEY");
+    let prev_google = std::env::var("GOOGLE_API_KEY");
+
+    std::env::remove_var("ANTHROPIC_API_KEY");
+    std::env::remove_var("OPENAI_API_KEY");
+    std::env::remove_var("GOOGLE_API_KEY");
+
+    use rememhq_core::providers::anthropic::AnthropicProvider;
+    use rememhq_core::providers::google::GoogleProvider;
+    use rememhq_core::providers::openai::OpenAIProvider;
+
+    assert!(AnthropicProvider::new(None).is_err());
+    assert!(OpenAIProvider::new(None).is_err());
+    assert!(GoogleProvider::new(None).is_err());
+
+    // Restore env keys
+    if let Ok(k) = prev_anthropic {
+        std::env::set_var("ANTHROPIC_API_KEY", k);
+    }
+    if let Ok(k) = prev_openai {
+        std::env::set_var("OPENAI_API_KEY", k);
+    }
+    if let Ok(k) = prev_google {
+        std::env::set_var("GOOGLE_API_KEY", k);
+    }
+}

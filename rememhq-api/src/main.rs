@@ -409,43 +409,158 @@ async fn main() -> anyhow::Result<()> {
     let reasoning_provider_name = std::env::var("REMEM_REASONING_PROVIDER")
         .unwrap_or_else(|_| config.reasoning.provider.clone());
 
-    let provider: Arc<dyn rememhq_core::providers::Provider> =
-        match reasoning_provider_name.as_str() {
-            "openai" => Arc::new(OpenAIProvider::new(None)?),
-            "anthropic" => Arc::new(AnthropicProvider::new(None)?),
-            "google" => Arc::new(rememhq_core::providers::google::GoogleProvider::new(None)?),
-            "mock" | "local" => Arc::new(rememhq_core::providers::mock::MockProvider),
-            _ => match std::env::var("GOOGLE_API_KEY") {
-                Ok(_) => Arc::new(rememhq_core::providers::google::GoogleProvider::new(None)?),
-                Err(_) => Arc::new(OpenAIProvider::new(None)?),
-            },
-        };
+    let provider: Arc<dyn rememhq_core::providers::Provider> = match reasoning_provider_name
+        .as_str()
+    {
+        "openai" => match OpenAIProvider::new(None) {
+            Ok(p) => Arc::new(p),
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to initialize configured OpenAI provider: {}. Attempting fallback...",
+                    e
+                );
+                match AnthropicProvider::new(None) {
+                    Ok(p) => Arc::new(p),
+                    Err(_) => match rememhq_core::providers::google::GoogleProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => {
+                            tracing::warn!("No valid cloud reasoning keys found. Falling back to MockProvider.");
+                            Arc::new(rememhq_core::providers::mock::MockProvider)
+                        }
+                    },
+                }
+            }
+        },
+        "anthropic" => match AnthropicProvider::new(None) {
+            Ok(p) => Arc::new(p),
+            Err(e) => {
+                tracing::warn!("Failed to initialize configured Anthropic provider: {}. Attempting fallback...", e);
+                match OpenAIProvider::new(None) {
+                    Ok(p) => Arc::new(p),
+                    Err(_) => match rememhq_core::providers::google::GoogleProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => {
+                            tracing::warn!("No valid cloud reasoning keys found. Falling back to MockProvider.");
+                            Arc::new(rememhq_core::providers::mock::MockProvider)
+                        }
+                    },
+                }
+            }
+        },
+        "google" => {
+            match rememhq_core::providers::google::GoogleProvider::new(None) {
+                Ok(p) => Arc::new(p),
+                Err(e) => {
+                    tracing::warn!("Failed to initialize configured Google provider: {}. Attempting fallback...", e);
+                    match AnthropicProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => match OpenAIProvider::new(None) {
+                            Ok(p) => Arc::new(p),
+                            Err(_) => {
+                                tracing::warn!("No valid cloud reasoning keys found. Falling back to MockProvider.");
+                                Arc::new(rememhq_core::providers::mock::MockProvider)
+                            }
+                        },
+                    }
+                }
+            }
+        }
+        "mock" | "local" => Arc::new(rememhq_core::providers::mock::MockProvider),
+        _ => {
+            // Auto-detect based on env vars
+            if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+                match AnthropicProvider::new(None) {
+                    Ok(p) => Arc::new(p),
+                    Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
+                }
+            } else if std::env::var("OPENAI_API_KEY").is_ok() {
+                match OpenAIProvider::new(None) {
+                    Ok(p) => Arc::new(p),
+                    Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
+                }
+            } else if std::env::var("GOOGLE_API_KEY").is_ok() {
+                match rememhq_core::providers::google::GoogleProvider::new(None) {
+                    Ok(p) => Arc::new(p),
+                    Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
+                }
+            } else {
+                tracing::warn!("No reasoning API keys set. Falling back to MockProvider.");
+                Arc::new(rememhq_core::providers::mock::MockProvider)
+            }
+        }
+    };
 
     let embedding_provider_name = std::env::var("REMEM_EMBEDDING_PROVIDER")
         .unwrap_or_else(|_| config.reasoning.provider.clone());
 
     let embeddings: Arc<dyn rememhq_core::providers::EmbeddingProvider> =
         match embedding_provider_name.as_str() {
-            "google" => Arc::new(rememhq_core::providers::google::GoogleEmbeddings::new(
-                None,
-            )?),
+            "google" => match rememhq_core::providers::google::GoogleEmbeddings::new(None) {
+                Ok(p) => Arc::new(p),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to initialize Google embeddings: {}. Attempting fallback...",
+                        e
+                    );
+                    if std::env::var("OPENAI_API_KEY").is_ok() {
+                        Arc::new(OpenAIEmbeddings::new(None, Some(768))?)
+                    } else {
+                        tracing::warn!("Falling back to MockEmbeddings.");
+                        Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
+                    }
+                }
+            },
             "mock" => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
             "local" => {
                 let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
                     .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
                 let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
                     .unwrap_or_else(|_| "models/vocab.txt".to_string());
-                Arc::new(rememhq_core::providers::local::LocalEmbeddings::new(
-                    &model_path,
-                    &vocab_path,
-                )?)
+                match rememhq_core::providers::local::LocalEmbeddings::new(&model_path, &vocab_path)
+                {
+                    Ok(p) => Arc::new(p),
+                    Err(e) => {
+                        tracing::warn!("Failed to initialize Local embeddings: {}. Falling back to MockEmbeddings.", e);
+                        Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
+                    }
+                }
             }
-            _ => match std::env::var("GOOGLE_API_KEY") {
-                Ok(_) => Arc::new(rememhq_core::providers::google::GoogleEmbeddings::new(
-                    None,
-                )?),
-                Err(_) => Arc::new(OpenAIEmbeddings::new(None, Some(768))?),
-            },
+            _ => {
+                // Auto-detect based on env vars
+                if std::env::var("OPENAI_API_KEY").is_ok() {
+                    match OpenAIEmbeddings::new(None, Some(768)) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
+                    }
+                } else if std::env::var("GOOGLE_API_KEY").is_ok() {
+                    match rememhq_core::providers::google::GoogleEmbeddings::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
+                    }
+                } else {
+                    // Check if local model files exist
+                    let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
+                        .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
+                    let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
+                        .unwrap_or_else(|_| "models/vocab.txt".to_string());
+                    if std::path::Path::new(&model_path).exists()
+                        && std::path::Path::new(&vocab_path).exists()
+                    {
+                        match rememhq_core::providers::local::LocalEmbeddings::new(
+                            &model_path,
+                            &vocab_path,
+                        ) {
+                            Ok(p) => Arc::new(p),
+                            Err(_) => {
+                                Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
+                            }
+                        }
+                    } else {
+                        tracing::warn!("No cloud API keys or local model files found for embeddings. Falling back to MockEmbeddings.");
+                        Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
+                    }
+                }
+            }
         };
 
     tracing::info!(
