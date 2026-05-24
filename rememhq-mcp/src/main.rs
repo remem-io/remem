@@ -154,17 +154,19 @@ async fn main() -> anyhow::Result<()> {
 
         let response = match serde_json::from_str::<JsonRpcRequest>(&line) {
             Ok(request) => handle_request(&engine, request).await,
-            Err(e) => JsonRpcResponse::error(
+            Err(e) => Some(JsonRpcResponse::error(
                 serde_json::Value::Null,
                 -32700,
                 format!("Parse error: {}", e),
-            ),
+            )),
         };
 
-        let json = serde_json::to_string(&response)?;
-        stdout.write_all(json.as_bytes()).await?;
-        stdout.write_all(b"\n").await?;
-        stdout.flush().await?;
+        if let Some(response) = response {
+            let json = serde_json::to_string(&response)?;
+            stdout.write_all(json.as_bytes()).await?;
+            stdout.write_all(b"\n").await?;
+            stdout.flush().await?;
+        }
     }
 
     // Save index on exit
@@ -173,7 +175,10 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn handle_request(engine: &Arc<ReasoningEngine>, request: JsonRpcRequest) -> JsonRpcResponse {
+async fn handle_request(
+    engine: &Arc<ReasoningEngine>,
+    request: JsonRpcRequest,
+) -> Option<JsonRpcResponse> {
     let id = request.id.unwrap_or(serde_json::Value::Null);
 
     match request.method.as_str() {
@@ -191,24 +196,32 @@ async fn handle_request(engine: &Arc<ReasoningEngine>, request: JsonRpcRequest) 
                     "version": "0.1.0"
                 }
             });
-            JsonRpcResponse::success(id, result)
+            Some(JsonRpcResponse::success(id, result))
         }
 
-        "notifications/initialized" | "notifications/cancelled" => {
-            // Notifications don't need responses, but we send one for protocol compliance
-            JsonRpcResponse::success(id, serde_json::json!({}))
+        // Notifications are fire-and-forget — no response per JSON-RPC spec
+        method if method.starts_with("notifications/") => {
+            tracing::debug!("Received notification: {}", method);
+            None
         }
 
         "tools/list" => {
             let tools = tools::list_tools();
-            JsonRpcResponse::success(id, serde_json::json!({ "tools": tools }))
+            Some(JsonRpcResponse::success(
+                id,
+                serde_json::json!({ "tools": tools }),
+            ))
         }
 
         "tools/call" => match tools::call_tool(engine, &request.params).await {
-            Ok(result) => JsonRpcResponse::success(id, result),
-            Err(e) => JsonRpcResponse::error(id, -32000, e.to_string()),
+            Ok(result) => Some(JsonRpcResponse::success(id, result)),
+            Err(e) => Some(JsonRpcResponse::error(id, -32000, e.to_string())),
         },
 
-        _ => JsonRpcResponse::error(id, -32601, format!("Method not found: {}", request.method)),
+        _ => Some(JsonRpcResponse::error(
+            id,
+            -32601,
+            format!("Method not found: {}", request.method),
+        )),
     }
 }

@@ -41,8 +41,85 @@ Respond with ONLY a single number between 1 and 10, nothing else."#
 
 #[cfg(test)]
 mod tests {
-    // unused import removed
+    use super::*;
+    use crate::providers::mock::MockProvider;
 
-    // Unit test with a mock provider would go here
-    // Integration tests with real APIs go in the evals/ directory
+    #[tokio::test]
+    async fn test_score_importance_returns_valid_range() {
+        let provider = MockProvider;
+        // MockProvider returns "Mock response" which is non-numeric, so defaults to 5.0
+        let score = score_importance(&provider, "Alice uses Rust for backend", "mock")
+            .await
+            .unwrap();
+        assert!(
+            (1.0..=10.0).contains(&score),
+            "Score {} should be between 1.0 and 10.0",
+            score
+        );
+        assert_eq!(
+            score, 5.0,
+            "Non-numeric mock response should default to 5.0"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_score_importance_clamps_high_value() {
+        // Create a provider that returns a value above 10
+        struct HighScoreProvider;
+        #[async_trait::async_trait]
+        impl Provider for HighScoreProvider {
+            async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
+                Ok("15".to_string())
+            }
+            fn name(&self) -> &str {
+                "high_score_mock"
+            }
+        }
+
+        let provider = HighScoreProvider;
+        let score = score_importance(&provider, "Critical secret key", "mock")
+            .await
+            .unwrap();
+        assert_eq!(score, 10.0, "Scores above 10 should be clamped to 10.0");
+    }
+
+    #[tokio::test]
+    async fn test_score_importance_clamps_low_value() {
+        struct LowScoreProvider;
+        #[async_trait::async_trait]
+        impl Provider for LowScoreProvider {
+            async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
+                Ok("-3".to_string())
+            }
+            fn name(&self) -> &str {
+                "low_score_mock"
+            }
+        }
+
+        let provider = LowScoreProvider;
+        let score = score_importance(&provider, "trivial info", "mock")
+            .await
+            .unwrap();
+        assert_eq!(score, 1.0, "Scores below 1 should be clamped to 1.0");
+    }
+
+    #[tokio::test]
+    async fn test_score_importance_parses_valid_number() {
+        struct ExactScoreProvider;
+        #[async_trait::async_trait]
+        impl Provider for ExactScoreProvider {
+            async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
+                Ok("  7  \n".to_string()) // whitespace + newline
+            }
+            fn name(&self) -> &str {
+                "exact_score_mock"
+            }
+        }
+
+        let provider = ExactScoreProvider;
+        let score = score_importance(&provider, "important config detail", "mock")
+            .await
+            .unwrap();
+        assert_eq!(score, 7.0, "Should parse '  7  \\n' as 7.0");
+    }
 }

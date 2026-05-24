@@ -4,9 +4,16 @@
 //! - POST   /v1/memories              → mem_store
 //! - GET    /v1/memories/recall       → mem_recall
 //! - GET    /v1/memories/search       → mem_search
+//! - GET    /v1/memories/:id          → get_memory
 //! - PATCH  /v1/memories/:id          → mem_update
 //! - DELETE /v1/memories/:id          → mem_forget
 //! - POST   /v1/sessions/:id/consolidate → mem_consolidate
+//! - GET    /v1/knowledge             → query_knowledge
+//! - GET    /v1/knowledge/entity/:name → get_entity_context
+//! - GET    /v1/stats                 → get_stats
+
+mod middleware;
+mod routes;
 
 use axum::{
     extract::{Path, Query, State},
@@ -441,9 +448,16 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/memories/recall", get(recall_memories))
         .route("/v1/memories/search", get(search_memories))
         .route("/v1/memories/decay", post(apply_decay))
+        .route("/v1/memories/{id}", get(routes::memories::get_memory))
         .route("/v1/memories/{id}", patch(update_memory))
         .route("/v1/memories/{id}", delete(forget_memory))
         .route("/v1/sessions/{id}/consolidate", post(consolidate_session))
+        .route("/v1/knowledge", get(routes::memories::query_knowledge))
+        .route(
+            "/v1/knowledge/entity/{name}",
+            get(routes::memories::get_entity_context),
+        )
+        .route("/v1/stats", get(routes::memories::get_stats))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(
             tower_http::cors::CorsLayer::new()

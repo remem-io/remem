@@ -5,7 +5,7 @@ use crate::storage::{MemoryStore, StoreStats};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -13,6 +13,8 @@ use uuid::Uuid;
 /// SQLite-backed memory store with WAL mode for concurrent reads.
 pub struct SqliteStore {
     conn: Arc<Mutex<Connection>>,
+    /// Path to the database file (None for in-memory).
+    db_path: Option<PathBuf>,
 }
 
 impl SqliteStore {
@@ -33,6 +35,7 @@ impl SqliteStore {
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
+            db_path: Some(path.to_path_buf()),
         })
     }
 
@@ -46,6 +49,7 @@ impl SqliteStore {
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
+            db_path: None,
         })
     }
 
@@ -426,11 +430,18 @@ impl MemoryStore for SqliteStore {
             by_type.insert(k, v);
         }
 
+        let db_size_bytes = self
+            .db_path
+            .as_ref()
+            .and_then(|p| std::fs::metadata(p).ok())
+            .map(|m: std::fs::Metadata| m.len())
+            .unwrap_or(0);
+
         Ok(StoreStats {
             total_memories: total,
             by_type,
             avg_importance: avg_importance as f32,
-            db_size_bytes: 0, // TODO: get actual file size
+            db_size_bytes,
         })
     }
 

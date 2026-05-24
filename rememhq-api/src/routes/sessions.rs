@@ -1,5 +1,7 @@
 //! Session route handlers — consolidation.
 
+#![allow(dead_code)]
+
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -29,18 +31,27 @@ pub async fn consolidate_session(
 ) -> Result<Json<ConsolidationReport>, (StatusCode, Json<ErrorResponse>)> {
     check_auth(&headers)?;
 
-    let model = body.model.unwrap_or_else(|| engine.config.reasoning.reasoning_model.clone());
+    let model = body
+        .model
+        .unwrap_or_else(|| engine.config.reasoning.reasoning_model.clone());
 
     let report = rememhq_core::reasoning::consolidation::consolidate_session(
         &*engine.provider,
         &*engine.embeddings,
         &engine.store,
-        &engine.index,
+        engine.index.as_ref(),
         &session_id,
         &model,
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+    })?;
 
     Ok(Json(report))
 }
