@@ -8,6 +8,8 @@
 //! - remem inspect        — show database statistics
 
 use clap::{Parser, Subcommand};
+use serde::Deserialize;
+use std::io::Write;
 use std::sync::Arc;
 
 use rememhq_core::config::RememConfig;
@@ -87,6 +89,19 @@ enum Commands {
     Models {
         #[command(subcommand)]
         action: ModelAction,
+    },
+    /// Interactive REPL mode
+    Repl,
+    /// Bulk import memories from a JSONL file
+    Import {
+        /// Path to JSONL file (one JSON object per line)
+        file: String,
+    },
+    /// Export all memories to a JSONL file
+    Export {
+        /// Output file path (defaults to stdout)
+        #[arg(long, short)]
+        output: Option<String>,
     },
 }
 
@@ -265,32 +280,264 @@ async fn main() -> anyhow::Result<()> {
                 Ok(())
             }
         },
+
+        Commands::Repl => {
+            let engine = build_engine(&config).await?;
+            run_repl(engine, &config).await
+        }
+
+        Commands::Import { file } => {
+            let engine = build_engine(&config).await?;
+            let path = std::path::Path::new(&file);
+            if !path.exists() {
+                anyhow::bail!("File not found: {}", file);
+            }
+
+            let content = std::fs::read_to_string(path)?;
+            let mut imported = 0;
+            let mut errors = 0;
+
+            for (i, line) in content.lines().enumerate() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+
+                match serde_json::from_str::<ImportRecord>(line) {
+                    Ok(rec) => {
+                        let memory_type: MemoryType = rec
+                            .memory_type
+                            .as_deref()
+                            .unwrap_or("fact")
+                            .parse()
+                            .unwrap_or(MemoryType::Fact);
+                        let auto_score = rec.importance.is_none();
+                        let mut record = MemoryRecord::new(&rec.content, memory_type)
+                            .with_tags(rec.tags.unwrap_or_default());
+                        if let Some(imp) = rec.importance {
+                            record = record.with_importance(imp);
+                        }
+                        match engine.store_memory(record, auto_score).await {
+                            Ok(stored) => {
+                                imported += 1;
+                                println!(
+                                    "  ✓ [{}] {} (id: {})",
+                                    imported,
+                                    stored.content.chars().take(60).collect::<String>(),
+                                    stored.id
+                                );
+                            }
+                            Err(e) => {
+                                errors += 1;
+                                eprintln!("  ✗ Line {}: {}", i + 1, e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        errors += 1;
+                        eprintln!("  ✗ Line {}: Parse error: {}", i + 1, e);
+                    }
+                }
+            }
+
+            println!(
+                "\n✓ Import complete: {} imported, {} errors",
+                imported, errors
+            );
+
+            // Save index
+            engine.index.save(&config.index_path()).await?;
+            Ok(())
+        }
+
+        Commands::Export { output } => {
+            let store = SqliteStore::open(&config.db_path())?;
+            let all_records = store.list(&[], None, None, 100_000).await?;
+
+            let mut writer: Box<dyn std::io::Write> = match &output {
+                Some(path) => Box::new(std::fs::File::create(path)?),
+                None => Box::new(std::io::stdout()),
+            };
+
+            let mut count = 0;
+            for record in &all_records {
+                let export = ExportRecord {
+                    id: record.id.to_string(),
+                    content: record.content.clone(),
+                    memory_type: record.memory_type.to_string(),
+                    tags: record.tags.clone(),
+                    importance: record.importance,
+                    decay_score: record.decay_score,
+                    created_at: record.created_at.to_rfc3339(),
+                    updated_at: record.updated_at.to_rfc3339(),
+                };
+                let json = serde_json::to_string(&export)?;
+                writeln!(writer, "{}", json)?;
+                count += 1;
+            }
+
+            if let Some(path) = &output {
+                println!("✓ Exported {} memories to {}", count, path);
+            } else {
+                eprintln!("✓ Exported {} memories to stdout", count);
+            }
+            Ok(())
+        }
     }
 }
 
 /// Build a reasoning engine from config (shared setup for CLI commands).
+///
+/// Uses cascading fallback: configured provider → alternatives → MockProvider.
 async fn build_engine(config: &RememConfig) -> anyhow::Result<ReasoningEngine> {
     let store = Arc::new(SqliteStore::open(&config.db_path())?);
     let index = Arc::new(HNSWVectorIndex::new(768, 10000));
     let _ = index.load(&config.index_path()).await;
 
+    // Reasoning provider with robust fallback
     let provider: Arc<dyn rememhq_core::providers::Provider> =
         match config.reasoning.provider.as_str() {
-            "openai" => Arc::new(OpenAIProvider::new(None)?),
-            "google" => Arc::new(GoogleProvider::new(None)?),
-            "mock" => Arc::new(rememhq_core::providers::mock::MockProvider),
-            _ => match AnthropicProvider::new(None) {
+            "openai" => match OpenAIProvider::new(None) {
                 Ok(p) => Arc::new(p),
-                Err(_) => Arc::new(OpenAIProvider::new(None)?),
+                Err(e) => {
+                    eprintln!(
+                        "⚠ Failed to initialize OpenAI provider: {}. Trying fallbacks...",
+                        e
+                    );
+                    match AnthropicProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => match GoogleProvider::new(None) {
+                            Ok(p) => Arc::new(p),
+                            Err(_) => {
+                                eprintln!("⚠ No valid API keys found. Using MockProvider.");
+                                Arc::new(rememhq_core::providers::mock::MockProvider)
+                            }
+                        },
+                    }
+                }
             },
+            "anthropic" => match AnthropicProvider::new(None) {
+                Ok(p) => Arc::new(p),
+                Err(e) => {
+                    eprintln!(
+                        "⚠ Failed to initialize Anthropic provider: {}. Trying fallbacks...",
+                        e
+                    );
+                    match OpenAIProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => match GoogleProvider::new(None) {
+                            Ok(p) => Arc::new(p),
+                            Err(_) => {
+                                eprintln!("⚠ No valid API keys found. Using MockProvider.");
+                                Arc::new(rememhq_core::providers::mock::MockProvider)
+                            }
+                        },
+                    }
+                }
+            },
+            "google" => match GoogleProvider::new(None) {
+                Ok(p) => Arc::new(p),
+                Err(e) => {
+                    eprintln!(
+                        "⚠ Failed to initialize Google provider: {}. Trying fallbacks...",
+                        e
+                    );
+                    match AnthropicProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => match OpenAIProvider::new(None) {
+                            Ok(p) => Arc::new(p),
+                            Err(_) => {
+                                eprintln!("⚠ No valid API keys found. Using MockProvider.");
+                                Arc::new(rememhq_core::providers::mock::MockProvider)
+                            }
+                        },
+                    }
+                }
+            },
+            "local" => Arc::new(rememhq_core::providers::local::LocalProvider::new(None)),
+            "mock" => Arc::new(rememhq_core::providers::mock::MockProvider),
+            _ => {
+                // Auto-detect based on env vars
+                if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+                    match AnthropicProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
+                    }
+                } else if std::env::var("OPENAI_API_KEY").is_ok() {
+                    match OpenAIProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
+                    }
+                } else if std::env::var("GOOGLE_API_KEY").is_ok() {
+                    match GoogleProvider::new(None) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
+                    }
+                } else {
+                    eprintln!("⚠ No reasoning API keys set. Using MockProvider.");
+                    Arc::new(rememhq_core::providers::mock::MockProvider)
+                }
+            }
         };
 
-    let embeddings: Arc<dyn rememhq_core::providers::EmbeddingProvider> =
-        match config.reasoning.provider.as_str() {
-            "google" => Arc::new(GoogleEmbeddings::new(None)?),
-            "mock" => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
-            _ => Arc::new(OpenAIEmbeddings::new(None, Some(768))?),
-        };
+    // Embedding provider with robust fallback
+    let embeddings: Arc<dyn rememhq_core::providers::EmbeddingProvider> = match config
+        .reasoning
+        .provider
+        .as_str()
+    {
+        "google" => match GoogleEmbeddings::new(None) {
+            Ok(p) => Arc::new(p),
+            Err(e) => {
+                eprintln!(
+                    "⚠ Failed to initialize Google embeddings: {}. Trying fallbacks...",
+                    e
+                );
+                if std::env::var("OPENAI_API_KEY").is_ok() {
+                    match OpenAIEmbeddings::new(None, Some(768)) {
+                        Ok(p) => Arc::new(p),
+                        Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
+                    }
+                } else {
+                    Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
+                }
+            }
+        },
+        "mock" => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
+        "local" => {
+            let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
+                .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
+            let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
+                .unwrap_or_else(|_| "models/vocab.txt".to_string());
+            match rememhq_core::providers::local::LocalEmbeddings::new(&model_path, &vocab_path) {
+                Ok(p) => Arc::new(p),
+                Err(e) => {
+                    eprintln!(
+                        "⚠ Failed to initialize local embeddings: {}. Using MockEmbeddings.",
+                        e
+                    );
+                    Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
+                }
+            }
+        }
+        _ => {
+            // Auto-detect embeddings
+            if std::env::var("OPENAI_API_KEY").is_ok() {
+                match OpenAIEmbeddings::new(None, Some(768)) {
+                    Ok(p) => Arc::new(p),
+                    Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
+                }
+            } else if std::env::var("GOOGLE_API_KEY").is_ok() {
+                match GoogleEmbeddings::new(None) {
+                    Ok(p) => Arc::new(p),
+                    Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
+                }
+            } else {
+                eprintln!("⚠ No embedding API keys found. Using MockEmbeddings.");
+                Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
+            }
+        }
+    };
 
     Ok(ReasoningEngine::new(
         config.clone(),
@@ -299,4 +546,158 @@ async fn build_engine(config: &RememConfig) -> anyhow::Result<ReasoningEngine> {
         store,
         index,
     ))
+}
+
+// --- Import / Export record types ---
+
+#[derive(Deserialize)]
+struct ImportRecord {
+    content: String,
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    #[serde(default)]
+    importance: Option<f32>,
+    #[serde(default)]
+    memory_type: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+struct ExportRecord {
+    id: String,
+    content: String,
+    memory_type: String,
+    tags: Vec<String>,
+    importance: f32,
+    decay_score: f32,
+    created_at: String,
+    updated_at: String,
+}
+
+// --- REPL ---
+
+async fn run_repl(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Result<()> {
+    println!("remem interactive REPL v{}", env!("CARGO_PKG_VERSION"));
+    println!("Project: {}", config.reasoning.provider);
+    println!("Type 'help' for commands, 'quit' to exit.\n");
+
+    let stdin = std::io::stdin();
+    loop {
+        print!("remem> ");
+        std::io::stdout().flush()?;
+
+        let mut input = String::new();
+        if stdin.read_line(&mut input)? == 0 {
+            // EOF
+            break;
+        }
+        let input = input.trim();
+        if input.is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = input.splitn(2, ' ').collect();
+        let cmd = parts[0].to_lowercase();
+        let args = parts.get(1).copied().unwrap_or("");
+
+        match cmd.as_str() {
+            "quit" | "exit" | "q" => {
+                println!("Saving index and exiting...");
+                engine.index.save(&config.index_path()).await?;
+                break;
+            }
+            "help" | "h" | "?" => {
+                println!("Commands:");
+                println!("  store <text>         Store a memory (auto-scored)");
+                println!("  recall <query>       Recall memories (LLM re-ranked)");
+                println!("  search <query>       Search memories (vector + FTS)");
+                println!("  inspect              Show database statistics");
+                println!("  quit                 Save and exit");
+                println!("  help                 Show this help");
+            }
+            "store" | "s" => {
+                if args.is_empty() {
+                    eprintln!("Usage: store <text>");
+                    continue;
+                }
+                match engine
+                    .store_memory(MemoryRecord::new(args, MemoryType::Fact), true)
+                    .await
+                {
+                    Ok(stored) => {
+                        println!(
+                            "\u{2713} Stored {} (importance: {:.1})",
+                            stored.id, stored.importance
+                        );
+                    }
+                    Err(e) => eprintln!("Error: {}", e),
+                }
+            }
+            "recall" | "r" => {
+                if args.is_empty() {
+                    eprintln!("Usage: recall <query>");
+                    continue;
+                }
+                match engine.recall(args, 8, &[], None, None).await {
+                    Ok(results) => {
+                        if results.is_empty() {
+                            println!("No memories found.");
+                        } else {
+                            for (i, r) in results.iter().enumerate() {
+                                println!("  {}. [imp: {:.1}] {}", i + 1, r.importance, r.content);
+                                if let Some(reasoning) = &r.reasoning {
+                                    println!("     \u{2192} {}", reasoning);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("Error: {}", e),
+                }
+            }
+            "search" => {
+                if args.is_empty() {
+                    eprintln!("Usage: search <query>");
+                    continue;
+                }
+                match engine.search(args, 10, &[]).await {
+                    Ok(results) => {
+                        if results.is_empty() {
+                            println!("No memories found.");
+                        } else {
+                            for (i, r) in results.iter().enumerate() {
+                                println!(
+                                    "  {}. [sim: {:.3}, imp: {:.1}] {}",
+                                    i + 1,
+                                    r.similarity,
+                                    r.importance,
+                                    r.content
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("Error: {}", e),
+                }
+            }
+            "inspect" | "stats" | "i" => {
+                let stats = engine.store.stats().await;
+                match stats {
+                    Ok(s) => {
+                        println!("Total memories: {}", s.total_memories);
+                        println!("Average importance: {:.1}", s.avg_importance);
+                        for (k, v) in &s.by_type {
+                            println!("  {}: {}", k, v);
+                        }
+                    }
+                    Err(e) => eprintln!("Error: {}", e),
+                }
+            }
+            _ => {
+                eprintln!(
+                    "Unknown command: '{}'. Type 'help' for available commands.",
+                    cmd
+                );
+            }
+        }
+    }
+
+    Ok(())
 }

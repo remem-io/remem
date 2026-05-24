@@ -16,14 +16,23 @@ and reasoning performance across different providers and models.
 
 ## Running Evaluations
 
+You can run evaluations against a live local API server or in mock simulation mode:
+
+### 1. Mock Simulation Mode (Default offline)
+Runs a simulated performance and accuracy pass without requiring the server to be running:
 ```bash
-cd evals
-remem eval run --provider anthropic --model claude-sonnet-4-5
-remem eval run --provider openai --model gpt-4o
-remem eval compare results/
+python evals/benchmark.py --mock
 ```
 
+### 2. Live API Server Mode
+1. Start the API server in a separate terminal:
+   ```bash
+   cargo run -p rememhq-api -- --project eval-test
+   ```
+2. Run the evaluation benchmark script:
+   ```bash
+   python evals/benchmark.py
+   ```
+
 ## Status
-🚧 **Evaluation harness is planned for v0.2.** The benchmark tasks will be
-based on LongMemEval with rememhq-specific additions for consolidation
-and contradiction detection quality.
+✅ **Evaluation harness is fully implemented (v0.2+).** The benchmark suite measures recall accuracy, semantic relevance precision, contradiction detection rate, consolidation quality, and profiles transaction latencies (p50/p95).

@@ -5,10 +5,10 @@
 * @thrive-spectrexq
 
 # Core Rust crates
-/remem-core/ @thrive-spectrexq
-/remem-mcp/  @thrive-spectrexq
-/remem-api/  @thrive-spectrexq
-/remem-cli/  @thrive-spectrexq
+/rememhq-core/ @thrive-spectrexq
+/rememhq-mcp/  @thrive-spectrexq
+/rememhq-api/  @thrive-spectrexq
+/rememhq-cli/  @thrive-spectrexq
 
 # C++ core (future)
 /libremem/ @thrive-spectrexq
