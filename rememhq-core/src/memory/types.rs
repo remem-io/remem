@@ -2,10 +2,11 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// The four memory types in remem's taxonomy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum MemoryType {
     /// Durable facts, decisions, preferences, and patterns.
@@ -44,7 +45,7 @@ impl std::str::FromStr for MemoryType {
 }
 
 /// A single memory record stored in remem.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MemoryRecord {
     /// Unique identifier.
     pub id: Uuid,
@@ -122,7 +123,7 @@ impl MemoryRecord {
 }
 
 /// A memory result returned from recall/search, includes reasoning trace.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MemoryResult {
     /// The memory record.
     pub id: Uuid,
@@ -158,7 +159,7 @@ impl From<MemoryRecord> for MemoryResult {
 }
 
 /// Parameters for storing a new memory.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StoreRequest {
     pub content: String,
     #[serde(default)]
@@ -175,7 +176,7 @@ fn default_memory_type() -> MemoryType {
 }
 
 /// Parameters for recalling memories (guided retrieval).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RecallRequest {
     pub query: String,
     #[serde(default = "default_recall_limit")]
@@ -191,7 +192,7 @@ fn default_recall_limit() -> usize {
 }
 
 /// Parameters for searching memories (no LLM re-ranking).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchRequest {
     pub query: String,
     #[serde(default = "default_search_limit")]
@@ -205,7 +206,7 @@ fn default_search_limit() -> usize {
 }
 
 /// Parameters for updating a memory.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UpdateRequest {
     pub id: Uuid,
     pub content: Option<String>,
@@ -214,7 +215,7 @@ pub struct UpdateRequest {
 }
 
 /// Forget mode for deleting/archiving memories.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ForgetMode {
     Delete,
@@ -223,7 +224,7 @@ pub enum ForgetMode {
 }
 
 /// Parameters for forgetting a memory.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ForgetRequest {
     pub id: Uuid,
     #[serde(default = "default_forget_mode")]
@@ -235,7 +236,7 @@ fn default_forget_mode() -> ForgetMode {
 }
 
 /// Result of a consolidation pass.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ConsolidationReport {
     pub session_id: String,
     pub new_facts: usize,
@@ -245,7 +246,7 @@ pub struct ConsolidationReport {
 }
 
 /// A detected contradiction between memories.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Contradiction {
     pub existing_memory_id: Uuid,
     pub new_content: String,
@@ -254,7 +255,7 @@ pub struct Contradiction {
 }
 
 /// An update to the knowledge graph.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct KnowledgeGraphUpdate {
     pub subject: String,
     pub predicate: String,

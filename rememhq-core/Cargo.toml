@@ -20,6 +20,8 @@ reqwest = { workspace = true }
 toml = { workspace = true }
 dirs = { workspace = true }
 ndarray = { workspace = true }
+utoipa = { workspace = true }
+
 
 [build-dependencies]
 cc = { workspace = true }

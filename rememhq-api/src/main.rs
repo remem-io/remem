@@ -25,6 +25,7 @@ use axum::{
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use utoipa::ToSchema;
 
 use rememhq_core::config::RememConfig;
 use rememhq_core::memory::types::*;
@@ -48,7 +49,7 @@ struct Args {
 
 // --- Response types ---
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct StoreResponse {
     id: uuid::Uuid,
     importance: f32,
@@ -56,7 +57,7 @@ struct StoreResponse {
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct ErrorResponse {
     error: String,
 }
@@ -83,7 +84,7 @@ struct SearchQuery {
     filter_tags: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct UpdateBody {
     content: Option<String>,
     importance: Option<f32>,
@@ -96,7 +97,7 @@ struct ForgetQuery {
     mode: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct ConsolidateBody {
     #[serde(default)]
     model: Option<String>,
@@ -111,7 +112,7 @@ fn default_20() -> usize {
 fn default_delete() -> String {
     "delete".into()
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct DecayBody {
     #[serde(default = "default_factor")]
     factor: f32,
@@ -144,6 +145,20 @@ fn check_auth(headers: &HeaderMap) -> Result<(), (StatusCode, Json<ErrorResponse
 
 // --- Handlers ---
 
+/// Store a new memory.
+#[utoipa::path(
+    post,
+    path = "/v1/memories",
+    request_body = StoreRequest,
+    responses(
+        (status = 201, description = "Memory stored successfully", body = StoreResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 async fn store_memory(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -182,6 +197,27 @@ async fn store_memory(
     ))
 }
 
+/// Recall memories using guided retrieval (vector search + LLM re-ranking).
+#[utoipa::path(
+    get,
+    path = "/v1/memories/recall",
+    params(
+        ("q" = String, Query, description = "Query string"),
+        ("limit" = Option<usize>, Query, description = "Max results to return"),
+        ("offset" = Option<usize>, Query, description = "Results offset"),
+        ("filter_tags" = Option<String>, Query, description = "Comma-separated list of tags to filter by"),
+        ("since" = Option<String>, Query, description = "ISO8601/RFC3339 timestamp filter"),
+        ("memory_type" = Option<String>, Query, description = "Memory type filter (fact, procedure, preference, decision)")
+    ),
+    responses(
+        (status = 200, description = "Recall results", body = Vec<MemoryResult>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 async fn recall_memories(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -225,6 +261,25 @@ async fn recall_memories(
     Ok(Json(paginated))
 }
 
+/// Search memories using simple vector similarity.
+#[utoipa::path(
+    get,
+    path = "/v1/memories/search",
+    params(
+        ("q" = String, Query, description = "Search query string"),
+        ("limit" = Option<usize>, Query, description = "Max results to return"),
+        ("offset" = Option<usize>, Query, description = "Results offset"),
+        ("filter_tags" = Option<String>, Query, description = "Comma-separated list of tags to filter by")
+    ),
+    responses(
+        (status = 200, description = "Search results", body = Vec<MemoryResult>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 async fn search_memories(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -261,6 +316,24 @@ async fn search_memories(
     Ok(Json(paginated))
 }
 
+/// Update an existing memory's content, importance, or tags.
+#[utoipa::path(
+    patch,
+    path = "/v1/memories/{id}",
+    params(
+        ("id" = String, Path, description = "UUID of the memory to update")
+    ),
+    request_body = UpdateBody,
+    responses(
+        (status = 200, description = "Memory updated successfully", body = serde_json::Value),
+        (status = 400, description = "Invalid UUID"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 async fn update_memory(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -299,6 +372,24 @@ async fn update_memory(
     })))
 }
 
+/// Forget a memory (delete, archive, or decay).
+#[utoipa::path(
+    delete,
+    path = "/v1/memories/{id}",
+    params(
+        ("id" = String, Path, description = "UUID of the memory to forget"),
+        ("mode" = Option<String>, Query, description = "Forget mode (delete, decay, archive)")
+    ),
+    responses(
+        (status = 200, description = "Memory forgotten successfully", body = serde_json::Value),
+        (status = 400, description = "Invalid UUID"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 async fn forget_memory(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -331,6 +422,20 @@ async fn forget_memory(
     Ok(Json(serde_json::json!({ "success": success })))
 }
 
+/// Apply decay to all active memories, archiving those that fall below threshold.
+#[utoipa::path(
+    post,
+    path = "/v1/memories/decay",
+    request_body = DecayBody,
+    responses(
+        (status = 200, description = "Decay applied successfully", body = serde_json::Value),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 async fn apply_decay(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -354,6 +459,23 @@ async fn apply_decay(
     })))
 }
 
+/// Consolidate a raw agent session, extracting new facts, checking contradictions, and updating the knowledge graph.
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{id}/consolidate",
+    params(
+        ("id" = String, Path, description = "Session ID to consolidate")
+    ),
+    request_body = ConsolidateBody,
+    responses(
+        (status = 200, description = "Session consolidated successfully", body = ConsolidationReport),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 async fn consolidate_session(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -389,6 +511,107 @@ async fn consolidate_session(
 
 async fn health() -> &'static str {
     "ok"
+}
+
+const SWAGGER_HTML: &str = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>remem API Docs</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" >
+  <style>
+    html { box-sizing: border-box; overflow-y: scroll; }
+    *, *:before, *:after { box-sizing: inherit; }
+    body { margin:0; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"> </script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"> </script>
+  <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "/api-docs/openapi.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout"
+      });
+      window.ui = ui;
+    };
+  </script>
+</body>
+</html>"#;
+
+async fn get_openapi_json() -> Json<serde_json::Value> {
+    use utoipa::OpenApi;
+    Json(serde_json::to_value(ApiDoc::openapi()).unwrap())
+}
+
+async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
+    axum::response::Html(SWAGGER_HTML)
+}
+
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(
+        store_memory,
+        recall_memories,
+        search_memories,
+        update_memory,
+        forget_memory,
+        apply_decay,
+        consolidate_session,
+        routes::memories::get_memory,
+        routes::memories::query_knowledge,
+        routes::memories::get_entity_context,
+        routes::memories::get_stats
+    ),
+    components(
+        schemas(
+            StoreRequest,
+            StoreResponse,
+            ErrorResponse,
+            MemoryRecord,
+            MemoryResult,
+            MemoryType,
+            UpdateBody,
+            ForgetMode,
+            DecayBody,
+            ConsolidateBody,
+            ConsolidationReport,
+            Contradiction,
+            KnowledgeGraphUpdate,
+            rememhq_core::storage::StoreStats
+        )
+    ),
+    modifiers(&SecurityAddon)
+)]
+struct ApiDoc;
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "api_key",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::HttpBuilder::new()
+                        .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
+                        .bearer_format("API Key")
+                        .build(),
+                ),
+            );
+        }
+    }
 }
 
 #[tokio::main]
@@ -589,6 +812,9 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(health))
+        .route("/api-docs/openapi.json", get(get_openapi_json))
+        .route("/swagger-ui", get(swagger_ui_handler))
+        .route("/swagger-ui/", get(swagger_ui_handler))
         .route("/v1/memories", post(store_memory))
         .route("/v1/memories/recall", get(recall_memories))
         .route("/v1/memories/search", get(search_memories))

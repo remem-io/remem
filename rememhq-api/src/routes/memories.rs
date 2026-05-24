@@ -10,10 +10,11 @@ use axum::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
+use utoipa::ToSchema;
 
 use rememhq_core::memory::types::*;
 use rememhq_core::reasoning::ReasoningEngine;
-use rememhq_core::storage::MemoryStore;
+use rememhq_core::storage::{MemoryStore, StoreStats};
 
 use crate::middleware::auth::check_auth;
 
@@ -21,7 +22,7 @@ type AppState = Arc<ReasoningEngine>;
 
 // --- Request/Response types ---
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct StoreResponse {
     pub id: uuid::Uuid,
     pub importance: f32,
@@ -29,7 +30,7 @@ pub struct StoreResponse {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct ErrorResponse {
     pub error: String,
 }
@@ -265,7 +266,23 @@ pub async fn forget_memory(
     Ok(Json(serde_json::json!({ "success": success })))
 }
 
-/// GET /v1/memories/:id — fetch a single memory by ID.
+/// Fetch a single memory by its UUID.
+#[utoipa::path(
+    get,
+    path = "/v1/memories/{id}",
+    params(
+        ("id" = String, Path, description = "UUID of the memory to fetch")
+    ),
+    responses(
+        (status = 200, description = "Memory fetched successfully", body = MemoryRecord),
+        (status = 400, description = "Invalid UUID"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Memory not found", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 pub async fn get_memory(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -326,7 +343,22 @@ pub struct KnowledgeQuery {
     pub object: Option<String>,
 }
 
-/// GET /v1/knowledge/entity/:name — get all knowledge triples for an entity.
+/// Get all knowledge graph triples associated with a specific entity name.
+#[utoipa::path(
+    get,
+    path = "/v1/knowledge/entity/{name}",
+    params(
+        ("name" = String, Path, description = "Entity name to retrieve context for")
+    ),
+    responses(
+        (status = 200, description = "Knowledge graph triples", body = Vec<KnowledgeGraphUpdate>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 pub async fn get_entity_context(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -349,7 +381,24 @@ pub async fn get_entity_context(
     Ok(Json(triples))
 }
 
-/// GET /v1/knowledge — query knowledge graph with optional filters.
+/// Query the knowledge graph with optional subject, predicate, or object filters.
+#[utoipa::path(
+    get,
+    path = "/v1/knowledge",
+    params(
+        ("subject" = Option<String>, Query, description = "Subject filter"),
+        ("predicate" = Option<String>, Query, description = "Predicate filter"),
+        ("object" = Option<String>, Query, description = "Object filter")
+    ),
+    responses(
+        (status = 200, description = "Matching knowledge graph triples", body = Vec<KnowledgeGraphUpdate>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 pub async fn query_knowledge(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -379,7 +428,19 @@ pub async fn query_knowledge(
     Ok(Json(triples))
 }
 
-/// GET /v1/stats — get database statistics.
+/// Get database and memory usage statistics.
+#[utoipa::path(
+    get,
+    path = "/v1/stats",
+    responses(
+        (status = 200, description = "Database statistics", body = StoreStats),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
 pub async fn get_stats(
     State(engine): State<AppState>,
     headers: HeaderMap,

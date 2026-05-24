@@ -25,3 +25,6 @@ tower-http = { workspace = true }
 clap = { workspace = true }
 async-trait = { workspace = true }
 dotenvy = "0.15.7"
+utoipa = { workspace = true }
+utoipa-axum = { workspace = true }
+

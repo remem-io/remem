@@ -75,7 +75,7 @@ pub trait MemoryStore: Send + Sync {
 }
 
 /// Database statistics.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct StoreStats {
     pub total_memories: usize,
     pub by_type: std::collections::HashMap<String, usize>,
