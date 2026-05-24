@@ -39,6 +39,7 @@ pub struct RecallQuery {
     pub q: String,
     #[serde(default = "default_8")]
     pub limit: usize,
+    pub offset: Option<usize>,
     pub filter_tags: Option<String>,
     pub since: Option<String>,
     pub memory_type: Option<String>,
@@ -49,6 +50,7 @@ pub struct SearchQuery {
     pub q: String,
     #[serde(default = "default_20")]
     pub limit: usize,
+    pub offset: Option<usize>,
     pub filter_tags: Option<String>,
 }
 
@@ -133,8 +135,12 @@ pub async fn recall_memories(
 
     let memory_type = q.memory_type.and_then(|s| s.parse().ok());
 
+    let offset = q.offset.unwrap_or(0);
+    let limit = q.limit;
+    let fetch_limit = offset + limit;
+
     let results = engine
-        .recall(&q.q, q.limit, &filter_tags, since, memory_type)
+        .recall(&q.q, fetch_limit, &filter_tags, since, memory_type)
         .await
         .map_err(|e| {
             (
@@ -145,7 +151,12 @@ pub async fn recall_memories(
             )
         })?;
 
-    Ok(Json(results))
+    let paginated = results
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect::<Vec<_>>();
+    Ok(Json(paginated))
 }
 
 pub async fn search_memories(
@@ -160,8 +171,12 @@ pub async fn search_memories(
         .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
         .unwrap_or_default();
 
+    let offset = q.offset.unwrap_or(0);
+    let limit = q.limit;
+    let fetch_limit = offset + limit;
+
     let results = engine
-        .search(&q.q, q.limit, &filter_tags)
+        .search(&q.q, fetch_limit, &filter_tags)
         .await
         .map_err(|e| {
             (
@@ -172,7 +187,12 @@ pub async fn search_memories(
             )
         })?;
 
-    Ok(Json(results))
+    let paginated = results
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect::<Vec<_>>();
+    Ok(Json(paginated))
 }
 
 pub async fn update_memory(
@@ -376,4 +396,95 @@ pub async fn get_stats(
     })?;
 
     Ok(Json(stats))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::routing::get;
+    use axum::Router;
+    use rememhq_core::config::RememConfig;
+    use rememhq_core::memory::types::{MemoryRecord, MemoryType};
+    use rememhq_core::providers::mock::{MockEmbeddings, MockProvider};
+    use rememhq_core::providers::EmbeddingProvider;
+    use rememhq_core::storage::sqlite::SqliteStore;
+    use rememhq_core::storage::vector::{HNSWVectorIndex, VectorIndex};
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_pagination_offset_limit() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        let index = HNSWVectorIndex::new(768, 100);
+        let provider = Arc::new(MockProvider);
+        let embeddings = Arc::new(MockEmbeddings::new(768));
+
+        // Insert 5 test memories
+        for i in 0..5 {
+            let record = MemoryRecord::new(format!("Alice test memory {}", i), MemoryType::Fact);
+            let embedding = embeddings.embed(&record.content).await.unwrap();
+
+            let mut record_with_emb = record.clone();
+            record_with_emb.embedding = Some(embedding.clone());
+            store.insert(&record_with_emb).await.unwrap();
+            index.add(record.id, &embedding).await.unwrap();
+        }
+
+        let config = RememConfig::default();
+        let engine = Arc::new(ReasoningEngine::new(
+            config,
+            provider,
+            embeddings,
+            Arc::new(store),
+            Arc::new(index),
+        ));
+
+        let app = Router::new()
+            .route("/v1/memories/recall", get(recall_memories))
+            .route("/v1/memories/search", get(search_memories))
+            .with_state(engine);
+
+        // Test search pagination: limit = 2, offset = 0
+        let req = axum::http::Request::builder()
+            .uri("/v1/memories/search?q=Alice&limit=2&offset=0")
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(res.into_body(), 10000).await.unwrap();
+        let memories: Vec<MemoryResult> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(memories.len(), 2);
+
+        // Test search pagination: limit = 2, offset = 2
+        let req2 = axum::http::Request::builder()
+            .uri("/v1/memories/search?q=Alice&limit=2&offset=2")
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let res2 = app.clone().oneshot(req2).await.unwrap();
+        assert_eq!(res2.status(), StatusCode::OK);
+
+        let body2 = axum::body::to_bytes(res2.into_body(), 10000).await.unwrap();
+        let memories2: Vec<MemoryResult> = serde_json::from_slice(&body2).unwrap();
+        assert_eq!(memories2.len(), 2);
+
+        // Assert that the memories in page 2 are different from page 1
+        assert_ne!(memories[0].id, memories2[0].id);
+        assert_ne!(memories[1].id, memories2[1].id);
+
+        // Test recall pagination: limit = 1, offset = 4
+        let req3 = axum::http::Request::builder()
+            .uri("/v1/memories/recall?q=Alice&limit=1&offset=4")
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let res3 = app.clone().oneshot(req3).await.unwrap();
+        assert_eq!(res3.status(), StatusCode::OK);
+
+        let body3 = axum::body::to_bytes(res3.into_body(), 10000).await.unwrap();
+        let memories3: Vec<MemoryResult> = serde_json::from_slice(&body3).unwrap();
+        assert_eq!(memories3.len(), 1);
+    }
 }

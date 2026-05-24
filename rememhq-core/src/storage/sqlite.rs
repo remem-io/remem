@@ -172,12 +172,8 @@ impl SqliteStore {
             ttl_days,
         })
     }
-}
 
-#[async_trait::async_trait]
-impl MemoryStore for SqliteStore {
-    async fn insert(&self, record: &MemoryRecord) -> anyhow::Result<()> {
-        let conn = self.conn.lock().await;
+    fn insert_inner(conn: &Connection, record: &MemoryRecord) -> anyhow::Result<()> {
         conn.execute(
             "INSERT INTO memories (id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -197,6 +193,89 @@ impl MemoryStore for SqliteStore {
         Ok(())
     }
 
+    fn update_inner(conn: &Connection, record: &MemoryRecord) -> anyhow::Result<()> {
+        conn.execute(
+            "UPDATE memories SET content = ?1, importance = ?2, tags = ?3, memory_type = ?4, updated_at = ?5, decay_score = ?6
+             WHERE id = ?7",
+            params![
+                record.content,
+                record.importance as f64,
+                Self::serialize_tags(&record.tags),
+                record.memory_type.to_string(),
+                Utc::now().to_rfc3339(),
+                record.decay_score as f64,
+                record.id.to_string(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn archive_inner(conn: &Connection, id: Uuid) -> anyhow::Result<bool> {
+        let rows = conn.execute(
+            "UPDATE memories SET archived = 1, updated_at = ?1 WHERE id = ?2",
+            params![Utc::now().to_rfc3339(), id.to_string()],
+        )?;
+        Ok(rows > 0)
+    }
+
+    fn insert_knowledge_triple_inner(
+        conn: &Connection,
+        triple: &KnowledgeGraphUpdate,
+        memory_id: Uuid,
+    ) -> anyhow::Result<()> {
+        conn.execute(
+            "INSERT OR IGNORE INTO knowledge_graph (subject, predicate, object, memory_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                triple.subject,
+                triple.predicate,
+                triple.object,
+                memory_id.to_string(),
+                Utc::now().to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Run a batch of consolidation writes atomically inside a single transaction.
+    pub async fn save_consolidation(
+        &self,
+        inserts: &[MemoryRecord],
+        updates: &[MemoryRecord],
+        archives: &[Uuid],
+        triples: &[(KnowledgeGraphUpdate, Uuid)],
+    ) -> anyhow::Result<()> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+
+        for record in inserts {
+            Self::insert_inner(&tx, record)?;
+        }
+
+        for record in updates {
+            Self::update_inner(&tx, record)?;
+        }
+
+        for id in archives {
+            let _ = Self::archive_inner(&tx, *id)?;
+        }
+
+        for (triple, memory_id) in triples {
+            Self::insert_knowledge_triple_inner(&tx, triple, *memory_id)?;
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl MemoryStore for SqliteStore {
+    async fn insert(&self, record: &MemoryRecord) -> anyhow::Result<()> {
+        let conn = self.conn.lock().await;
+        Self::insert_inner(&conn, record)
+    }
+
     async fn get(&self, id: Uuid) -> anyhow::Result<Option<MemoryRecord>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
@@ -213,20 +292,7 @@ impl MemoryStore for SqliteStore {
 
     async fn update(&self, record: &MemoryRecord) -> anyhow::Result<()> {
         let conn = self.conn.lock().await;
-        conn.execute(
-            "UPDATE memories SET content = ?1, importance = ?2, tags = ?3, memory_type = ?4, updated_at = ?5, decay_score = ?6
-             WHERE id = ?7",
-            params![
-                record.content,
-                record.importance as f64,
-                Self::serialize_tags(&record.tags),
-                record.memory_type.to_string(),
-                Utc::now().to_rfc3339(),
-                record.decay_score as f64,
-                record.id.to_string(),
-            ],
-        )?;
-        Ok(())
+        Self::update_inner(&conn, record)
     }
 
     async fn delete(&self, id: Uuid) -> anyhow::Result<bool> {
@@ -244,18 +310,7 @@ impl MemoryStore for SqliteStore {
         memory_id: Uuid,
     ) -> anyhow::Result<()> {
         let conn = self.conn.lock().await;
-        conn.execute(
-            "INSERT OR IGNORE INTO knowledge_graph (subject, predicate, object, memory_id, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                triple.subject,
-                triple.predicate,
-                triple.object,
-                memory_id.to_string(),
-                Utc::now().to_rfc3339(),
-            ],
-        )?;
-        Ok(())
+        Self::insert_knowledge_triple_inner(&conn, triple, memory_id)
     }
 
     async fn get_knowledge_for_entity(

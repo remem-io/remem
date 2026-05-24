@@ -79,14 +79,20 @@ pub async fn consolidate_session(
     )
     .await?;
 
-    // Auto-resolve contradictions by archiving the old superseded memories
+    let mut inserts = Vec::new();
+    let mut updates = Vec::new();
+    let mut archives = Vec::new();
+    let mut triples = Vec::new();
+    let mut index_adds = Vec::new();
+
+    // Auto-resolve contradictions by preparing archives
     for c in &contradictions {
         tracing::info!(
             old_memory_id = %c.existing_memory_id,
             explanation = %c.explanation,
-            "Auto-resolving contradiction by archiving superseded memory"
+            "Auto-resolving contradiction by preparing archive of superseded memory"
         );
-        let _ = store.archive(c.existing_memory_id).await;
+        archives.push(c.existing_memory_id);
     }
 
     // Step 3: Store new facts
@@ -109,15 +115,16 @@ pub async fn consolidate_session(
         let mut is_update = false;
 
         for er in &existing_results {
-            if er.similarity > 0.92 {
+            if er.similarity > 0.92 && !archives.contains(&er.id) {
                 // Very similar — this is an update, not a new fact
                 if let Ok(Some(existing)) = store.get(er.id).await {
                     let mut updated = existing;
                     updated.content = record.content.clone();
                     updated.importance = record.importance.max(updated.importance);
                     updated.updated_at = chrono::Utc::now();
-                    store.update(&updated).await?;
-                    index.add(updated.id, &embedding).await?;
+
+                    updates.push(updated.clone());
+                    index_adds.push((updated.id, embedding.clone()));
                     updated_count += 1;
                     is_update = true;
                     break;
@@ -126,17 +133,26 @@ pub async fn consolidate_session(
         }
 
         if !is_update {
-            store.insert(&record).await?;
-            index.add(record.id, &embedding).await?;
+            inserts.push(record.clone());
+            index_adds.push((record.id, embedding.clone()));
             new_count += 1;
         }
 
         // Extract knowledge graph triples
         if let Some(triple) = &fact.knowledge_triple {
             kg_updates.push(triple.clone());
-            // Persist the triple to the SQLite knowledge_graph table
-            let _ = store.insert_knowledge_triple(triple, record.id).await;
+            triples.push((triple.clone(), record.id));
         }
+    }
+
+    // Execute ALL SQLite writes atomically in a single transaction
+    store
+        .save_consolidation(&inserts, &updates, &archives, &triples)
+        .await?;
+
+    // Add to vector index after successful DB commit
+    for (id, embedding) in index_adds {
+        let _ = index.add(id, &embedding).await;
     }
 
     Ok(ConsolidationReport {

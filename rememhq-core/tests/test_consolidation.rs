@@ -2,7 +2,7 @@
 
 use rememhq_core::memory::types::{MemoryRecord, MemoryType};
 use rememhq_core::providers::mock::{MockEmbeddings, MockProvider};
-use rememhq_core::providers::{EmbeddingProvider, Provider};
+use rememhq_core::providers::EmbeddingProvider;
 use rememhq_core::reasoning::consolidation::consolidate_session;
 use rememhq_core::storage::sqlite::SqliteStore;
 use rememhq_core::storage::vector::{HNSWVectorIndex, VectorIndex};
@@ -41,9 +41,9 @@ async fn test_consolidate_normal_session() {
     let embeddings = MockEmbeddings::new(768);
 
     // Insert a raw memory from the session
-    let mut record = MemoryRecord::new("User said they love coding in Rust", MemoryType::Fact)
+    let record = MemoryRecord::new("User said they love coding in Rust", MemoryType::Fact)
         .with_session("session-normal");
-    let embedding = embeddings.embed(&record.content).await.unwrap();
+    let _embedding = embeddings.embed(&record.content).await.unwrap();
     store.insert(&record).await.unwrap();
 
     let report = consolidate_session(
@@ -82,7 +82,7 @@ async fn test_consolidate_procedure_session() {
     let embeddings = MockEmbeddings::new(768);
 
     // Insert raw memory mentioning "To bake a cake"
-    let mut record = MemoryRecord::new(
+    let record = MemoryRecord::new(
         "To bake a cake, first preheat the oven and then mix the batter.",
         MemoryType::Procedure,
     )
@@ -140,7 +140,7 @@ async fn test_consolidate_with_contradiction_autoresolve() {
     assert!(store.get(existing_record.id).await.unwrap().is_some());
 
     // 2. Insert new raw memory from the session "Alice moved to New York"
-    let mut raw_record = MemoryRecord::new("Alice moved to New York", MemoryType::Fact)
+    let raw_record = MemoryRecord::new("Alice moved to New York", MemoryType::Fact)
         .with_session("session-contradiction");
     store.insert(&raw_record).await.unwrap();
 

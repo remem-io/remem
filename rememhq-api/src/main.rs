@@ -65,6 +65,7 @@ struct RecallQuery {
     q: String,
     #[serde(default = "default_8")]
     limit: usize,
+    offset: Option<usize>,
     #[serde(default)]
     filter_tags: Option<String>,
     since: Option<String>,
@@ -76,6 +77,7 @@ struct SearchQuery {
     q: String,
     #[serde(default = "default_20")]
     limit: usize,
+    offset: Option<usize>,
     #[serde(default)]
     filter_tags: Option<String>,
 }
@@ -198,8 +200,12 @@ async fn recall_memories(
 
     let memory_type = q.memory_type.and_then(|s| s.parse().ok());
 
+    let offset = q.offset.unwrap_or(0);
+    let limit = q.limit;
+    let fetch_limit = offset + limit;
+
     let results = engine
-        .recall(&q.q, q.limit, &filter_tags, since, memory_type)
+        .recall(&q.q, fetch_limit, &filter_tags, since, memory_type)
         .await
         .map_err(|e| {
             (
@@ -210,7 +216,12 @@ async fn recall_memories(
             )
         })?;
 
-    Ok(Json(results))
+    let paginated = results
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect::<Vec<_>>();
+    Ok(Json(paginated))
 }
 
 async fn search_memories(
@@ -225,8 +236,12 @@ async fn search_memories(
         .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
         .unwrap_or_default();
 
+    let offset = q.offset.unwrap_or(0);
+    let limit = q.limit;
+    let fetch_limit = offset + limit;
+
     let results = engine
-        .search(&q.q, q.limit, &filter_tags)
+        .search(&q.q, fetch_limit, &filter_tags)
         .await
         .map_err(|e| {
             (
@@ -237,7 +252,12 @@ async fn search_memories(
             )
         })?;
 
-    Ok(Json(results))
+    let paginated = results
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect::<Vec<_>>();
+    Ok(Json(paginated))
 }
 
 async fn update_memory(
@@ -442,6 +462,10 @@ async fn main() -> anyhow::Result<()> {
         index,
     ));
 
+    let rate_limit_state = Arc::new(tokio::sync::Mutex::new(
+        middleware::rate_limit::RateLimiterState::new(),
+    ));
+
     let app = Router::new()
         .route("/health", get(health))
         .route("/v1/memories", post(store_memory))
@@ -458,6 +482,10 @@ async fn main() -> anyhow::Result<()> {
             get(routes::memories::get_entity_context),
         )
         .route("/v1/stats", get(routes::memories::get_stats))
+        .layer(axum::middleware::from_fn_with_state(
+            rate_limit_state,
+            middleware::rate_limit::rate_limit_middleware,
+        ))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(
             tower_http::cors::CorsLayer::new()

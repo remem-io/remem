@@ -146,30 +146,46 @@ async fn main() -> anyhow::Result<()> {
     let reader = BufReader::new(stdin);
     let mut lines = reader.lines();
 
-    while let Ok(Some(line)) = lines.next_line().await {
-        let line = line.trim().to_string();
-        if line.is_empty() {
-            continue;
-        }
+    let shutdown_signal = async {
+        let _ = tokio::signal::ctrl_c().await;
+        tracing::info!("Shutdown signal received, exiting gracefully...");
+    };
 
-        let response = match serde_json::from_str::<JsonRpcRequest>(&line) {
-            Ok(request) => handle_request(&engine, request).await,
-            Err(e) => Some(JsonRpcResponse::error(
-                serde_json::Value::Null,
-                -32700,
-                format!("Parse error: {}", e),
-            )),
-        };
+    tokio::select! {
+        res = async {
+            while let Ok(Some(line)) = lines.next_line().await {
+                let line = line.trim().to_string();
+                if line.is_empty() {
+                    continue;
+                }
 
-        if let Some(response) = response {
-            let json = serde_json::to_string(&response)?;
-            stdout.write_all(json.as_bytes()).await?;
-            stdout.write_all(b"\n").await?;
-            stdout.flush().await?;
+                let response = match serde_json::from_str::<JsonRpcRequest>(&line) {
+                    Ok(request) => handle_request(&engine, request).await,
+                    Err(e) => Some(JsonRpcResponse::error(
+                        serde_json::Value::Null,
+                        -32700,
+                        format!("Parse error: {}", e),
+                    )),
+                };
+
+                if let Some(response) = response {
+                    let json = serde_json::to_string(&response)?;
+                    stdout.write_all(json.as_bytes()).await?;
+                    stdout.write_all(b"\n").await?;
+                    stdout.flush().await?;
+                }
+            }
+            Ok::<(), anyhow::Error>(())
+        } => {
+            if let Err(e) = res {
+                tracing::error!("Error in stdin loop: {:?}", e);
+            }
         }
+        _ = shutdown_signal => {}
     }
 
     // Save index on exit
+    tracing::info!("Saving vector index to {}", config.index_path().display());
     index.save(&config.index_path()).await?;
 
     Ok(())
