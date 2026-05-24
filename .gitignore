@@ -109,10 +109,12 @@ desktop.ini
 # ========================
 # Agent / AI tool configs
 # ========================
-.claude/
+.claude/**/*
+!.claude/config.json
 .codex/
 .gemini/
-.cursor/
+.cursor/**/*
+!.cursor/hooks.json
 
 # ========================
 # Misc
