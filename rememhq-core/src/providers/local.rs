@@ -1,6 +1,7 @@
-use crate::providers::EmbeddingProvider;
+use crate::providers::{EmbeddingProvider, Provider};
 use crate::storage::vector::remem_ffi;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 pub struct LocalEmbeddings {
     handle: *mut remem_ffi::remem_embedder_t,
@@ -68,5 +69,97 @@ impl EmbeddingProvider for LocalEmbeddings {
 
     fn dimension(&self) -> usize {
         self.dim
+    }
+}
+
+/// Local LLM reasoning provider communicating with an OpenAI-compatible endpoint
+/// (such as llama.cpp server, Ollama, or LM Studio) running locally.
+pub struct LocalProvider {
+    client: reqwest::Client,
+    api_base: String,
+}
+
+#[derive(Serialize)]
+struct ChatRequest {
+    model: String,
+    messages: Vec<ChatMessage>,
+    max_tokens: u32,
+}
+
+#[derive(Serialize)]
+struct ChatMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct ChatResponse {
+    choices: Vec<Choice>,
+}
+
+#[derive(Deserialize)]
+struct Choice {
+    message: ResponseMessage,
+}
+
+#[derive(Deserialize)]
+struct ResponseMessage {
+    content: Option<String>,
+}
+
+impl LocalProvider {
+    /// Create a new Local reasoning provider.
+    ///
+    /// Reads `LLAMA_API_BASE` or `OLLAMA_API_BASE` from env, defaulting to `http://localhost:8080/v1`.
+    pub fn new(api_base: Option<String>) -> Self {
+        let api_base = api_base
+            .or_else(|| std::env::var("LLAMA_API_BASE").ok())
+            .or_else(|| std::env::var("OLLAMA_API_BASE").ok())
+            .unwrap_or_else(|| "http://localhost:8080/v1".to_string());
+
+        Self {
+            client: reqwest::Client::new(),
+            api_base,
+        }
+    }
+}
+
+#[async_trait]
+impl Provider for LocalProvider {
+    async fn complete(&self, prompt: &str, model: &str) -> anyhow::Result<String> {
+        let request = ChatRequest {
+            model: model.to_string(),
+            messages: vec![ChatMessage {
+                role: "user".into(),
+                content: prompt.to_string(),
+            }],
+            max_tokens: 2048,
+        };
+
+        let response = self
+            .client
+            .post(format!("{}/chat/completions", self.api_base))
+            .json(&request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("Local LLM API error ({}): {}", status, body);
+        }
+
+        let resp: ChatResponse = response.json().await?;
+        let text = resp
+            .choices
+            .first()
+            .and_then(|c| c.message.content.clone())
+            .unwrap_or_default();
+
+        Ok(text)
+    }
+
+    fn name(&self) -> &str {
+        "local"
     }
 }

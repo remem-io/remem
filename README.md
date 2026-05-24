@@ -63,7 +63,7 @@ remem is designed to work seamlessly with MCP-compliant environments. Add the fo
 {
   "mcpServers": {
     "remem": {
-      "command": "remem",
+      "command": "rememhq",
       "args": ["mcp", "--project", "my-project"]
     }
   }
@@ -111,14 +111,7 @@ const results = await m.recall("how do we manage branches?");
 1.  **Guided Retrieval**: When you query remem, it first retrieves the top 50 candidates using cosine similarity on the vector index. These candidates are then passed to an LLM (e.g., Claude 4.6 Sonnet) which filters and re-ranks them, returning the top ~8 most relevant memories accompanied by a "reasoning trace" explaining why they were chosen.
 2.  **Session Consolidation**: At the end of a session, remem can ingest the entire interaction log. An LLM extracts durable, high-signal facts, scores their importance, and identifies relationships between them.
 3.  **Knowledge Graph & Contradiction Detection**: Facts are stored as structured nodes and edges (triples) in a knowledge graph. When new information is added that conflicts with existing knowledge, remem flags the contradiction, allowing the agent to clarify or archive the stale memory.
-4.  **Local First (v0.2+)**: Using `libremem`, a custom C++ engine, remem supports local HNSW indexing and BERT-compatible tokenization for privacy-first, offline embedding generation.
-
-## Tech Stack
-
-- **Rust**: Core reasoning engine, REST API (Axum), and MCP server.
-- **C++17**: High-performance vector index (HNSW) and ONNX embedding engine (`libremem`).
-- **SQLite**: Reliable metadata storage with WAL mode for high concurrency.
-- **Python & TypeScript**: Modern, type-safe SDKs for rapid integration.
+4.  **Local First**: Using `libremem`, a custom C++ engine, remem supports local HNSW indexing and BERT-compatible tokenization for privacy-first, offline embedding generation.
 
 ## 🤝 Contributing
 

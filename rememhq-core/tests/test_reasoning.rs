@@ -125,3 +125,33 @@ fn test_provider_initialization_failures_when_keys_missing() {
         std::env::set_var("GOOGLE_API_KEY", k);
     }
 }
+
+#[test]
+fn test_local_provider_default_construction() {
+    let prev_llama = std::env::var("LLAMA_API_BASE");
+    let prev_ollama = std::env::var("OLLAMA_API_BASE");
+
+    std::env::remove_var("LLAMA_API_BASE");
+    std::env::remove_var("OLLAMA_API_BASE");
+
+    use rememhq_core::providers::{local::LocalProvider, Provider};
+    let provider = LocalProvider::new(None);
+    assert_eq!(provider.name(), "local");
+
+    // Test env base resolving
+    std::env::set_var("LLAMA_API_BASE", "http://my-llama:1234/v1");
+    let provider_env = LocalProvider::new(None);
+    assert_eq!(provider_env.name(), "local");
+
+    // Restore env keys
+    if let Ok(k) = prev_llama {
+        std::env::set_var("LLAMA_API_BASE", k);
+    } else {
+        std::env::remove_var("LLAMA_API_BASE");
+    }
+    if let Ok(k) = prev_ollama {
+        std::env::set_var("OLLAMA_API_BASE", k);
+    } else {
+        std::env::remove_var("OLLAMA_API_BASE");
+    }
+}

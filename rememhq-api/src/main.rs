@@ -30,6 +30,7 @@ use rememhq_core::config::RememConfig;
 use rememhq_core::memory::types::*;
 use rememhq_core::providers::anthropic::AnthropicProvider;
 use rememhq_core::providers::embeddings::OpenAIEmbeddings;
+use rememhq_core::providers::local::LocalProvider;
 use rememhq_core::providers::openai::OpenAIProvider;
 use rememhq_core::reasoning::ReasoningEngine;
 use rememhq_core::storage::sqlite::SqliteStore;
@@ -465,7 +466,8 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        "mock" | "local" => Arc::new(rememhq_core::providers::mock::MockProvider),
+        "local" => Arc::new(LocalProvider::new(None)),
+        "mock" => Arc::new(rememhq_core::providers::mock::MockProvider),
         _ => {
             // Auto-detect based on env vars
             if std::env::var("ANTHROPIC_API_KEY").is_ok() {
@@ -483,6 +485,10 @@ async fn main() -> anyhow::Result<()> {
                     Ok(p) => Arc::new(p),
                     Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
                 }
+            } else if std::env::var("LLAMA_API_BASE").is_ok()
+                || std::env::var("OLLAMA_API_BASE").is_ok()
+            {
+                Arc::new(LocalProvider::new(None))
             } else {
                 tracing::warn!("No reasoning API keys set. Falling back to MockProvider.");
                 Arc::new(rememhq_core::providers::mock::MockProvider)
