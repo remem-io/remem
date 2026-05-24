@@ -64,21 +64,20 @@ impl Provider for AnthropicProvider {
             }],
         };
 
-        let response = self
-            .client
-            .post(format!("{}/v1/messages", self.base_url))
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&request)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("Anthropic API error ({}): {}", status, body);
-        }
+        let response = super::resiliency::execute_with_retry(
+            || {
+                self.client
+                    .post(format!("{}/v1/messages", self.base_url))
+                    .header("x-api-key", &self.api_key)
+                    .header("anthropic-version", "2023-06-01")
+                    .header("content-type", "application/json")
+                    .json(&request)
+                    .send()
+            },
+            3,
+            std::time::Duration::from_millis(500),
+        )
+        .await?;
 
         let resp: MessagesResponse = response.json().await?;
         let text = resp

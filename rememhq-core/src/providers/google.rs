@@ -41,19 +41,13 @@ impl Provider for GoogleProvider {
             }]
         });
 
-        let resp = self
-            .client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request to Google API")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("Google API error {}: {}", status, text));
-        }
+        let resp = super::resiliency::execute_with_retry(
+            || self.client.post(&url).json(&body).send(),
+            3,
+            std::time::Duration::from_millis(500),
+        )
+        .await
+        .context("Failed to send request to Google API")?;
 
         let json: serde_json::Value = resp.json().await?;
         let text = json["candidates"][0]["content"]["parts"][0]["text"]
@@ -103,19 +97,13 @@ impl EmbeddingProvider for GoogleEmbeddings {
             }
         });
 
-        let resp = self
-            .client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send embedding request to Google API")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("Google Embedding API error {}: {}", status, text));
-        }
+        let resp = super::resiliency::execute_with_retry(
+            || self.client.post(&url).json(&body).send(),
+            3,
+            std::time::Duration::from_millis(500),
+        )
+        .await
+        .context("Failed to send embedding request to Google API")?;
 
         let json: serde_json::Value = resp.json().await?;
         let values = json["embedding"]["values"]
@@ -148,23 +136,13 @@ impl EmbeddingProvider for GoogleEmbeddings {
 
         let body = json!({ "requests": requests });
 
-        let resp = self
-            .client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send batch embedding request to Google API")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Google Batch Embedding API error {}: {}",
-                status,
-                text
-            ));
-        }
+        let resp = super::resiliency::execute_with_retry(
+            || self.client.post(&url).json(&body).send(),
+            3,
+            std::time::Duration::from_millis(500),
+        )
+        .await
+        .context("Failed to send batch embedding request to Google API")?;
 
         let json: serde_json::Value = resp.json().await?;
         let embeddings_json = json["embeddings"]

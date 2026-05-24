@@ -6,6 +6,7 @@ pub mod google;
 pub mod local;
 pub mod mock;
 pub mod openai;
+pub mod resiliency;
 
 use async_trait::async_trait;
 

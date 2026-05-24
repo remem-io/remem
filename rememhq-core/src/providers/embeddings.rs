@@ -66,20 +66,19 @@ impl EmbeddingProvider for OpenAIEmbeddings {
             dimensions: self.dimension,
         };
 
-        let response = self
-            .client
-            .post("https://api.openai.com/v1/embeddings")
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&request)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("OpenAI Embeddings API error ({}): {}", status, body);
-        }
+        let response = super::resiliency::execute_with_retry(
+            || {
+                self.client
+                    .post("https://api.openai.com/v1/embeddings")
+                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .header("Content-Type", "application/json")
+                    .json(&request)
+                    .send()
+            },
+            3,
+            std::time::Duration::from_millis(500),
+        )
+        .await?;
 
         let resp: EmbeddingResponse = response.json().await?;
         Ok(resp.data.into_iter().map(|d| d.embedding).collect())

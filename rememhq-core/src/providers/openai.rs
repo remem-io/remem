@@ -69,20 +69,19 @@ impl Provider for OpenAIProvider {
             max_tokens: 4096,
         };
 
-        let response = self
-            .client
-            .post(format!("{}/v1/chat/completions", self.base_url))
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&request)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("OpenAI API error ({}): {}", status, body);
-        }
+        let response = super::resiliency::execute_with_retry(
+            || {
+                self.client
+                    .post(format!("{}/v1/chat/completions", self.base_url))
+                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .header("Content-Type", "application/json")
+                    .json(&request)
+                    .send()
+            },
+            3,
+            std::time::Duration::from_millis(500),
+        )
+        .await?;
 
         let resp: ChatResponse = response.json().await?;
         let text = resp
