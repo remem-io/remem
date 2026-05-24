@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "remem": {
+      "type": "stdio",
+      "command": "cargo",
+      "args": ["run", "-q", "-p", "rememhq-mcp"],
+      "env": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+        "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+      }
+    }
+  }
+}
