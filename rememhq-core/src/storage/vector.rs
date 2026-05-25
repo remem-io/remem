@@ -4,7 +4,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 pub mod remem_ffi {
-    use std::os::raw::{c_char, c_float};
+    use std::os::raw::{c_char, c_float, c_int};
 
     #[repr(C)]
     pub struct RememSearchResult {
@@ -46,6 +46,23 @@ pub mod remem_ffi {
         ) -> *mut f32;
         pub fn remem_free_embedding(ptr: *mut f32);
         pub fn remem_embedder_dim(embedder: *mut remem_embedder_t) -> usize;
+
+        // Document Chunker FFI
+        pub fn remem_chunk_text(
+            text: *const c_char,
+            chunk_size: usize,
+            chunk_overlap: usize,
+            by_words: c_int,
+        ) -> *mut std::ffi::c_void;
+        pub fn remem_chunks_count(chunks: *mut std::ffi::c_void) -> usize;
+        pub fn remem_chunks_get(chunks: *mut std::ffi::c_void, index: usize) -> *const c_char;
+        pub fn remem_chunks_free(chunks: *mut std::ffi::c_void);
+        pub fn remem_normalize_text(
+            text: *const c_char,
+            to_lower: c_int,
+            strip_whitespace: c_int,
+        ) -> *mut c_char;
+        pub fn remem_free_string_cpp(str: *mut c_char);
     }
 
     #[allow(non_camel_case_types)]
@@ -168,5 +185,71 @@ impl VectorIndex for HNSWVectorIndex {
             remem_ffi::remem_index_load(self.handle, path_str.as_ptr());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::{CStr, CString};
+
+    #[test]
+    fn test_cpp_text_normalization() {
+        let input = CString::new("   Hello   World! \n This is   a   Test   ").unwrap();
+        unsafe {
+            let normalized_ptr = remem_ffi::remem_normalize_text(input.as_ptr(), 1, 1);
+            assert!(!normalized_ptr.is_null());
+
+            let normalized_str = CStr::from_ptr(normalized_ptr).to_string_lossy();
+            assert_eq!(normalized_str, "hello world! this is a test");
+
+            remem_ffi::remem_free_string_cpp(normalized_ptr);
+        }
+    }
+
+    #[test]
+    fn test_cpp_document_chunker_by_words() {
+        let input = CString::new("one two three four five six").unwrap();
+        unsafe {
+            // chunk_size = 3, chunk_overlap = 1, by_words = 1
+            let chunks_ptr = remem_ffi::remem_chunk_text(input.as_ptr(), 3, 1, 1);
+            assert!(!chunks_ptr.is_null());
+
+            let count = remem_ffi::remem_chunks_count(chunks_ptr);
+            assert_eq!(count, 3); // ["one two three", "three four five", "five six"]
+
+            let c0 = CStr::from_ptr(remem_ffi::remem_chunks_get(chunks_ptr, 0)).to_string_lossy();
+            let c1 = CStr::from_ptr(remem_ffi::remem_chunks_get(chunks_ptr, 1)).to_string_lossy();
+            let c2 = CStr::from_ptr(remem_ffi::remem_chunks_get(chunks_ptr, 2)).to_string_lossy();
+
+            assert_eq!(c0, "one two three");
+            assert_eq!(c1, "three four five");
+            assert_eq!(c2, "five six");
+
+            remem_ffi::remem_chunks_free(chunks_ptr);
+        }
+    }
+
+    #[test]
+    fn test_cpp_document_chunker_by_chars() {
+        let input = CString::new("abcdefgh").unwrap();
+        unsafe {
+            // chunk_size = 4, chunk_overlap = 2, by_words = 0
+            let chunks_ptr = remem_ffi::remem_chunk_text(input.as_ptr(), 4, 2, 0);
+            assert!(!chunks_ptr.is_null());
+
+            let count = remem_ffi::remem_chunks_count(chunks_ptr);
+            assert_eq!(count, 3); // ["abcd", "cdef", "efgh"]
+
+            let c0 = CStr::from_ptr(remem_ffi::remem_chunks_get(chunks_ptr, 0)).to_string_lossy();
+            let c1 = CStr::from_ptr(remem_ffi::remem_chunks_get(chunks_ptr, 1)).to_string_lossy();
+            let c2 = CStr::from_ptr(remem_ffi::remem_chunks_get(chunks_ptr, 2)).to_string_lossy();
+
+            assert_eq!(c0, "abcd");
+            assert_eq!(c1, "cdef");
+            assert_eq!(c2, "efgh");
+
+            remem_ffi::remem_chunks_free(chunks_ptr);
+        }
     }
 }

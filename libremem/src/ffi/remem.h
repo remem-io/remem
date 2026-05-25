@@ -52,6 +52,17 @@ REMEM_API void remem_free_embedding(float* embedding);
 // Info
 REMEM_API size_t remem_embedder_dim(remem_embedder_t* embedder);
 
+// --- Document Chunker (v0.3+) ---
+typedef struct remem_chunks_t remem_chunks_t;
+
+REMEM_API remem_chunks_t* remem_chunk_text(const char* text, size_t chunk_size, size_t chunk_overlap, int by_words);
+REMEM_API size_t remem_chunks_count(remem_chunks_t* chunks);
+REMEM_API const char* remem_chunks_get(remem_chunks_t* chunks, size_t index);
+REMEM_API void remem_chunks_free(remem_chunks_t* chunks);
+
+REMEM_API char* remem_normalize_text(const char* text, int to_lower, int strip_whitespace);
+REMEM_API void remem_free_string_cpp(char* str);
+
 #ifdef __cplusplus
 }
 #endif

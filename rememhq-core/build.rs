@@ -8,6 +8,7 @@ fn main() {
         .file("../libremem/src/vector_store/index.cpp")
         .file("../libremem/src/embedding/engine.cpp")
         .file("../libremem/src/embedding/tokenizer.cpp")
+        .file("../libremem/src/document/chunker.cpp")
         .file("../libremem/src/ffi/remem.cpp")
         .include("../libremem/include")
         .include("../libremem/src")

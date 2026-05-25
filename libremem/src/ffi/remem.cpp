@@ -1,6 +1,7 @@
 #include "remem.h"
 #include "../vector_store/index.h"
 #include "../embedding/engine.h"
+#include "../document/chunker.h"
 #include <cstring>
 #include <vector>
 #include <iostream>
@@ -14,6 +15,10 @@ struct remem_index_t {
 
 struct remem_embedder_t {
     ONNXEngine* impl;
+};
+
+struct remem_chunks_t {
+    std::vector<std::string> items;
 };
 
 remem_index_t* remem_index_new(size_t dim, size_t max_elements) {
@@ -150,4 +155,61 @@ size_t remem_embedder_dim(remem_embedder_t* embedder) {
     } catch (...) {
         return 0;
     }
+}
+
+// --- Document Chunker (v0.3+) ---
+
+remem_chunks_t* remem_chunk_text(const char* text, size_t chunk_size, size_t chunk_overlap, int by_words) {
+    try {
+        if (!text) return nullptr;
+        
+        remem::document::ChunkerOptions options;
+        options.chunk_size = chunk_size;
+        options.chunk_overlap = chunk_overlap;
+        options.by_words = (by_words != 0);
+        
+        auto result = remem::document::chunk_text(text, options);
+        
+        auto chunks = new remem_chunks_t();
+        chunks->items = std::move(result);
+        return chunks;
+    } catch (const std::exception& e) {
+        std::cerr << "[libremem] Error in remem_chunk_text: " << e.what() << std::endl;
+        return nullptr;
+    }
+}
+
+size_t remem_chunks_count(remem_chunks_t* chunks) {
+    if (!chunks) return 0;
+    return chunks->items.size();
+}
+
+const char* remem_chunks_get(remem_chunks_t* chunks, size_t index) {
+    if (!chunks || index >= chunks->items.size()) return nullptr;
+    return chunks->items[index].c_str();
+}
+
+void remem_chunks_free(remem_chunks_t* chunks) {
+    if (chunks) {
+        delete chunks;
+    }
+}
+
+char* remem_normalize_text(const char* text, int to_lower, int strip_whitespace) {
+    try {
+        if (!text) return nullptr;
+        std::string normalized = remem::document::normalize_text(text, to_lower != 0, strip_whitespace != 0);
+        
+        char* out = (char*)malloc(normalized.size() + 1);
+        if (!out) return nullptr;
+        std::strcpy(out, normalized.c_str());
+        return out;
+    } catch (const std::exception& e) {
+        std::cerr << "[libremem] Error in remem_normalize_text: " << e.what() << std::endl;
+        return nullptr;
+    }
+}
+
+void remem_free_string_cpp(char* str) {
+    if (str) free(str);
 }
