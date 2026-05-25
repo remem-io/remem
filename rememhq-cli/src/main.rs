@@ -26,7 +26,7 @@ use rememhq_core::storage::MemoryStore;
 #[derive(Parser)]
 #[command(
     name = "remem",
-    version = "0.1.0",
+    version = env!("CARGO_PKG_VERSION"),
     about = "Reasoning memory layer for AI agents"
 )]
 struct Cli {

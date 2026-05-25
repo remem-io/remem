@@ -336,7 +336,7 @@ async fn handle_request(
                 },
                 "serverInfo": {
                     "name": "rememhq-mcp",
-                    "version": "0.1.0"
+                    "version": env!("CARGO_PKG_VERSION")
                 }
             });
             Some(JsonRpcResponse::success(id, result))
