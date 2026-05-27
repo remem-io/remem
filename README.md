@@ -2,15 +2,15 @@
   <h1>remem</h1>
   <p><strong>The reasoning memory layer for AI agents.</strong></p>
   <p>
-    <a href="https://github.com/rememhq/remem/actions"><img src="https://github.com/rememhq/remem/workflows/CI/badge.svg" alt="CI Status" /></a>
-    <a href="https://github.com/rememhq/remem/releases"><img src="https://img.shields.io/github/v/release/rememhq/remem" alt="Release" /></a>
+    <a href="https://github.com/remem-io/remem/actions"><img src="https://github.com/remem-io/remem/workflows/CI/badge.svg" alt="CI Status" /></a>
+    <a href="https://github.com/remem-io/remem/releases"><img src="https://img.shields.io/github/v/release/remem-io/remem" alt="Release" /></a>
     <a href="https://apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
   </p>
 </div>
 
 ---
 
-> **⚠️ In Development** — remem is evolving rapidly. APIs are subject to change. Not yet recommended for mission-critical production workloads.
+> **⚠️ In Development** — remem is evolving rapidly. Not yet recommended for mission-critical production workloads.
 
 remem provides agents with **persistent, reasoned memory** that spans across sessions. Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning step at every stage of the memory lifecycle: from initial importance scoring and guided retrieval to session-wide consolidation and contradiction detection.
 
@@ -117,7 +117,7 @@ const results = await m.recall("how do we manage branches?");
 
 We welcome contributions! Whether you're fixing a bug, improving the reasoning prompts, or adding a new provider, please check out our [CONTRIBUTING.md](CONTRIBUTING.md).
 
-1.  Clone the repo: `git clone https://github.com/rememhq/remem`
+1.  Clone the repo: `git clone https://github.com/remem-io/remem`
 2.  Build: `cargo build`
 3.  Test: `cargo test --workspace`
 
