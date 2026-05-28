@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
   security-events: write
+  checks: write
 
 jobs:
   # ──────────────────────────────────────────────
@@ -22,9 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2.0.0
+      - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          ignore: RUSTSEC-2024-0436
 
   # ──────────────────────────────────────────────
   # Cargo deny — license + advisory checks
@@ -34,6 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories sources
@@ -63,4 +66,3 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:python"
-

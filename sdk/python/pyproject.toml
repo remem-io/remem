@@ -5,10 +5,32 @@ description = "Reasoning memory layer for AI agents — Python SDK"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
+authors = [
+    { name = "remem-io", email = "thrive-spectrexq@users.noreply.github.com" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Database",
+    "Typing :: Typed",
+]
 dependencies = [
     "httpx>=0.27",
     "pydantic>=2.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/remem-io/remem"
+Repository = "https://github.com/remem-io/remem"
+Issues = "https://github.com/remem-io/remem/issues"
+Changelog = "https://github.com/remem-io/remem/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/remem-io/remem/tree/main/sdk/python"
 
 [project.optional-dependencies]
 dev = [
@@ -24,3 +46,9 @@ crewai = ["crewai>=0.80"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+include = ["rememhq/"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["rememhq"]
