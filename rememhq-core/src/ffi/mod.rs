@@ -19,7 +19,7 @@ use std::sync::{Arc, OnceLock};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-/// Opaque wrapper for Arc<ReasoningEngine> passed across the FFI boundary
+/// Opaque wrapper for `Arc<ReasoningEngine>` passed across the FFI boundary
 pub struct RememEngine {
     pub engine: Arc<ReasoningEngine>,
 }
