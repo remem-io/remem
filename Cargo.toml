@@ -41,7 +41,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # Storage
-rusqlite = { version = "0.39", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 
 # HTTP client (for cloud providers)
 reqwest = { version = "0.13", features = ["json", "rustls-native-certs"], default-features = false }
