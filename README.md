@@ -12,7 +12,7 @@
 
 > **⚠️ In Development** — remem is evolving rapidly. Not yet recommended for mission-critical production workloads.
 
-remem provides agents with **persistent, reasoned memory** that spans across sessions. Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning step at every stage of the memory lifecycle: from initial importance scoring and guided retrieval to session-wide consolidation and contradiction detection.
+remem provides agents with **persistent, reasoned memory** that spans across sessions. Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems.
 
 ## Architecture
 
@@ -43,7 +43,7 @@ remem provides agents with **persistent, reasoned memory** that spans across ses
 
 ## Why remem?
 
-Traditional vector stores often suffer from "confident recall of irrelevant context." They return what is semantically *nearest*, not what is actually *useful*. remem bridges this gap with reasoning.
+Traditional vector stores often suffer from "confident recall of irrelevant context." They return what is semantically *nearest*, not what is actually *useful*. remem bridges this gap with reasoning-powered retrieval that understands context, importance, and domain-specific relevance.
 
 | Feature | Naive Vector Store | remem |
 | :--- | :--- | :--- |
@@ -106,11 +106,55 @@ await m.store("This repository uses trunk-based development", { tags: ["workflow
 const results = await m.recall("how do we manage branches?");
 ```
 
+## ⚙️ Usage Commands
+
+### Local Development
+
+```bash
+# Build the entire workspace
+cargo build --workspace
+
+# Run all tests
+cargo test --workspace
+
+# Check formatting
+cargo fmt --all -- --check
+
+# Format code
+cargo fmt
+
+# Lint (clippy) — must pass with no warnings
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+### Running Services
+
+```bash
+# Start the API server (REST interface)
+cargo run -p rememhq-api -- --project default
+
+# Start the MCP server (stdio interface for Claude Code, Cursor, etc.)
+cargo run -p rememhq-mcp
+
+# Run the CLI tool
+cargo run -p rememhq-cli -- --help
+```
+
+### SDKs
+
+```bash
+# Python SDK
+cd sdk/python && pip install -e ".[dev]" && pytest tests/
+
+# TypeScript SDK
+cd sdk/typescript && npm install && npm run build
+```
+
 ## ⚙️ How it Works
 
-1.  **Guided Retrieval**: When you query remem, it first retrieves the top 50 candidates using cosine similarity on the vector index. These candidates are then passed to an LLM (e.g., Claude 4.6 Sonnet) which filters and re-ranks them, returning the top ~8 most relevant memories accompanied by a "reasoning trace" explaining why they were chosen.
-2.  **Session Consolidation**: At the end of a session, remem can ingest the entire interaction log. An LLM extracts durable, high-signal facts, scores their importance, and identifies relationships between them.
-3.  **Knowledge Graph & Contradiction Detection**: Facts are stored as structured nodes and edges (triples) in a knowledge graph. When new information is added that conflicts with existing knowledge, remem flags the contradiction, allowing the agent to clarify or archive the stale memory.
+1.  **Guided Retrieval**: When you query remem, it first retrieves the top 50 candidates using cosine similarity on the vector index. These candidates are then passed to an LLM (e.g., Claude 4.6 or GPT-4) along with your query. The LLM reason about each candidate and returns the top 8 most relevant results, along with a trace of its reasoning.
+2.  **Session Consolidation**: At the end of a session, remem can ingest the entire interaction log. An LLM extracts durable, high-signal facts, scores their importance, and identifies relationships, building a structured knowledge base out of raw interaction data.
+3.  **Knowledge Graph & Contradiction Detection**: Facts are stored as structured nodes and edges (triples) in a knowledge graph. When new information is added that conflicts with existing knowledge, the LLM flags the contradiction, allowing you to resolve it manually or apply custom rules.
 4.  **Local First**: Using `libremem`, a custom C++ engine, remem supports local HNSW indexing and BERT-compatible tokenization for privacy-first, offline embedding generation.
 
 ## 🤝 Contributing
