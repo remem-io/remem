@@ -8,7 +8,6 @@ members = [
 ]
 resolver = "2"
 
-
 [workspace.package]
 version = "0.1.3"
 edition = "2021"
@@ -60,9 +59,6 @@ tower-http = { version = "0.6", features = ["cors", "trace", "auth"] }
 utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-axum = "0.2"
 
-# MCP
-rmcp = { version = "0.1", features = ["server", "transport-io"] }
-
 # Vector math
 ndarray = "0.17"
 
@@ -71,3 +67,7 @@ cc = "1.2"
 
 # Internal crates
 rememhq-core = { path = "rememhq-core" }
+
+# NOTE: rememhq-mcp implements its own stdio JSON-RPC loop and does NOT use
+# the rmcp crate. If a future version migrates to the rmcp SDK, add it back
+# here at that time.

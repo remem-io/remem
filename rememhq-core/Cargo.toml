@@ -25,7 +25,8 @@ toml = { workspace = true }
 dirs = { workspace = true }
 ndarray = { workspace = true }
 utoipa = { workspace = true }
-
+# needed by models::pull_model for streaming response body to disk
+futures-util = "0.3"
 
 [build-dependencies]
 cc = { workspace = true }

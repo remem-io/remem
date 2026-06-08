@@ -1,4 +1,4 @@
-name: Smoke Tests
+name: Smoke tests
 
 on:
   push:
@@ -30,24 +30,19 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # ──────────────────────────────────────────────
-  # Build release binaries
-  # ──────────────────────────────────────────────
   build:
-    name: Build Release
+    name: Build release binaries
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           key: smoke
-
       - name: Build all binaries
         run: cargo build --release -p rememhq-cli -p rememhq-api -p rememhq-mcp
-
       - name: Upload binaries
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: smoke-binaries
           path: |
@@ -56,65 +51,50 @@ jobs:
             target/release/rememhq-mcp
           retention-days: 1
 
-  # ──────────────────────────────────────────────
-  # CLI smoke test
-  # ──────────────────────────────────────────────
   cli:
-    name: CLI
+    name: CLI smoke
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: smoke-binaries
-
       - name: Verify CLI
         run: |
           chmod +x remem
           ./remem --help
           echo "✅ CLI binary runs"
 
-  # ──────────────────────────────────────────────
-  # API server smoke test
-  # ──────────────────────────────────────────────
   api:
-    name: API Server
+    name: API smoke
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: smoke-binaries
-
       - name: Verify API
         run: |
           chmod +x rememhq-api
           timeout 5 ./rememhq-api --help || true
           echo "✅ API binary runs"
 
-  # ──────────────────────────────────────────────
-  # MCP server smoke test
-  # ──────────────────────────────────────────────
   mcp:
-    name: MCP Server
+    name: MCP smoke
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: smoke-binaries
-
       - name: Verify MCP
         run: |
           chmod +x rememhq-mcp
           timeout 5 ./rememhq-mcp --help || true
           echo "✅ MCP binary runs"
 
-  # ──────────────────────────────────────────────
-  # Gate
-  # ──────────────────────────────────────────────
   smoke-pass:
-    name: Smoke Pass
+    name: Smoke pass
     if: always()
     needs: [cli, api, mcp]
     runs-on: ubuntu-latest

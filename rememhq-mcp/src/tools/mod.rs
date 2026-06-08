@@ -1,6 +1,7 @@
 mod consolidate;
 mod decay;
 mod forget;
+mod knowledge;
 mod recall;
 mod search;
 mod store;
@@ -20,6 +21,8 @@ pub fn list_tools() -> Vec<Value> {
         forget::schema(),
         consolidate::schema(),
         decay::schema(),
+        knowledge::query_schema(),
+        knowledge::entity_schema(),
     ]
 }
 
@@ -36,13 +39,15 @@ pub async fn call_tool(engine: &Arc<ReasoningEngine>, params: &Value) -> anyhow:
         .unwrap_or(Value::Object(serde_json::Map::new()));
 
     match tool_name {
-        "mem_store" => store::handle(engine, &arguments).await,
-        "mem_recall" => recall::handle(engine, &arguments).await,
-        "mem_search" => search::handle(engine, &arguments).await,
-        "mem_update" => update::handle(engine, &arguments).await,
-        "mem_forget" => forget::handle(engine, &arguments).await,
-        "mem_consolidate" => consolidate::handle(engine, &arguments).await,
-        "mem_decay" => decay::handle(engine, &arguments).await,
+        "mem_store"               => store::handle(engine, &arguments).await,
+        "mem_recall"              => recall::handle(engine, &arguments).await,
+        "mem_search"              => search::handle(engine, &arguments).await,
+        "mem_update"              => update::handle(engine, &arguments).await,
+        "mem_forget"              => forget::handle(engine, &arguments).await,
+        "mem_consolidate"         => consolidate::handle(engine, &arguments).await,
+        "mem_decay"               => decay::handle(engine, &arguments).await,
+        "mem_query_knowledge"     => knowledge::handle_query(engine, &arguments).await,
+        "mem_get_entity_context"  => knowledge::handle_entity(engine, &arguments).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }

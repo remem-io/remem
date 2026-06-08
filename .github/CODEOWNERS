@@ -4,26 +4,26 @@
 # Default owner for everything
 * @thrive-spectrexq
 
-# Core Rust crates
+# Core Rust crates (actual directory names)
 /rememhq-core/ @thrive-spectrexq
 /rememhq-mcp/  @thrive-spectrexq
 /rememhq-api/  @thrive-spectrexq
 /rememhq-cli/  @thrive-spectrexq
 
-# C++ core (future)
+# C++ core
 /libremem/ @thrive-spectrexq
 
 # SDKs
 /sdk/python/     @thrive-spectrexq
-/sdk/typescript/  @thrive-spectrexq
-/sdk/rust/        @thrive-spectrexq
+/sdk/typescript/ @thrive-spectrexq
+/sdk/rust/       @thrive-spectrexq
 
 # Bindings (future)
 /bindings/ @thrive-spectrexq
 
 # CI/CD and infrastructure
-/.github/  @thrive-spectrexq
-/Dockerfile @thrive-spectrexq
+/.github/     @thrive-spectrexq
+/Dockerfile   @thrive-spectrexq
 /.devcontainer/ @thrive-spectrexq
 
 # Documentation

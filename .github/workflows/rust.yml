@@ -35,33 +35,24 @@ env:
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
-  # ──────────────────────────────────────────────
-  # Lint — format, clippy, docs
-  # ──────────────────────────────────────────────
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-
       - name: Format check
         run: cargo fmt --all -- --check
-
       - name: Clippy
         run: cargo clippy --workspace --all-targets
-
       - name: Documentation
         run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: "-Dwarnings"
 
-  # ──────────────────────────────────────────────
-  # Build + test (cross-platform, includes C++)
-  # ──────────────────────────────────────────────
   build:
     name: Build (${{ matrix.os }})
     needs: lint
@@ -71,36 +62,28 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
-
-      - name: Build workspace (includes C++ via build.rs)
+      - name: Build workspace
         run: cargo build --workspace --release
-
       - name: Run tests
         run: cargo test --workspace
 
-  # ──────────────────────────────────────────────
-  # Cargo deny — license + advisory compliance
-  # ──────────────────────────────────────────────
   deny:
-    name: Cargo Deny
+    name: Cargo deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories licenses sources
 
-  # ──────────────────────────────────────────────
-  # Gate
-  # ──────────────────────────────────────────────
   rust-pass:
-    name: Rust Pass
+    name: Rust pass
     if: always()
     needs: [lint, build, deny]
     runs-on: ubuntu-latest

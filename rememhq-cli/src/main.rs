@@ -269,14 +269,63 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Models { action } => match action {
             ModelAction::Pull { name } => {
-                println!("Model pulling not yet implemented in v0.1 (using cloud APIs).");
-                println!("Requested: {}", name);
-                println!("Local models will be available in v0.2.");
+                let spec = rememhq_core::models::find_model(&name).ok_or_else(|| {
+                    let known: Vec<&str> = rememhq_core::models::KNOWN_MODELS
+                        .iter()
+                        .map(|m| m.id)
+                        .collect();
+                    anyhow::anyhow!(
+                        "Unknown model '{}'. Available models: {}",
+                        name,
+                        known.join(", ")
+                    )
+                })?;
+
+                let dest = rememhq_core::models::default_models_dir();
+                println!("Pulling '{}' → {}", spec.id, dest.display());
+                println!("  {}", spec.description);
+                println!("  (approx. {:.0} MB)", spec.approx_bytes as f64 / 1_000_000.0);
+
+                let result = rememhq_core::models::pull_model(spec, &dest).await?;
+
+                if result.onnx_downloaded {
+                    println!("  ✓ Downloaded {}", spec.onnx_filename);
+                } else {
+                    println!("  ✓ {} already present (skipped)", spec.onnx_filename);
+                }
+                if result.vocab_downloaded {
+                    println!("  ✓ Downloaded {}", spec.vocab_filename);
+                } else {
+                    println!("  ✓ {} already present (skipped)", spec.vocab_filename);
+                }
+
+                println!("\nModel ready. Set environment variables to use it:");
+                println!(
+                    "  REMEM_PROVIDER=local \\\n  REMEM_LOCAL_MODEL_PATH={} \\\n  REMEM_LOCAL_VOCAB_PATH={}",
+                    result.onnx_path.display(),
+                    result.vocab_path.display()
+                );
+
                 Ok(())
             }
+
             ModelAction::List => {
-                println!("v0.1 uses cloud APIs — no local models required.");
-                println!("Local model support coming in v0.2.");
+                let dest = rememhq_core::models::default_models_dir();
+                println!("Known models (model dir: {}):\n", dest.display());
+
+                for spec in rememhq_core::models::KNOWN_MODELS {
+                    let onnx_present  = dest.join(spec.onnx_filename).exists();
+                    let vocab_present = dest.join(spec.vocab_filename).exists();
+                    let status = match (onnx_present, vocab_present) {
+                        (true,  true)  => "✓ installed",
+                        (true,  false) => "⚠ onnx present, vocab missing",
+                        (false, true)  => "⚠ vocab present, onnx missing",
+                        (false, false) => "  not installed",
+                    };
+                    println!("  {:14} {}  —  {}", spec.id, status, spec.description);
+                }
+
+                println!("\nTo install a model run:  remem models pull <id>");
                 Ok(())
             }
         },
