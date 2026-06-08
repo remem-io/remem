@@ -314,7 +314,7 @@ async fn main() -> anyhow::Result<()> {
                 println!("Known models (model dir: {}):\n", dest.display());
 
                 for spec in rememhq_core::models::KNOWN_MODELS {
-                    let onnx_present  = dest.join(spec.onnx_filename).exists();
+                    let onnx_present = dest.join(spec.onnx_filename).exists();
                     let vocab_present = dest.join(spec.vocab_filename).exists();
                     let status = match (onnx_present, vocab_present) {
                         (true,  true)  => "✓ installed",
