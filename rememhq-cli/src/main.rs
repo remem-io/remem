@@ -300,11 +300,9 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 println!("\nModel ready. Set environment variables to use it:");
-                println!(
-                    "  REMEM_PROVIDER=local \\\n  REMEM_LOCAL_MODEL_PATH={} \\\n  REMEM_LOCAL_VOCAB_PATH={}",
-                    result.onnx_path.display(),
-                    result.vocab_path.display()
-                );
+                println!("  REMEM_PROVIDER=local \\");
+                println!("  REMEM_LOCAL_MODEL_PATH={} \\", result.onnx_path.display());
+                println!("  REMEM_LOCAL_VOCAB_PATH={}", result.vocab_path.display());
 
                 Ok(())
             }
