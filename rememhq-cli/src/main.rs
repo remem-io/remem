@@ -317,9 +317,9 @@ async fn main() -> anyhow::Result<()> {
                     let onnx_present = dest.join(spec.onnx_filename).exists();
                     let vocab_present = dest.join(spec.vocab_filename).exists();
                     let status = match (onnx_present, vocab_present) {
-                        (true,  true)  => "✓ installed",
-                        (true,  false) => "⚠ onnx present, vocab missing",
-                        (false, true)  => "⚠ vocab present, onnx missing",
+                        (true, true) => "✓ installed",
+                        (true, false) => "⚠ onnx present, vocab missing",
+                        (false, true) => "⚠ vocab present, onnx missing",
                         (false, false) => "  not installed",
                     };
                     println!("  {:14} {}  —  {}", spec.id, status, spec.description);
