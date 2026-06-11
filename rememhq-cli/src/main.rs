@@ -284,7 +284,10 @@ async fn main() -> anyhow::Result<()> {
                 let dest = rememhq_core::models::default_models_dir();
                 println!("Pulling '{}' → {}", spec.id, dest.display());
                 println!("  {}", spec.description);
-                println!("  (approx. {:.0} MB)", spec.approx_bytes as f64 / 1_000_000.0);
+                println!(
+                    "  (approx. {:.0} MB)",
+                    spec.approx_bytes as f64 / 1_000_000.0
+                );
 
                 let result = rememhq_core::models::pull_model(spec, &dest).await?;
 
