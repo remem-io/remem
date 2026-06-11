@@ -8,13 +8,24 @@ use std::sync::Arc;
 pub fn query_schema() -> Value {
     json!({
         "name": "mem_query_knowledge",
-        "description": "Query the knowledge graph. Returns subject-predicate-object triples matching the given filters. All filters are optional — omitting them returns everything.",
+        "description": "Query the knowledge graph. Returns subject-predicate-object triples \
+                        matching the given filters. All filters are optional — omitting them \
+                        returns everything.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "subject":   { "type": "string", "description": "Filter by subject entity name" },
-                "predicate": { "type": "string", "description": "Filter by relationship type (e.g. 'lives_in', 'next_step')" },
-                "object":    { "type": "string", "description": "Filter by object entity name" }
+                "subject": {
+                    "type": "string",
+                    "description": "Filter by subject entity name"
+                },
+                "predicate": {
+                    "type": "string",
+                    "description": "Filter by relationship type (e.g. 'lives_in', 'next_step')"
+                },
+                "object": {
+                    "type": "string",
+                    "description": "Filter by object entity name"
+                }
             }
         }
     })
@@ -23,11 +34,16 @@ pub fn query_schema() -> Value {
 pub fn entity_schema() -> Value {
     json!({
         "name": "mem_get_entity_context",
-        "description": "Retrieve all knowledge graph triples where the given entity appears as either the subject or the object. Useful for getting everything known about a person, system, or concept.",
+        "description": "Retrieve all knowledge graph triples where the given entity appears \
+                        as either the subject or the object. Useful for getting everything \
+                        known about a person, system, or concept.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "entity": { "type": "string", "description": "Entity name to look up" }
+                "entity": {
+                    "type": "string",
+                    "description": "Entity name to look up"
+                }
             },
             "required": ["entity"]
         }
@@ -35,9 +51,9 @@ pub fn entity_schema() -> Value {
 }
 
 pub async fn handle_query(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Result<Value> {
-    let subject   = args.get("subject").and_then(|v| v.as_str());
+    let subject = args.get("subject").and_then(|v| v.as_str());
     let predicate = args.get("predicate").and_then(|v| v.as_str());
-    let object    = args.get("object").and_then(|v| v.as_str());
+    let object = args.get("object").and_then(|v| v.as_str());
 
     let triples = engine.query_knowledge(subject, predicate, object).await?;
 
