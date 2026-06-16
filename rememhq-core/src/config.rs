@@ -18,13 +18,17 @@ pub struct RememConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningConfig {
-    /// Cloud provider: "anthropic", "openai", "google", "local"
+    /// Cloud provider: "anthropic", "openai", "google", "local", "mock"
     #[serde(default = "default_provider")]
     pub provider: String,
-    /// Model for consolidation + guided retrieval
+    /// Model for consolidation + guided retrieval.
+    /// Defaults are provider-aware: Anthropic → claude-sonnet-4-5,
+    /// OpenAI → gpt-4o, Google → gemini-2.0-flash.
     #[serde(default = "default_reasoning_model")]
     pub reasoning_model: String,
-    /// Model for importance scoring + contradiction pre-check
+    /// Model for importance scoring + contradiction pre-check.
+    /// Defaults are provider-aware: Anthropic → claude-haiku-4-5,
+    /// OpenAI → gpt-4o-mini, Google → gemini-2.0-flash.
     #[serde(default = "default_scoring_model")]
     pub scoring_model: String,
     /// Path to local GGUF model (only for provider = "local")
@@ -70,17 +74,58 @@ pub struct ServerConfig {
     pub transport: String,
 }
 
-// --- Defaults ---
+// ---------------------------------------------------------------------------
+// Provider-aware model defaults
+// ---------------------------------------------------------------------------
+
+/// Return the correct default reasoning model for the active provider.
+///
+/// Priority: `REMEM_REASONING_MODEL` env var → provider-specific default.
+pub fn reasoning_model_for(provider: &str) -> String {
+    if let Ok(v) = std::env::var("REMEM_REASONING_MODEL") {
+        return v;
+    }
+    match provider {
+        "openai" => "gpt-4o".into(),
+        "google" => "gemini-2.0-flash".into(),
+        "local" => std::env::var("REMEM_LOCAL_MODEL_NAME").unwrap_or_else(|_| "phi-3-mini".into()),
+        "mock" => "mock".into(),
+        _ => "claude-sonnet-4-5".into(), // anthropic default
+    }
+}
+
+/// Return the correct default scoring model for the active provider.
+///
+/// Priority: `REMEM_SCORING_MODEL` env var → provider-specific default.
+pub fn scoring_model_for(provider: &str) -> String {
+    if let Ok(v) = std::env::var("REMEM_SCORING_MODEL") {
+        return v;
+    }
+    match provider {
+        "openai" => "gpt-4o-mini".into(),
+        "google" => "gemini-2.0-flash".into(),
+        "local" => std::env::var("REMEM_LOCAL_MODEL_NAME").unwrap_or_else(|_| "phi-3-mini".into()),
+        "mock" => "mock".into(),
+        _ => "claude-haiku-4-5".into(), // anthropic default
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Serde defaults (used when deserialising config.toml without explicit values)
+// ---------------------------------------------------------------------------
 
 fn default_provider() -> String {
     std::env::var("REMEM_PROVIDER").unwrap_or_else(|_| "anthropic".into())
 }
+
 fn default_reasoning_model() -> String {
-    std::env::var("REMEM_REASONING_MODEL").unwrap_or_else(|_| "claude-sonnet-4-5".into())
+    reasoning_model_for(&default_provider())
 }
+
 fn default_scoring_model() -> String {
-    std::env::var("REMEM_SCORING_MODEL").unwrap_or_else(|_| "claude-haiku-4-5".into())
+    scoring_model_for(&default_provider())
 }
+
 fn default_working_memory_tokens() -> usize {
     131072
 }
@@ -114,13 +159,14 @@ fn default_transport() -> String {
 
 impl Default for RememConfig {
     fn default() -> Self {
+        let provider = default_provider();
         Self {
             project: "default".into(),
             reasoning: ReasoningConfig {
-                provider: default_provider(),
-                reasoning_model: default_reasoning_model(),
-                scoring_model: default_scoring_model(),
+                reasoning_model: reasoning_model_for(&provider),
+                scoring_model: scoring_model_for(&provider),
                 local_model_path: None,
+                provider,
             },
             memory: MemoryConfig {
                 working_memory_tokens: default_working_memory_tokens(),
@@ -174,5 +220,60 @@ impl RememConfig {
     /// Returns the path where the HNSW index should be stored.
     pub fn index_path(&self) -> PathBuf {
         self.project_data_dir().join("hnsw.idx")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reasoning_model_for_anthropic() {
+        std::env::remove_var("REMEM_REASONING_MODEL");
+        assert_eq!(reasoning_model_for("anthropic"), "claude-sonnet-4-5");
+    }
+
+    #[test]
+    fn test_reasoning_model_for_openai() {
+        std::env::remove_var("REMEM_REASONING_MODEL");
+        assert_eq!(reasoning_model_for("openai"), "gpt-4o");
+    }
+
+    #[test]
+    fn test_reasoning_model_for_google() {
+        std::env::remove_var("REMEM_REASONING_MODEL");
+        assert_eq!(reasoning_model_for("google"), "gemini-2.0-flash");
+    }
+
+    #[test]
+    fn test_scoring_model_for_google() {
+        std::env::remove_var("REMEM_SCORING_MODEL");
+        assert_eq!(scoring_model_for("google"), "gemini-2.0-flash");
+    }
+
+    #[test]
+    fn test_scoring_model_for_openai() {
+        std::env::remove_var("REMEM_SCORING_MODEL");
+        assert_eq!(scoring_model_for("openai"), "gpt-4o-mini");
+    }
+
+    #[test]
+    fn test_reasoning_model_env_override() {
+        std::env::set_var("REMEM_REASONING_MODEL", "my-custom-model");
+        let result = reasoning_model_for("google");
+        std::env::remove_var("REMEM_REASONING_MODEL");
+        assert_eq!(result, "my-custom-model");
+    }
+
+    #[test]
+    fn test_default_config_provider_aware_models() {
+        std::env::remove_var("REMEM_PROVIDER");
+        std::env::remove_var("REMEM_REASONING_MODEL");
+        std::env::remove_var("REMEM_SCORING_MODEL");
+        let config = RememConfig::default();
+        // Default provider is anthropic
+        assert_eq!(config.reasoning.provider, "anthropic");
+        assert_eq!(config.reasoning.reasoning_model, "claude-sonnet-4-5");
+        assert_eq!(config.reasoning.scoring_model, "claude-haiku-4-5");
     }
 }
