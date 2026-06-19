@@ -226,50 +226,72 @@ impl RememConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // `std::env::set_var`/`remove_var` mutate process-wide global state, and
+    // `cargo test` runs tests in parallel by default. Without serialization,
+    // these tests race against each other (and against any other test that
+    // reads REMEM_PROVIDER / REMEM_REASONING_MODEL / REMEM_SCORING_MODEL),
+    // causing intermittent, platform-dependent failures. This mutex ensures
+    // only one of these tests touches the environment at a time.
+    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Clears all env vars these tests depend on. Call while holding the lock.
+    fn clear_env() {
+        std::env::remove_var("REMEM_PROVIDER");
+        std::env::remove_var("REMEM_REASONING_MODEL");
+        std::env::remove_var("REMEM_SCORING_MODEL");
+    }
 
     #[test]
     fn test_reasoning_model_for_anthropic() {
-        std::env::remove_var("REMEM_REASONING_MODEL");
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        clear_env();
         assert_eq!(reasoning_model_for("anthropic"), "claude-sonnet-4-5");
     }
 
     #[test]
     fn test_reasoning_model_for_openai() {
-        std::env::remove_var("REMEM_REASONING_MODEL");
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        clear_env();
         assert_eq!(reasoning_model_for("openai"), "gpt-4o");
     }
 
     #[test]
     fn test_reasoning_model_for_google() {
-        std::env::remove_var("REMEM_REASONING_MODEL");
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        clear_env();
         assert_eq!(reasoning_model_for("google"), "gemini-2.0-flash");
     }
 
     #[test]
     fn test_scoring_model_for_google() {
-        std::env::remove_var("REMEM_SCORING_MODEL");
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        clear_env();
         assert_eq!(scoring_model_for("google"), "gemini-2.0-flash");
     }
 
     #[test]
     fn test_scoring_model_for_openai() {
-        std::env::remove_var("REMEM_SCORING_MODEL");
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        clear_env();
         assert_eq!(scoring_model_for("openai"), "gpt-4o-mini");
     }
 
     #[test]
     fn test_reasoning_model_env_override() {
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        clear_env();
         std::env::set_var("REMEM_REASONING_MODEL", "my-custom-model");
         let result = reasoning_model_for("google");
-        std::env::remove_var("REMEM_REASONING_MODEL");
+        clear_env();
         assert_eq!(result, "my-custom-model");
     }
 
     #[test]
     fn test_default_config_provider_aware_models() {
-        std::env::remove_var("REMEM_PROVIDER");
-        std::env::remove_var("REMEM_REASONING_MODEL");
-        std::env::remove_var("REMEM_SCORING_MODEL");
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        clear_env();
         let config = RememConfig::default();
         // Default provider is anthropic
         assert_eq!(config.reasoning.provider, "anthropic");
