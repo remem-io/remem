@@ -101,9 +101,7 @@ fn try_provider_chain(chain: &[ProviderKind]) -> Arc<dyn Provider> {
         match try_provider(kind) {
             Some(p) => return p,
             None if i == 0 => {
-                tracing::warn!(
-                    "Failed to initialise configured provider. Trying fallbacks…"
-                );
+                tracing::warn!("Failed to initialise configured provider. Trying fallbacks…");
             }
             None => {}
         }
@@ -153,12 +151,14 @@ fn fallback_embedding() -> Arc<dyn EmbeddingProvider> {
 fn try_local_embeddings() -> Arc<dyn EmbeddingProvider> {
     let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
         .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
-    let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
-        .unwrap_or_else(|_| "models/vocab.txt".to_string());
+    let vocab_path =
+        std::env::var("REMEM_LOCAL_VOCAB_PATH").unwrap_or_else(|_| "models/vocab.txt".to_string());
     match LocalEmbeddings::new(&model_path, &vocab_path) {
         Ok(p) => Arc::new(p),
         Err(e) => {
-            tracing::warn!("Failed to initialise local embeddings: {e}. Falling back to MockEmbeddings.");
+            tracing::warn!(
+                "Failed to initialise local embeddings: {e}. Falling back to MockEmbeddings."
+            );
             Arc::new(MockEmbeddings::new(768))
         }
     }
@@ -178,13 +178,15 @@ fn auto_detect_embeddings() -> Arc<dyn EmbeddingProvider> {
     // Try local model files
     let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
         .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
-    let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
-        .unwrap_or_else(|_| "models/vocab.txt".to_string());
+    let vocab_path =
+        std::env::var("REMEM_LOCAL_VOCAB_PATH").unwrap_or_else(|_| "models/vocab.txt".to_string());
     if std::path::Path::new(&model_path).exists() && std::path::Path::new(&vocab_path).exists() {
         if let Ok(p) = LocalEmbeddings::new(&model_path, &vocab_path) {
             return Arc::new(p);
         }
     }
-    tracing::warn!("No embedding API keys or local model files found. Falling back to MockEmbeddings.");
+    tracing::warn!(
+        "No embedding API keys or local model files found. Falling back to MockEmbeddings."
+    );
     Arc::new(MockEmbeddings::new(768))
 }

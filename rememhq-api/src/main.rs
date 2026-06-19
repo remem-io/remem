@@ -550,9 +550,16 @@ async fn list_memories(
         .unwrap_or_default();
 
     let memory_type = q.memory_type.and_then(|t| t.parse().ok());
-    let since = q.since.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok().map(|d| d.with_timezone(&chrono::Utc)));
+    let since = q.since.and_then(|s| {
+        chrono::DateTime::parse_from_rfc3339(&s)
+            .ok()
+            .map(|d| d.with_timezone(&chrono::Utc))
+    });
 
-    match engine.list_memories(&filter_tags, memory_type, since, q.limit).await {
+    match engine
+        .list_memories(&filter_tags, memory_type, since, q.limit)
+        .await
+    {
         Ok(memories) => Ok(Json(memories)),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -613,7 +620,9 @@ async fn create_session(
             } else {
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse { error: "Failed to fetch created session".into() })
+                    Json(ErrorResponse {
+                        error: "Failed to fetch created session".into(),
+                    }),
                 ))
             }
         }
@@ -644,7 +653,9 @@ async fn end_session(
         Ok(true) => Ok(Json(serde_json::json!({ "status": "ended" }))),
         Ok(false) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: "Session not found or already ended".into() }),
+            Json(ErrorResponse {
+                error: "Session not found or already ended".into(),
+            }),
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -671,14 +682,17 @@ async fn list_sessions(
 ) -> Result<Json<Vec<SessionResponse>>, (StatusCode, Json<ErrorResponse>)> {
     match engine.list_sessions(q.limit).await {
         Ok(sessions) => {
-            let res = sessions.into_iter().map(|r| SessionResponse {
+            let res = sessions
+                .into_iter()
+                .map(|r| SessionResponse {
                     id: r.id,
                     project: r.project,
                     started_at: r.started_at,
                     ended_at: r.ended_at,
                     consolidated: r.consolidated,
                     memory_count: r.memory_count,
-            }).collect();
+                })
+                .collect();
             Ok(Json(res))
         }
         Err(e) => Err((
@@ -835,7 +849,7 @@ async fn main() -> anyhow::Result<()> {
             .with_store(store)
             .with_index(index)
             .build()
-            .await?
+            .await?,
     );
 
     let rate_limit_state = Arc::new(tokio::sync::Mutex::new(

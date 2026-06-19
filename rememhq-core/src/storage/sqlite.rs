@@ -576,19 +576,11 @@ impl SqliteStore {
     // ── Session Management ──────────────────────────────────────────────
 
     /// Create a new session for a project.
-    pub async fn create_session(
-        &self,
-        session_id: &str,
-        project: &str,
-    ) -> anyhow::Result<()> {
+    pub async fn create_session(&self, session_id: &str, project: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO sessions (id, project, started_at) VALUES (?1, ?2, ?3)",
-            params![
-                session_id,
-                project,
-                chrono::Utc::now().to_rfc3339()
-            ],
+            params![session_id, project, chrono::Utc::now().to_rfc3339()],
         )?;
         Ok(())
     }
@@ -604,10 +596,7 @@ impl SqliteStore {
     }
 
     /// Get a session by ID.
-    pub async fn get_session(
-        &self,
-        session_id: &str,
-    ) -> anyhow::Result<Option<SessionRecord>> {
+    pub async fn get_session(&self, session_id: &str) -> anyhow::Result<Option<SessionRecord>> {
         let conn = self.conn.lock().await;
         let result = conn
             .query_row(
@@ -621,10 +610,7 @@ impl SqliteStore {
     }
 
     /// List recent sessions.
-    pub async fn list_sessions(
-        &self,
-        limit: usize,
-    ) -> anyhow::Result<Vec<SessionRecord>> {
+    pub async fn list_sessions(&self, limit: usize) -> anyhow::Result<Vec<SessionRecord>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, project, started_at, ended_at, consolidated, memory_count
@@ -638,10 +624,7 @@ impl SqliteStore {
     }
 
     /// Increment the memory_count for a session.
-    pub async fn increment_session_memory_count(
-        &self,
-        session_id: &str,
-    ) -> anyhow::Result<()> {
+    pub async fn increment_session_memory_count(&self, session_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock().await;
         conn.execute(
             "UPDATE sessions SET memory_count = memory_count + 1 WHERE id = ?1",

@@ -15,8 +15,8 @@ use crate::providers::{EmbeddingProvider, Provider};
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// The reasoning engine orchestrates all intelligent memory operations.
 pub struct ReasoningEngine {
@@ -324,7 +324,9 @@ impl ReasoningEngine {
         since: Option<chrono::DateTime<chrono::Utc>>,
         limit: usize,
     ) -> anyhow::Result<Vec<MemoryRecord>> {
-        self.store.list(filter_tags, memory_type, since, limit).await
+        self.store
+            .list(filter_tags, memory_type, since, limit)
+            .await
     }
 
     // ── Index Persistence ───────────────────────────────────────────────
@@ -337,7 +339,8 @@ impl ReasoningEngine {
     /// Check if auto-save should run, and trigger it if threshold reached.
     async fn check_auto_save(&self) -> anyhow::Result<()> {
         let count = self.write_counter.fetch_add(1, Ordering::Relaxed) + 1;
-        if count >= 100 { // Auto-save after 100 writes
+        if count >= 100 {
+            // Auto-save after 100 writes
             self.write_counter.store(0, Ordering::Relaxed);
             self.save_index().await?;
             tracing::debug!("Auto-saved vector index after 100 writes");
@@ -420,13 +423,13 @@ impl EngineBuilder {
             None => Arc::new(SqliteStore::open(&self.config.db_path())?),
         };
 
-        let provider = self.provider.unwrap_or_else(|| {
-            crate::providers::factory::build_reasoning_provider(&self.config)
-        });
+        let provider = self
+            .provider
+            .unwrap_or_else(|| crate::providers::factory::build_reasoning_provider(&self.config));
 
-        let embeddings = self.embeddings.unwrap_or_else(|| {
-            crate::providers::factory::build_embedding_provider(&self.config)
-        });
+        let embeddings = self
+            .embeddings
+            .unwrap_or_else(|| crate::providers::factory::build_embedding_provider(&self.config));
 
         let index = match self.index {
             Some(i) => i,
