@@ -2,6 +2,7 @@
 
 pub mod anthropic;
 pub mod embeddings;
+pub mod factory;
 pub mod google;
 pub mod local;
 pub mod mock;

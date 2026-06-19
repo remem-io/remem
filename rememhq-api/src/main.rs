@@ -29,10 +29,6 @@ use utoipa::ToSchema;
 
 use rememhq_core::config::RememConfig;
 use rememhq_core::memory::types::*;
-use rememhq_core::providers::anthropic::AnthropicProvider;
-use rememhq_core::providers::embeddings::OpenAIEmbeddings;
-use rememhq_core::providers::local::LocalProvider;
-use rememhq_core::providers::openai::OpenAIProvider;
 use rememhq_core::reasoning::ReasoningEngine;
 use rememhq_core::storage::sqlite::SqliteStore;
 use rememhq_core::storage::vector::{HNSWVectorIndex, VectorIndex};
@@ -101,6 +97,26 @@ struct ForgetQuery {
 struct ConsolidateBody {
     #[serde(default)]
     model: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ListQuery {
+    #[serde(default = "default_20")]
+    limit: usize,
+    #[serde(default)]
+    filter_tags: Option<String>,
+    since: Option<String>,
+    memory_type: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+struct SessionResponse {
+    id: String,
+    project: String,
+    started_at: String,
+    ended_at: Option<String>,
+    consolidated: bool,
+    memory_count: usize,
 }
 
 fn default_8() -> usize {
@@ -509,6 +525,171 @@ async fn consolidate_session(
     Ok(Json(report))
 }
 
+// ── List Memories ───────────────────────────────────────────────────
+
+#[utoipa::path(
+    get,
+    path = "/v1/memories",
+    params(
+        ("limit" = Option<usize>, Query, description = "Max results"),
+        ("filter_tags" = Option<String>, Query, description = "Comma-separated tags"),
+        ("since" = Option<String>, Query, description = "RFC3339 datetime"),
+        ("memory_type" = Option<String>, Query, description = "Memory type"),
+    ),
+    responses(
+        (status = 200, description = "List of memories", body = Vec<MemoryRecord>)
+    )
+)]
+async fn list_memories(
+    State(engine): State<AppState>,
+    Query(q): Query<ListQuery>,
+) -> Result<Json<Vec<MemoryRecord>>, (StatusCode, Json<ErrorResponse>)> {
+    let filter_tags: Vec<String> = q
+        .filter_tags
+        .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
+        .unwrap_or_default();
+
+    let memory_type = q.memory_type.and_then(|t| t.parse().ok());
+    let since = q.since.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok().map(|d| d.with_timezone(&chrono::Utc)));
+
+    match engine.list_memories(&filter_tags, memory_type, since, q.limit).await {
+        Ok(memories) => Ok(Json(memories)),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to list memories: {}", e),
+            }),
+        )),
+    }
+}
+
+// ── Expiration ──────────────────────────────────────────────────────
+
+#[utoipa::path(
+    post,
+    path = "/v1/memories/expire",
+    responses(
+        (status = 200, description = "Expired memories count")
+    )
+)]
+async fn expire_memories(
+    State(engine): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    match engine.expire_ttl().await {
+        Ok(count) => Ok(Json(serde_json::json!({ "expired": count }))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to expire memories: {}", e),
+            }),
+        )),
+    }
+}
+
+// ── Sessions ────────────────────────────────────────────────────────
+
+#[utoipa::path(
+    post,
+    path = "/v1/sessions",
+    responses(
+        (status = 200, description = "Session created", body = SessionResponse)
+    )
+)]
+async fn create_session(
+    State(engine): State<AppState>,
+) -> Result<Json<SessionResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let id = uuid::Uuid::new_v4().to_string();
+    match engine.create_session(&id).await {
+        Ok(_) => {
+            if let Ok(Some(record)) = engine.get_session(&id).await {
+                Ok(Json(SessionResponse {
+                    id: record.id,
+                    project: record.project,
+                    started_at: record.started_at,
+                    ended_at: record.ended_at,
+                    consolidated: record.consolidated,
+                    memory_count: record.memory_count,
+                }))
+            } else {
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse { error: "Failed to fetch created session".into() })
+                ))
+            }
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to create session: {}", e),
+            }),
+        )),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{id}/end",
+    params(
+        ("id" = String, Path, description = "Session ID to end")
+    ),
+    responses(
+        (status = 200, description = "Session ended")
+    )
+)]
+async fn end_session(
+    State(engine): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    match engine.end_session(&id).await {
+        Ok(true) => Ok(Json(serde_json::json!({ "status": "ended" }))),
+        Ok(false) => Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse { error: "Session not found or already ended".into() }),
+        )),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to end session: {}", e),
+            }),
+        )),
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/sessions",
+    params(
+        ("limit" = Option<usize>, Query, description = "Max results")
+    ),
+    responses(
+        (status = 200, description = "List of sessions", body = Vec<SessionResponse>)
+    )
+)]
+async fn list_sessions(
+    State(engine): State<AppState>,
+    Query(q): Query<ListQuery>,
+) -> Result<Json<Vec<SessionResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    match engine.list_sessions(q.limit).await {
+        Ok(sessions) => {
+            let res = sessions.into_iter().map(|r| SessionResponse {
+                    id: r.id,
+                    project: r.project,
+                    started_at: r.started_at,
+                    ended_at: r.ended_at,
+                    consolidated: r.consolidated,
+                    memory_count: r.memory_count,
+            }).collect();
+            Ok(Json(res))
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to list sessions: {}", e),
+            }),
+        )),
+    }
+}
+
 async fn health() -> &'static str {
     "ok"
 }
@@ -563,11 +744,16 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
 #[openapi(
     paths(
         store_memory,
+        list_memories,
         recall_memories,
         search_memories,
         update_memory,
         forget_memory,
         apply_decay,
+        expire_memories,
+        list_sessions,
+        create_session,
+        end_session,
         consolidate_session,
         routes::memories::get_memory,
         routes::memories::query_knowledge,
@@ -589,6 +775,7 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
             ConsolidationReport,
             Contradiction,
             KnowledgeGraphUpdate,
+            SessionResponse,
             rememhq_core::storage::StoreStats
         )
     ),
@@ -627,190 +814,57 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize components
     let store = Arc::new(SqliteStore::open(&config.db_path())?);
-    let reasoning_provider_name = std::env::var("REMEM_REASONING_PROVIDER")
-        .unwrap_or_else(|_| config.reasoning.provider.clone());
 
-    let provider: Arc<dyn rememhq_core::providers::Provider> = match reasoning_provider_name
-        .as_str()
-    {
-        "openai" => match OpenAIProvider::new(None) {
-            Ok(p) => Arc::new(p),
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to initialize configured OpenAI provider: {}. Attempting fallback...",
-                    e
-                );
-                match AnthropicProvider::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => match rememhq_core::providers::google::GoogleProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => {
-                            tracing::warn!("No valid cloud reasoning keys found. Falling back to MockProvider.");
-                            Arc::new(rememhq_core::providers::mock::MockProvider)
-                        }
-                    },
-                }
-            }
-        },
-        "anthropic" => match AnthropicProvider::new(None) {
-            Ok(p) => Arc::new(p),
-            Err(e) => {
-                tracing::warn!("Failed to initialize configured Anthropic provider: {}. Attempting fallback...", e);
-                match OpenAIProvider::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => match rememhq_core::providers::google::GoogleProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => {
-                            tracing::warn!("No valid cloud reasoning keys found. Falling back to MockProvider.");
-                            Arc::new(rememhq_core::providers::mock::MockProvider)
-                        }
-                    },
-                }
-            }
-        },
-        "google" => {
-            match rememhq_core::providers::google::GoogleProvider::new(None) {
-                Ok(p) => Arc::new(p),
-                Err(e) => {
-                    tracing::warn!("Failed to initialize configured Google provider: {}. Attempting fallback...", e);
-                    match AnthropicProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => match OpenAIProvider::new(None) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => {
-                                tracing::warn!("No valid cloud reasoning keys found. Falling back to MockProvider.");
-                                Arc::new(rememhq_core::providers::mock::MockProvider)
-                            }
-                        },
-                    }
-                }
-            }
-        }
-        "local" => Arc::new(LocalProvider::new(None)),
-        "mock" => Arc::new(rememhq_core::providers::mock::MockProvider),
-        _ => {
-            // Auto-detect based on env vars
-            if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-                match AnthropicProvider::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
-                }
-            } else if std::env::var("OPENAI_API_KEY").is_ok() {
-                match OpenAIProvider::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
-                }
-            } else if std::env::var("GOOGLE_API_KEY").is_ok() {
-                match rememhq_core::providers::google::GoogleProvider::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
-                }
-            } else if std::env::var("LLAMA_API_BASE").is_ok()
-                || std::env::var("OLLAMA_API_BASE").is_ok()
-            {
-                Arc::new(LocalProvider::new(None))
-            } else {
-                tracing::warn!("No reasoning API keys set. Falling back to MockProvider.");
-                Arc::new(rememhq_core::providers::mock::MockProvider)
-            }
-        }
-    };
-
-    let embedding_provider_name = std::env::var("REMEM_EMBEDDING_PROVIDER")
-        .unwrap_or_else(|_| config.reasoning.provider.clone());
-
-    let embeddings: Arc<dyn rememhq_core::providers::EmbeddingProvider> =
-        match embedding_provider_name.as_str() {
-            "google" => match rememhq_core::providers::google::GoogleEmbeddings::new(None) {
-                Ok(p) => Arc::new(p),
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to initialize Google embeddings: {}. Attempting fallback...",
-                        e
-                    );
-                    if std::env::var("OPENAI_API_KEY").is_ok() {
-                        Arc::new(OpenAIEmbeddings::new(None, Some(768))?)
-                    } else {
-                        tracing::warn!("Falling back to MockEmbeddings.");
-                        Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
-                    }
-                }
-            },
-            "mock" => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
-            "local" => {
-                let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
-                    .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
-                let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
-                    .unwrap_or_else(|_| "models/vocab.txt".to_string());
-                match rememhq_core::providers::local::LocalEmbeddings::new(&model_path, &vocab_path)
-                {
-                    Ok(p) => Arc::new(p),
-                    Err(e) => {
-                        tracing::warn!("Failed to initialize Local embeddings: {}. Falling back to MockEmbeddings.", e);
-                        Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
-                    }
-                }
-            }
-            _ => {
-                // Auto-detect based on env vars
-                if std::env::var("OPENAI_API_KEY").is_ok() {
-                    match OpenAIEmbeddings::new(None, Some(768)) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
-                    }
-                } else if std::env::var("GOOGLE_API_KEY").is_ok() {
-                    match rememhq_core::providers::google::GoogleEmbeddings::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
-                    }
-                } else {
-                    // Check if local model files exist
-                    let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
-                        .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
-                    let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
-                        .unwrap_or_else(|_| "models/vocab.txt".to_string());
-                    if std::path::Path::new(&model_path).exists()
-                        && std::path::Path::new(&vocab_path).exists()
-                    {
-                        match rememhq_core::providers::local::LocalEmbeddings::new(
-                            &model_path,
-                            &vocab_path,
-                        ) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => {
-                                Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
-                            }
-                        }
-                    } else {
-                        tracing::warn!("No cloud API keys or local model files found for embeddings. Falling back to MockEmbeddings.");
-                        Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
-                    }
-                }
-            }
-        };
+    let provider = rememhq_core::providers::factory::build_reasoning_provider(&config);
+    let embeddings = rememhq_core::providers::factory::build_embedding_provider(&config);
 
     tracing::info!(
         "Initializing ReasoningEngine with project: {}",
         args.project
     );
-    tracing::info!("Using reasoning provider: {}", reasoning_provider_name);
-    tracing::info!("Using embedding provider: {}", embedding_provider_name);
+    tracing::info!("Using reasoning provider: {}", provider.name());
+    tracing::info!("Using embedding provider (dim={})", embeddings.dimension());
 
     let index = Arc::new(HNSWVectorIndex::new(embeddings.dimension(), 10000));
     let _ = index.load(&config.index_path()).await;
 
-
-    let engine = Arc::new(ReasoningEngine::new(
-        config.clone(),
-        provider,
-        embeddings,
-        store,
-        index,
-    ));
+    let engine = Arc::new(
+        rememhq_core::reasoning::EngineBuilder::from_config(config.clone())
+            .with_provider(provider)
+            .with_embeddings(embeddings)
+            .with_store(store)
+            .with_index(index)
+            .build()
+            .await?
+    );
 
     let rate_limit_state = Arc::new(tokio::sync::Mutex::new(
         middleware::rate_limit::RateLimiterState::new(),
     ));
+
+    // Start background tasks
+    let bg_engine = engine.clone();
+    let decay_hours = config.memory.importance_decay_interval_hours as u64;
+    tokio::spawn(async move {
+        let decay_interval = std::time::Duration::from_secs(decay_hours * 3600);
+        let mut decay_timer = tokio::time::interval(decay_interval);
+        let mut ttl_timer = tokio::time::interval(std::time::Duration::from_secs(3600)); // check TTL every hour
+
+        loop {
+            tokio::select! {
+                _ = decay_timer.tick() => {
+                    tracing::info!("Running background memory decay...");
+                    let _ = bg_engine.apply_decay(0.9).await;
+                    let _ = bg_engine.save_index().await;
+                }
+                _ = ttl_timer.tick() => {
+                    tracing::info!("Running background TTL expiration...");
+                    let _ = bg_engine.expire_ttl().await;
+                    let _ = bg_engine.save_index().await;
+                }
+            }
+        }
+    });
 
     let app = Router::new()
         .route("/health", get(health))
@@ -818,12 +872,17 @@ async fn main() -> anyhow::Result<()> {
         .route("/swagger-ui", get(swagger_ui_handler))
         .route("/swagger-ui/", get(swagger_ui_handler))
         .route("/v1/memories", post(store_memory))
+        .route("/v1/memories", get(list_memories))
         .route("/v1/memories/recall", get(recall_memories))
         .route("/v1/memories/search", get(search_memories))
         .route("/v1/memories/decay", post(apply_decay))
+        .route("/v1/memories/expire", post(expire_memories))
         .route("/v1/memories/{id}", get(routes::memories::get_memory))
         .route("/v1/memories/{id}", patch(update_memory))
         .route("/v1/memories/{id}", delete(forget_memory))
+        .route("/v1/sessions", get(list_sessions))
+        .route("/v1/sessions", post(create_session))
+        .route("/v1/sessions/{id}/end", post(end_session))
         .route("/v1/sessions/{id}/consolidate", post(consolidate_session))
         .route("/v1/knowledge", get(routes::memories::query_knowledge))
         .route(

@@ -14,10 +14,6 @@ use std::sync::Arc;
 
 use rememhq_core::config::RememConfig;
 use rememhq_core::memory::types::{MemoryRecord, MemoryType};
-use rememhq_core::providers::anthropic::AnthropicProvider;
-use rememhq_core::providers::embeddings::OpenAIEmbeddings;
-use rememhq_core::providers::google::{GoogleEmbeddings, GoogleProvider};
-use rememhq_core::providers::openai::OpenAIProvider;
 use rememhq_core::reasoning::ReasoningEngine;
 use rememhq_core::storage::sqlite::SqliteStore;
 use rememhq_core::storage::vector::{HNSWVectorIndex, VectorIndex};
@@ -438,153 +434,12 @@ async fn main() -> anyhow::Result<()> {
 
 /// Build a reasoning engine from config (shared setup for CLI commands).
 ///
-/// Uses cascading fallback: configured provider → alternatives → MockProvider.
+/// Uses the centralised provider factory for cascading fallbacks.
 async fn build_engine(config: &RememConfig) -> anyhow::Result<ReasoningEngine> {
     let store = Arc::new(SqliteStore::open(&config.db_path())?);
-    // Reasoning provider with robust fallback
-    let provider: Arc<dyn rememhq_core::providers::Provider> =
-        match config.reasoning.provider.as_str() {
-            "openai" => match OpenAIProvider::new(None) {
-                Ok(p) => Arc::new(p),
-                Err(e) => {
-                    eprintln!(
-                        "⚠ Failed to initialize OpenAI provider: {}. Trying fallbacks...",
-                        e
-                    );
-                    match AnthropicProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => match GoogleProvider::new(None) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => {
-                                eprintln!("⚠ No valid API keys found. Using MockProvider.");
-                                Arc::new(rememhq_core::providers::mock::MockProvider)
-                            }
-                        },
-                    }
-                }
-            },
-            "anthropic" => match AnthropicProvider::new(None) {
-                Ok(p) => Arc::new(p),
-                Err(e) => {
-                    eprintln!(
-                        "⚠ Failed to initialize Anthropic provider: {}. Trying fallbacks...",
-                        e
-                    );
-                    match OpenAIProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => match GoogleProvider::new(None) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => {
-                                eprintln!("⚠ No valid API keys found. Using MockProvider.");
-                                Arc::new(rememhq_core::providers::mock::MockProvider)
-                            }
-                        },
-                    }
-                }
-            },
-            "google" => match GoogleProvider::new(None) {
-                Ok(p) => Arc::new(p),
-                Err(e) => {
-                    eprintln!(
-                        "⚠ Failed to initialize Google provider: {}. Trying fallbacks...",
-                        e
-                    );
-                    match AnthropicProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => match OpenAIProvider::new(None) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => {
-                                eprintln!("⚠ No valid API keys found. Using MockProvider.");
-                                Arc::new(rememhq_core::providers::mock::MockProvider)
-                            }
-                        },
-                    }
-                }
-            },
-            "local" => Arc::new(rememhq_core::providers::local::LocalProvider::new(None)),
-            "mock" => Arc::new(rememhq_core::providers::mock::MockProvider),
-            _ => {
-                // Auto-detect based on env vars
-                if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-                    match AnthropicProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
-                    }
-                } else if std::env::var("OPENAI_API_KEY").is_ok() {
-                    match OpenAIProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
-                    }
-                } else if std::env::var("GOOGLE_API_KEY").is_ok() {
-                    match GoogleProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => Arc::new(rememhq_core::providers::mock::MockProvider),
-                    }
-                } else {
-                    eprintln!("⚠ No reasoning API keys set. Using MockProvider.");
-                    Arc::new(rememhq_core::providers::mock::MockProvider)
-                }
-            }
-        };
 
-    // Embedding provider with robust fallback
-    let embeddings: Arc<dyn rememhq_core::providers::EmbeddingProvider> = match config
-        .reasoning
-        .provider
-        .as_str()
-    {
-        "google" => match GoogleEmbeddings::new(None) {
-            Ok(p) => Arc::new(p),
-            Err(e) => {
-                eprintln!(
-                    "⚠ Failed to initialize Google embeddings: {}. Trying fallbacks...",
-                    e
-                );
-                if std::env::var("OPENAI_API_KEY").is_ok() {
-                    match OpenAIEmbeddings::new(None, Some(768)) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
-                    }
-                } else {
-                    Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
-                }
-            }
-        },
-        "mock" => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
-        "local" => {
-            let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
-                .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
-            let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
-                .unwrap_or_else(|_| "models/vocab.txt".to_string());
-            match rememhq_core::providers::local::LocalEmbeddings::new(&model_path, &vocab_path) {
-                Ok(p) => Arc::new(p),
-                Err(e) => {
-                    eprintln!(
-                        "⚠ Failed to initialize local embeddings: {}. Using MockEmbeddings.",
-                        e
-                    );
-                    Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
-                }
-            }
-        }
-        _ => {
-            // Auto-detect embeddings
-            if std::env::var("OPENAI_API_KEY").is_ok() {
-                match OpenAIEmbeddings::new(None, Some(768)) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
-                }
-            } else if std::env::var("GOOGLE_API_KEY").is_ok() {
-                match GoogleEmbeddings::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768)),
-                }
-            } else {
-                eprintln!("⚠ No embedding API keys found. Using MockEmbeddings.");
-                Arc::new(rememhq_core::providers::mock::MockEmbeddings::new(768))
-            }
-        }
-    };
+    let provider = rememhq_core::providers::factory::build_reasoning_provider(config);
+    let embeddings = rememhq_core::providers::factory::build_embedding_provider(config);
 
     let index = Arc::new(HNSWVectorIndex::new(embeddings.dimension(), 10000));
     let _ = index.load(&config.index_path()).await;

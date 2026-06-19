@@ -537,6 +537,143 @@ impl MemoryStore for SqliteStore {
     }
 }
 
+impl SqliteStore {
+    // ── TTL Expiration ──────────────────────────────────────────────────
+
+    /// Archive memories whose TTL has expired.
+    ///
+    /// Returns the number of newly-archived memories.
+    pub async fn expire_ttl(&self) -> anyhow::Result<Vec<uuid::Uuid>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id FROM memories
+             WHERE archived = 0
+               AND ttl_days IS NOT NULL
+               AND julianday('now') - julianday(created_at) > ttl_days",
+        )?;
+
+        let expired_ids: Vec<uuid::Uuid> = stmt
+            .query_map([], |row| {
+                let id_str: String = row.get(0)?;
+                Ok(uuid::Uuid::parse_str(&id_str).unwrap_or_else(|_| uuid::Uuid::new_v4()))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if !expired_ids.is_empty() {
+            for id in &expired_ids {
+                conn.execute(
+                    "UPDATE memories SET archived = 1 WHERE id = ?1",
+                    params![id.to_string()],
+                )?;
+            }
+            tracing::info!(count = expired_ids.len(), "Archived TTL-expired memories");
+        }
+
+        Ok(expired_ids)
+    }
+
+    // ── Session Management ──────────────────────────────────────────────
+
+    /// Create a new session for a project.
+    pub async fn create_session(
+        &self,
+        session_id: &str,
+        project: &str,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "INSERT INTO sessions (id, project, started_at) VALUES (?1, ?2, ?3)",
+            params![
+                session_id,
+                project,
+                chrono::Utc::now().to_rfc3339()
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// End a session by setting ended_at.
+    pub async fn end_session(&self, session_id: &str) -> anyhow::Result<bool> {
+        let conn = self.conn.lock().await;
+        let count = conn.execute(
+            "UPDATE sessions SET ended_at = ?1 WHERE id = ?2 AND ended_at IS NULL",
+            params![chrono::Utc::now().to_rfc3339(), session_id],
+        )?;
+        Ok(count > 0)
+    }
+
+    /// Get a session by ID.
+    pub async fn get_session(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<SessionRecord>> {
+        let conn = self.conn.lock().await;
+        let result = conn
+            .query_row(
+                "SELECT id, project, started_at, ended_at, consolidated, memory_count
+                 FROM sessions WHERE id = ?1",
+                params![session_id],
+                Self::row_to_session,
+            )
+            .optional()?;
+        Ok(result)
+    }
+
+    /// List recent sessions.
+    pub async fn list_sessions(
+        &self,
+        limit: usize,
+    ) -> anyhow::Result<Vec<SessionRecord>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, project, started_at, ended_at, consolidated, memory_count
+             FROM sessions ORDER BY started_at DESC LIMIT ?1",
+        )?;
+        let sessions = stmt
+            .query_map(params![limit as i64], Self::row_to_session)?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(sessions)
+    }
+
+    /// Increment the memory_count for a session.
+    pub async fn increment_session_memory_count(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "UPDATE sessions SET memory_count = memory_count + 1 WHERE id = ?1",
+            params![session_id],
+        )?;
+        Ok(())
+    }
+
+    /// Parse a session record from a SQLite row.
+    fn row_to_session(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRecord> {
+        Ok(SessionRecord {
+            id: row.get(0)?,
+            project: row.get(1)?,
+            started_at: row.get(2)?,
+            ended_at: row.get(3)?,
+            consolidated: row.get::<_, i32>(4)? != 0,
+            memory_count: row.get::<_, i64>(5)? as usize,
+        })
+    }
+}
+
+/// A session record from the sessions table.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SessionRecord {
+    pub id: String,
+    pub project: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub consolidated: bool,
+    pub memory_count: usize,
+}
+
 // We need rusqlite::OptionalExtension
 use rusqlite::OptionalExtension;
 

@@ -4,12 +4,7 @@
 
 use crate::config::RememConfig;
 use crate::memory::types::{ForgetMode, MemoryRecord, MemoryType};
-use crate::providers::anthropic::AnthropicProvider;
-use crate::providers::embeddings::OpenAIEmbeddings;
-use crate::providers::google::{GoogleEmbeddings, GoogleProvider};
-use crate::providers::local::{LocalEmbeddings, LocalProvider};
-use crate::providers::openai::OpenAIProvider;
-use crate::providers::{EmbeddingProvider, Provider};
+
 use crate::reasoning::ReasoningEngine;
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::{HNSWVectorIndex, VectorIndex};
@@ -93,87 +88,10 @@ pub unsafe extern "C" fn remem_engine_new(
             let store = Arc::new(SqliteStore::open(&config.db_path())?);
 
             let target_provider = config.reasoning.provider.clone();
+            let _ = target_provider; // consumed by logging below
 
-            // Setup reasoning provider with robust fallbacks
-            let provider: Arc<dyn Provider> = match target_provider.as_str() {
-                "openai" => match OpenAIProvider::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => match AnthropicProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => match GoogleProvider::new(None) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => Arc::new(crate::providers::mock::MockProvider),
-                        },
-                    },
-                },
-                "google" => match GoogleProvider::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => match AnthropicProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => match OpenAIProvider::new(None) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => Arc::new(crate::providers::mock::MockProvider),
-                        },
-                    },
-                },
-                "local" => Arc::new(LocalProvider::new(None)),
-                "mock" => Arc::new(crate::providers::mock::MockProvider),
-                _ => match AnthropicProvider::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => match OpenAIProvider::new(None) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => match GoogleProvider::new(None) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => Arc::new(crate::providers::mock::MockProvider),
-                        },
-                    },
-                },
-            };
-
-            // Setup embedding provider with robust fallbacks
-            let embeddings: Arc<dyn EmbeddingProvider> = match target_provider.as_str() {
-                "google" => match GoogleEmbeddings::new(None) {
-                    Ok(p) => Arc::new(p),
-                    Err(_) => {
-                        if std::env::var("OPENAI_API_KEY").is_ok() {
-                            match OpenAIEmbeddings::new(None, Some(768)) {
-                                Ok(p) => Arc::new(p),
-                                Err(_) => {
-                                    Arc::new(crate::providers::mock::MockEmbeddings::new(768))
-                                }
-                            }
-                        } else {
-                            Arc::new(crate::providers::mock::MockEmbeddings::new(768))
-                        }
-                    }
-                },
-                "mock" => Arc::new(crate::providers::mock::MockEmbeddings::new(768)),
-                "local" => {
-                    let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
-                        .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
-                    let vocab_path = std::env::var("REMEM_LOCAL_VOCAB_PATH")
-                        .unwrap_or_else(|_| "models/vocab.txt".to_string());
-                    match LocalEmbeddings::new(&model_path, &vocab_path) {
-                        Ok(p) => Arc::new(p),
-                        Err(_) => Arc::new(crate::providers::mock::MockEmbeddings::new(768)),
-                    }
-                }
-                _ => {
-                    if std::env::var("OPENAI_API_KEY").is_ok() {
-                        match OpenAIEmbeddings::new(None, Some(768)) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => Arc::new(crate::providers::mock::MockEmbeddings::new(768)),
-                        }
-                    } else if std::env::var("GOOGLE_API_KEY").is_ok() {
-                        match GoogleEmbeddings::new(None) {
-                            Ok(p) => Arc::new(p),
-                            Err(_) => Arc::new(crate::providers::mock::MockEmbeddings::new(768)),
-                        }
-                    } else {
-                        Arc::new(crate::providers::mock::MockEmbeddings::new(768))
-                    }
-                }
-            };
+            let provider = crate::providers::factory::build_reasoning_provider(&config);
+            let embeddings = crate::providers::factory::build_embedding_provider(&config);
 
             let index = Arc::new(HNSWVectorIndex::new(embeddings.dimension(), 10000));
             let _ = index.load(&config.index_path()).await;

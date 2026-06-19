@@ -16,6 +16,7 @@ use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// The reasoning engine orchestrates all intelligent memory operations.
 pub struct ReasoningEngine {
@@ -24,6 +25,7 @@ pub struct ReasoningEngine {
     pub embeddings: Arc<dyn EmbeddingProvider>,
     pub store: Arc<SqliteStore>,
     pub index: Arc<dyn VectorIndex>,
+    pub write_counter: AtomicUsize,
 }
 
 impl ReasoningEngine {
@@ -41,6 +43,7 @@ impl ReasoningEngine {
             embeddings,
             store,
             index,
+            write_counter: AtomicUsize::new(0),
         }
     }
 
@@ -77,6 +80,8 @@ impl ReasoningEngine {
             memory_type = %record.memory_type,
             "Stored memory"
         );
+
+        self.check_auto_save().await?;
 
         Ok(record)
     }
@@ -207,6 +212,8 @@ impl ReasoningEngine {
         record.updated_at = chrono::Utc::now();
         self.store.update(&record).await?;
 
+        self.check_auto_save().await?;
+
         Ok(record)
     }
 
@@ -216,7 +223,7 @@ impl ReasoningEngine {
         id: uuid::Uuid,
         mode: crate::memory::types::ForgetMode,
     ) -> anyhow::Result<bool> {
-        match mode {
+        let success = match mode {
             crate::memory::types::ForgetMode::Delete => {
                 let _ = self.index.remove(id).await;
                 self.store.delete(id).await
@@ -231,7 +238,12 @@ impl ReasoningEngine {
                     Ok(false)
                 }
             }
+        };
+
+        if matches!(success, Ok(true)) {
+            self.check_auto_save().await?;
         }
+        success
     }
 
     /// Apply decay to all active memories and archive those that fall below the threshold.
@@ -258,5 +270,182 @@ impl ReasoningEngine {
         );
 
         Ok(archived_count)
+    }
+
+    // ── TTL Expiration ──────────────────────────────────────────────────
+
+    /// Expire memories that have exceeded their TTL and remove them from the
+    /// vector index. Returns the count of newly-archived memories.
+    pub async fn expire_ttl(&self) -> anyhow::Result<usize> {
+        let expired_ids = self.store.expire_ttl().await?;
+        for id in &expired_ids {
+            let _ = self.index.remove(*id).await;
+        }
+        Ok(expired_ids.len())
+    }
+
+    // ── Session Management ──────────────────────────────────────────────
+
+    /// Create a new session for the current project.
+    pub async fn create_session(&self, session_id: &str) -> anyhow::Result<()> {
+        self.store
+            .create_session(session_id, &self.config.project)
+            .await
+    }
+
+    /// End a session.
+    pub async fn end_session(&self, session_id: &str) -> anyhow::Result<bool> {
+        self.store.end_session(session_id).await
+    }
+
+    /// List recent sessions.
+    pub async fn list_sessions(
+        &self,
+        limit: usize,
+    ) -> anyhow::Result<Vec<crate::storage::sqlite::SessionRecord>> {
+        self.store.list_sessions(limit).await
+    }
+
+    /// Get a specific session.
+    pub async fn get_session(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<crate::storage::sqlite::SessionRecord>> {
+        self.store.get_session(session_id).await
+    }
+
+    // ── List Memories ───────────────────────────────────────────────────
+
+    /// List memories with optional filters (delegates to MemoryStore::list).
+    pub async fn list_memories(
+        &self,
+        filter_tags: &[String],
+        memory_type: Option<crate::memory::types::MemoryType>,
+        since: Option<chrono::DateTime<chrono::Utc>>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<MemoryRecord>> {
+        self.store.list(filter_tags, memory_type, since, limit).await
+    }
+
+    // ── Index Persistence ───────────────────────────────────────────────
+
+    /// Save the vector index to disk.
+    pub async fn save_index(&self) -> anyhow::Result<()> {
+        self.index.save(&self.config.index_path()).await
+    }
+
+    /// Check if auto-save should run, and trigger it if threshold reached.
+    async fn check_auto_save(&self) -> anyhow::Result<()> {
+        let count = self.write_counter.fetch_add(1, Ordering::Relaxed) + 1;
+        if count >= 100 { // Auto-save after 100 writes
+            self.write_counter.store(0, Ordering::Relaxed);
+            self.save_index().await?;
+            tracing::debug!("Auto-saved vector index after 100 writes");
+        }
+        Ok(())
+    }
+}
+
+// ── Engine Builder ──────────────────────────────────────────────────────
+
+/// Fluent builder for `ReasoningEngine`.
+///
+/// ```no_run
+/// use rememhq_core::config::RememConfig;
+/// use rememhq_core::reasoning::EngineBuilder;
+///
+/// # async fn demo() -> anyhow::Result<()> {
+/// let engine = EngineBuilder::from_config(RememConfig::default())
+///     .build()
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+pub struct EngineBuilder {
+    config: RememConfig,
+    provider: Option<Arc<dyn Provider>>,
+    embeddings: Option<Arc<dyn EmbeddingProvider>>,
+    store: Option<Arc<SqliteStore>>,
+    index: Option<Arc<dyn VectorIndex>>,
+    max_index_capacity: usize,
+}
+
+impl EngineBuilder {
+    /// Create a builder from a `RememConfig`.
+    pub fn from_config(config: RememConfig) -> Self {
+        Self {
+            config,
+            provider: None,
+            embeddings: None,
+            store: None,
+            index: None,
+            max_index_capacity: 10_000,
+        }
+    }
+
+    /// Override the reasoning provider.
+    pub fn with_provider(mut self, p: Arc<dyn Provider>) -> Self {
+        self.provider = Some(p);
+        self
+    }
+
+    /// Override the embedding provider.
+    pub fn with_embeddings(mut self, e: Arc<dyn EmbeddingProvider>) -> Self {
+        self.embeddings = Some(e);
+        self
+    }
+
+    /// Override the store.
+    pub fn with_store(mut self, s: Arc<SqliteStore>) -> Self {
+        self.store = Some(s);
+        self
+    }
+
+    /// Override the vector index.
+    pub fn with_index(mut self, i: Arc<dyn VectorIndex>) -> Self {
+        self.index = Some(i);
+        self
+    }
+
+    /// Set the HNSW max capacity.
+    pub fn max_capacity(mut self, n: usize) -> Self {
+        self.max_index_capacity = n;
+        self
+    }
+
+    /// Build the engine, creating default components for anything not overridden.
+    pub async fn build(self) -> anyhow::Result<ReasoningEngine> {
+        let store = match self.store {
+            Some(s) => s,
+            None => Arc::new(SqliteStore::open(&self.config.db_path())?),
+        };
+
+        let provider = self.provider.unwrap_or_else(|| {
+            crate::providers::factory::build_reasoning_provider(&self.config)
+        });
+
+        let embeddings = self.embeddings.unwrap_or_else(|| {
+            crate::providers::factory::build_embedding_provider(&self.config)
+        });
+
+        let index = match self.index {
+            Some(i) => i,
+            None => {
+                let i = Arc::new(crate::storage::vector::HNSWVectorIndex::new(
+                    embeddings.dimension(),
+                    self.max_index_capacity,
+                ));
+                let _ = i.load(&self.config.index_path()).await;
+                i
+            }
+        };
+
+        Ok(ReasoningEngine::new(
+            self.config,
+            provider,
+            embeddings,
+            store,
+            index,
+        ))
     }
 }
