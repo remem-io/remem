@@ -627,9 +627,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize components
     let store = Arc::new(SqliteStore::open(&config.db_path())?);
-    let index = Arc::new(HNSWVectorIndex::new(768, 10000));
-    let _ = index.load(&config.index_path()).await;
-
     let reasoning_provider_name = std::env::var("REMEM_REASONING_PROVIDER")
         .unwrap_or_else(|_| config.reasoning.provider.clone());
 
@@ -798,6 +795,11 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::info!("Using reasoning provider: {}", reasoning_provider_name);
     tracing::info!("Using embedding provider: {}", embedding_provider_name);
+
+    let index = Arc::new(HNSWVectorIndex::new(embeddings.dimension(), 10000));
+    let _ = index.load(&config.index_path()).await;
+
+
     let engine = Arc::new(ReasoningEngine::new(
         config.clone(),
         provider,

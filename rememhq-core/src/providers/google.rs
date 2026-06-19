@@ -14,8 +14,8 @@ pub const DEFAULT_REASONING_MODEL: &str = "gemini-2.0-flash";
 
 pub const DEFAULT_EMBEDDING_MODEL: &str = "gemini-embedding-2";
 
-/// Embedding dimensions returned by `text-embedding-004`.
-pub const EMBEDDING_DIM: usize = 768;
+/// Embedding dimensions returned by `gemini-embedding-2`.
+pub const EMBEDDING_DIM: usize = 3072;
 
 // ---------------------------------------------------------------------------
 // GoogleProvider — reasoning / completion
@@ -222,7 +222,7 @@ mod tests {
     fn test_default_model_constants() {
         assert_eq!(DEFAULT_REASONING_MODEL, "gemini-2.0-flash");
         assert_eq!(DEFAULT_EMBEDDING_MODEL, "gemini-embedding-2");
-        assert_eq!(EMBEDDING_DIM, 768);
+        assert_eq!(EMBEDDING_DIM, 3072);
     }
 
     #[test]

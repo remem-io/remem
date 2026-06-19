@@ -91,8 +91,6 @@ pub unsafe extern "C" fn remem_engine_new(
         rt.block_on(async {
             let config = RememConfig::load(&project_str, data_dir_path.as_deref())?;
             let store = Arc::new(SqliteStore::open(&config.db_path())?);
-            let index = Arc::new(HNSWVectorIndex::new(768, 10000));
-            let _ = index.load(&config.index_path()).await;
 
             let target_provider = config.reasoning.provider.clone();
 
@@ -176,6 +174,9 @@ pub unsafe extern "C" fn remem_engine_new(
                     }
                 }
             };
+
+            let index = Arc::new(HNSWVectorIndex::new(embeddings.dimension(), 10000));
+            let _ = index.load(&config.index_path()).await;
 
             let engine = ReasoningEngine::new(config, provider, embeddings, store, index);
             Ok(RememEngine {

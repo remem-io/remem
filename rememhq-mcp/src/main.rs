@@ -93,10 +93,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize components
     let store = Arc::new(SqliteStore::open(&config.db_path())?);
-    let index = Arc::new(HNSWVectorIndex::new(768, 10000));
-
-    // Load existing index if available
-    let _ = index.load(&config.index_path()).await;
 
     // Create provider based on config
     let provider: Arc<dyn rememhq_core::providers::Provider> = match config
@@ -256,6 +252,9 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     };
+
+    let index = Arc::new(HNSWVectorIndex::new(embeddings.dimension(), 10000));
+    let _ = index.load(&config.index_path()).await;
 
     let engine = Arc::new(ReasoningEngine::new(
         config.clone(),

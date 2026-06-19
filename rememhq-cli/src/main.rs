@@ -441,9 +441,6 @@ async fn main() -> anyhow::Result<()> {
 /// Uses cascading fallback: configured provider → alternatives → MockProvider.
 async fn build_engine(config: &RememConfig) -> anyhow::Result<ReasoningEngine> {
     let store = Arc::new(SqliteStore::open(&config.db_path())?);
-    let index = Arc::new(HNSWVectorIndex::new(768, 10000));
-    let _ = index.load(&config.index_path()).await;
-
     // Reasoning provider with robust fallback
     let provider: Arc<dyn rememhq_core::providers::Provider> =
         match config.reasoning.provider.as_str() {
@@ -588,6 +585,9 @@ async fn build_engine(config: &RememConfig) -> anyhow::Result<ReasoningEngine> {
             }
         }
     };
+
+    let index = Arc::new(HNSWVectorIndex::new(embeddings.dimension(), 10000));
+    let _ = index.load(&config.index_path()).await;
 
     Ok(ReasoningEngine::new(
         config.clone(),
