@@ -59,6 +59,11 @@ cargo run -p rememhq-mcp
 # Run the CLI
 cargo run -p rememhq-cli -- --help
 
+# Initialize MCP config for an agent consumer
+# Supported: claude-code, codex, cursor, copilot, gemini-cli, opencode, all
+remem init cursor --project my-project
+remem init all --project my-project
+
 # Python SDK
 cd sdk/python && pip install -e ".[dev]" && pytest tests/ -v
 

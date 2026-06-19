@@ -13,6 +13,7 @@ This file provides system context, build/test commands, and code style rules for
 - **Run API server:** `cargo run -p rememhq-api -- --project default`
 - **Run MCP server:** `cargo run -p rememhq-mcp`
 - **Run CLI tool:** `cargo run -p rememhq-cli -- --help`
+- **Init agent config:** `cargo run -p rememhq-cli -- init <consumer>` (claude-code, codex, cursor, copilot, gemini-cli, opencode, all)
 
 ### Formatting & Linting
 - **Check formatting:** `cargo fmt --all -- --check`

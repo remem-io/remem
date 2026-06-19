@@ -1,7 +1,8 @@
 //! Stdio transport — reads JSON-RPC from stdin, writes to stdout.
 //!
 //! This is the primary transport for MCP integration with
-//! Claude Code, Cursor, and other IDE-based agents.
+//! Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode,
+//! and other IDE-based / CLI-based agents.
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 

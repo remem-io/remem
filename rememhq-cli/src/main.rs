@@ -43,6 +43,14 @@ enum Commands {
     },
     /// Start the MCP server (stdio transport)
     Mcp,
+    /// Initialize remem config for an AI agent consumer
+    Init {
+        /// Which agent consumer to configure
+        consumer: AgentConsumer,
+        /// Override the remem binary path in generated configs
+        #[arg(long, default_value = "remem")]
+        binary: String,
+    },
     /// Store a memory
     Store {
         /// Content to store
@@ -99,6 +107,51 @@ enum Commands {
         #[arg(long, short)]
         output: Option<String>,
     },
+}
+
+/// Supported AI agent consumers for `remem init`.
+#[derive(Clone, Debug)]
+enum AgentConsumer {
+    ClaudeCode,
+    Codex,
+    Cursor,
+    Copilot,
+    GeminiCli,
+    OpenCode,
+    All,
+}
+
+impl std::str::FromStr for AgentConsumer {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "claude-code" | "claude" => Ok(Self::ClaudeCode),
+            "codex" => Ok(Self::Codex),
+            "cursor" => Ok(Self::Cursor),
+            "copilot" | "github-copilot" => Ok(Self::Copilot),
+            "gemini-cli" | "gemini" => Ok(Self::GeminiCli),
+            "opencode" => Ok(Self::OpenCode),
+            "all" => Ok(Self::All),
+            _ => Err(format!(
+                "Unknown consumer '{}'. Valid options: claude-code, codex, cursor, copilot, gemini-cli, opencode, all",
+                s
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for AgentConsumer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ClaudeCode => write!(f, "claude-code"),
+            Self::Codex => write!(f, "codex"),
+            Self::Cursor => write!(f, "cursor"),
+            Self::Copilot => write!(f, "copilot"),
+            Self::GeminiCli => write!(f, "gemini-cli"),
+            Self::OpenCode => write!(f, "opencode"),
+            Self::All => write!(f, "all"),
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -160,6 +213,31 @@ async fn main() -> anyhow::Result<()> {
                     anyhow::bail!("rememhq-mcp not found")
                 }
             }
+        }
+
+        Commands::Init { consumer, binary } => {
+            let consumers = match consumer {
+                AgentConsumer::All => vec![
+                    AgentConsumer::ClaudeCode,
+                    AgentConsumer::Codex,
+                    AgentConsumer::Cursor,
+                    AgentConsumer::Copilot,
+                    AgentConsumer::GeminiCli,
+                    AgentConsumer::OpenCode,
+                ],
+                other => vec![other],
+            };
+
+            for c in &consumers {
+                match generate_consumer_config(c, &cli.project, &binary) {
+                    Ok(path) => println!("  ✓ {} → {}", c, path),
+                    Err(e) => eprintln!("  ✗ {} — {}", c, e),
+                }
+            }
+
+            println!("\nDone! Start the MCP server with:");
+            println!("  {} mcp --project {}", binary, cli.project);
+            Ok(())
         }
 
         Commands::Store {
@@ -430,6 +508,137 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+/// Generate the MCP configuration file for a given agent consumer.
+fn generate_consumer_config(
+    consumer: &AgentConsumer,
+    project: &str,
+    binary: &str,
+) -> anyhow::Result<String> {
+    let (dir_path, file_name, content) = match consumer {
+        AgentConsumer::ClaudeCode => (
+            ".claude",
+            "config.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::Codex => (
+            ".codex",
+            "config.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::Cursor => (
+            ".cursor",
+            "mcp.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::Copilot => (
+            ".github/copilot",
+            "mcp.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::GeminiCli => (
+            ".gemini",
+            "settings.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::OpenCode => (
+            ".opencode",
+            "config.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::All => unreachable!("All is expanded before calling this function"),
+    };
+
+    let dir = std::path::Path::new(dir_path);
+    std::fs::create_dir_all(dir)?;
+
+    let file_path = dir.join(file_name);
+    if file_path.exists() {
+        anyhow::bail!("Config already exists: {}", file_path.display());
+    }
+
+    let json_str = serde_json::to_string_pretty(&content)?;
+    std::fs::write(&file_path, format!("{}\n", json_str))?;
+
+    Ok(file_path.display().to_string())
 }
 
 /// Build a reasoning engine from config (shared setup for CLI commands).

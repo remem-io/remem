@@ -1,6 +1,7 @@
 <div align="center">
   <h1>remem</h1>
   <p><strong>The reasoning memory layer for AI agents.</strong></p>
+  <p><em>Give your AI assistant a memory that learns, adapts and reasons.</em></p>
   <p>
     <a href="https://github.com/remem-io/remem/actions"><img src="https://github.com/remem-io/remem/workflows/CI/badge.svg" alt="CI Status" /></a>
     <a href="https://github.com/remem-io/remem/releases"><img src="https://img.shields.io/github/v/release/remem-io/remem" alt="Release" /></a>
@@ -12,38 +13,64 @@
 
 > **⚠️ In Development** — remem is evolving rapidly. Not yet recommended for mission-critical production workloads.
 
-remem provides agents with **persistent, reasoned memory** that spans across sessions. Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems.
+remem provides agents with **persistent, reasoned memory** that spans across sessions. It enhances AI assistants and agents with an **intelligent memory layer** that enables truly personalized AI interactions — it **remembers user preferences**, **adapts to individual needs**, and **continuously learns over time**, turning stateless AI tools into persistent, context-aware partners.
+
+Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems. Whether you're using Claude Code, Codex, Cursor, Copilot, Gemini CLI, or OpenCode, remem gives your AI a durable, cross-session memory that grows smarter with every interaction.
 
 ## Architecture
 
 ```text
-┌─────────────────────────────────────────────────────┐
-│                  Agent Consumers                    │
-│  Claude Code · Cursor · Codex · Python/TS agents    │
-└──────────┬──────────────────┬───────────────────────┘
-           │ MCP stdio        │ REST API / SDK
-┌──────────▼──────────────────▼───────────────────────┐
-│              Interface Layer (Rust)                 │
-│     rememhq-mcp (stdio) · rememhq-api (Axum REST)   │
-│     Python SDK (httpx)  · TypeScript SDK (fetch)    │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│          Reasoning Engine (rememhq-core)            │
-│  Consolidation · Guided Retrieval · Contradiction   │
-│  Detection · Importance Scoring · Knowledge Graph   │
-└──────┬──────────────────────────┬───────────────────┘
-       │                          │
-┌──────▼──────┐          ┌────────▼────────────────────┐
-│ OpenAI      │          │  Storage Layer              │
-│ Anthropic   │          │  SQLite + WAL (metadata)    │
-│ Gemini      │          │  Vector Index (HNSW)        │
-└─────────────┘          └─────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                        Agent Consumers                               │
+│  Claude Code · Codex · Cursor · Copilot · Gemini CLI · OpenCode      │
+│  Python agents · TypeScript agents · Any MCP-compatible client       │
+└──────────┬──────────────────────┬────────────────────────────────────┘
+           │ MCP stdio            │ REST API / SDK
+┌──────────▼──────────────────────▼────────────────────────────────────┐
+│                    Interface Layer (Rust)                            │
+│       rememhq-mcp (stdio) · rememhq-api (Axum REST)                  │
+│       Python SDK (httpx)  · TypeScript SDK (fetch)                   │
+└────────────────────────────┬─────────────────────────────────────────┘
+                             │
+┌────────────────────────────▼─────────────────────────────────────────┐
+│                Reasoning Engine (rememhq-core)                       │
+│    Consolidation · Guided Retrieval · Contradiction Detection        │
+│    Importance Scoring · Knowledge Graph · Preference Learning        │
+└──────────┬─────────────────────────────┬──────────────────────────── ┘
+           │                             │
+┌──────────▼──────────┐       ┌──────────▼────────────────────────────┐
+│ LLM Providers       │       │  Storage Layer                        │
+│ OpenAI · Anthropic  │       │  SQLite + WAL (metadata)              │
+│ Gemini · Local ONNX │       │  Vector Index (HNSW via libremem)     │
+└─────────────────────┘       └───────────────────────────────────────┘
 ```
+
+### Supported Agent Consumers
+
+remem integrates with the leading AI coding assistants and agent frameworks. Each consumer connects through either the **MCP stdio protocol** or the **REST API / SDK**, giving your AI tools a shared, persistent memory across sessions.
+
+| Consumer | Integration | How It Connects |
+| :--- | :--- | :--- |
+| **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** | MCP (stdio) | Native MCP support — add remem as an MCP server in your project config |
+| **[Codex](https://github.com/openai/codex)** | MCP (stdio) | Connects via MCP server configuration, enabling persistent context across coding sessions |
+| **[Cursor](https://cursor.com)** | MCP (stdio) | Add remem to Cursor's MCP settings for cross-session memory in your IDE |
+| **[GitHub Copilot](https://github.com/features/copilot)** | MCP (stdio) | MCP server integration provides durable project context alongside Copilot suggestions |
+| **[Gemini CLI](https://github.com/google-gemini/gemini-cli)** | MCP (stdio) | Configure remem as an MCP tool server for Gemini CLI agents |
+| **[OpenCode](https://github.com/nichochar/opencode)** | MCP (stdio) | MCP-compatible — works out of the box with remem's stdio transport |
+| **Python agents** | REST API / Python SDK | `pip install rememhq` — use `Memory.store()` and `Memory.recall()` in any async Python agent |
+| **TypeScript agents** | REST API / TypeScript SDK | `npm install @rememhq/sdk` — typed client for Node.js and Deno agents |
+| **Any MCP client** | MCP (stdio) | Any tool implementing the [Model Context Protocol](https://modelcontextprotocol.io) works with remem |
 
 ## Why remem?
 
-Traditional vector stores often suffer from "confident recall of irrelevant context." They return what is semantically *nearest*, not what is actually *useful*. remem bridges this gap with reasoning-powered retrieval that understands context, importance, and domain-specific relevance.
+AI assistants today are **stateless by default** — every conversation starts from scratch. remem solves this by giving your AI tools a memory that:
+
+- **Remembers preferences**: Coding style, tool choices, architecture decisions — stored once, recalled every time.
+- **Adapts to you**: The more you interact, the better remem understands your project context and working patterns.
+- **Learns continuously**: Session consolidation extracts durable knowledge from every interaction, building an ever-growing understanding of your codebase and workflows.
+- **Reasons about relevance**: Unlike naive vector search, remem uses LLM reasoning to return what is actually *useful*, not just what is semantically *nearest*.
+
+Traditional vector stores suffer from "confident recall of irrelevant context." remem bridges this gap with reasoning-powered retrieval that understands context, importance, and domain-specific relevance.
 
 | Feature | Naive Vector Store | remem |
 | :--- | :--- | :--- |
@@ -55,9 +82,9 @@ Traditional vector stores often suffer from "confident recall of irrelevant cont
 
 ## Quickstart
 
-### Model Context Protocol (MCP) — Claude Code / Cursor / Codex
+### Model Context Protocol (MCP) — Claude Code / Codex / Cursor / Copilot / Gemini CLI / OpenCode
 
-remem is designed to work seamlessly with MCP-compliant environments. Add the following to your configuration:
+remem works seamlessly with any MCP-compliant AI assistant. Add the following to your tool's MCP configuration:
 
 ```json
 {

@@ -4,7 +4,22 @@
 
 ## What is remem?
 
-A **reasoning memory layer for AI agents**. It stores memories with importance scoring, retrieves them with LLM-guided reasoning, detects contradictions between old and new information, and consolidates session data into durable knowledge — all backed by a SQLite store and an HNSW vector index implemented in C++.
+A **reasoning memory layer for AI agents**. It enhances AI assistants with an intelligent memory layer that enables personalized interactions — it remembers user preferences, adapts to individual needs, and continuously learns over time. Backed by a SQLite store and an HNSW vector index implemented in C++, remem stores memories with importance scoring, retrieves them with LLM-guided reasoning, detects contradictions between old and new information, and consolidates session data into durable knowledge.
+
+## Supported Agent Consumers
+
+remem integrates with the following AI coding assistants via MCP (stdio):
+
+| Consumer | Config Location | Setup Command |
+|---|---|---|
+| **Claude Code** | `.claude/config.json` | `remem init claude-code` |
+| **Codex** | `.codex/config.json` | `remem init codex` |
+| **Cursor** | `.cursor/mcp.json` | `remem init cursor` |
+| **GitHub Copilot** | `.github/copilot/mcp.json` | `remem init copilot` |
+| **Gemini CLI** | `.gemini/settings.json` | `remem init gemini-cli` |
+| **OpenCode** | `.opencode/config.json` | `remem init opencode` |
+
+Use `remem init all` to generate configs for every consumer at once.
 
 ## Tech Stack
 
