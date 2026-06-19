@@ -53,7 +53,7 @@ Traditional vector stores often suffer from "confident recall of irrelevant cont
 | **Contradictions** | — | **LLM Conflict Detection** between old and new facts |
 | **Decay** | Time-based (linear) | **Importance-Weighted Decay**; critical facts persist longer |
 
-## 🚀 Quickstart
+## Quickstart
 
 ### Model Context Protocol (MCP) — Claude Code / Cursor / Codex
 
@@ -106,9 +106,9 @@ await m.store("This repository uses trunk-based development", { tags: ["workflow
 const results = await m.recall("how do we manage branches?");
 ```
 
-## ⚙️ Usage Commands
+## Usage Commands
 
-### Local Development
+### Local Development (Building from Source)
 
 ```bash
 # Build the entire workspace
@@ -127,7 +127,52 @@ cargo fmt
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-### Running Services
+### Running the pre-built binaries (Downloaded Releases)
+
+If you downloaded the pre-built binary releases from GitHub, you can use the `remem` executable directly.
+Here are some of the basic commands:
+
+```bash
+# Start the REST API server
+remem serve --project my-project
+
+# Start the MCP server (stdio transport)
+remem mcp --project my-project
+
+# Store a memory
+remem store "The main branch is called 'main'"
+
+# Recall memories with guided retrieval
+remem recall "What is the main branch called?"
+
+# Search memories (no LLM re-ranking)
+remem search "main branch"
+
+# Show database statistics
+remem inspect
+
+# Apply importance-weighted decay to all active memories
+remem decay
+
+# Start an interactive REPL mode
+remem repl
+
+# List downloaded local models
+remem models list
+
+# Pull a local model for offline use
+remem models pull nomic-embed-text
+
+# Bulk import memories from a JSONL file
+remem import data.jsonl
+
+# Export all memories to a JSONL file
+remem export backup.jsonl
+```
+
+### Running Services from Source
+
+If you are developing locally, you can run the components via `cargo`:
 
 ```bash
 # Start the API server (REST interface)
@@ -150,14 +195,14 @@ cd sdk/python && pip install -e ".[dev]" && pytest tests/
 cd sdk/typescript && npm install && npm run build
 ```
 
-## ⚙️ How it Works
+## How it Works
 
 1.  **Guided Retrieval**: When you query remem, it first retrieves the top 50 candidates using cosine similarity on the vector index. These candidates are then passed to an LLM (e.g., Claude 4.6 or GPT-4) along with your query. The LLM reason about each candidate and returns the top 8 most relevant results, along with a trace of its reasoning.
 2.  **Session Consolidation**: At the end of a session, remem can ingest the entire interaction log. An LLM extracts durable, high-signal facts, scores their importance, and identifies relationships, building a structured knowledge base out of raw interaction data.
 3.  **Knowledge Graph & Contradiction Detection**: Facts are stored as structured nodes and edges (triples) in a knowledge graph. When new information is added that conflicts with existing knowledge, the LLM flags the contradiction, allowing you to resolve it manually or apply custom rules.
 4.  **Local First**: Using `libremem`, a custom C++ engine, remem supports local HNSW indexing and BERT-compatible tokenization for privacy-first, offline embedding generation.
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Whether you're fixing a bug, improving the reasoning prompts, or adding a new provider, please check out our [CONTRIBUTING.md](CONTRIBUTING.md).
 

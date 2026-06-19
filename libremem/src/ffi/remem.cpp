@@ -23,8 +23,9 @@ struct remem_chunks_t {
 
 remem_index_t* remem_index_new(size_t dim, size_t max_elements) {
     try {
+        auto impl = new HNSWIndex(dim, max_elements);
         auto index = new remem_index_t();
-        index->impl = new HNSWIndex(dim, max_elements);
+        index->impl = impl;
         return index;
     } catch (const std::exception& e) {
         std::cerr << "[libremem] Error in remem_index_new: " << e.what() << std::endl;
@@ -111,8 +112,9 @@ void remem_index_load(remem_index_t* index, const char* path) {
 
 remem_embedder_t* remem_embedder_new(const char* model_path, const char* vocab_path) {
     try {
+        auto impl = new ONNXEngine(model_path, vocab_path);
         auto embedder = new remem_embedder_t();
-        embedder->impl = new ONNXEngine(model_path, vocab_path);
+        embedder->impl = impl;
         return embedder;
     } catch (const std::exception& e) {
         std::cerr << "[libremem] Error in remem_embedder_new: " << e.what() << std::endl;
