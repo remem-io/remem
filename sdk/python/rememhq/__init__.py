@@ -4,4 +4,4 @@ from rememhq.client import Memory
 from rememhq.models import MemoryResult, ConsolidationReport, StoreResponse
 
 __all__ = ["Memory", "MemoryResult", "ConsolidationReport", "StoreResponse"]
-__version__ = "0.1.4"
+__version__ = "0.1.5"
