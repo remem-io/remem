@@ -1,0 +1,110 @@
+name: Swift Binding
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bindings/swift/**"
+      - "rememhq-core/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/bindings-swift.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "bindings/swift/**"
+      - "rememhq-core/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/bindings-swift.yml"
+
+concurrency:
+  group: bindings-swift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Build native library + Swift package
+  # ──────────────────────────────────────────────
+  build:
+    name: Build
+    # Swift toolchains are only preinstalled on macOS GitHub-hosted
+    # runners; this also matches the package's actual target platforms
+    # (iOS/macOS).
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bindings-swift
+
+      - name: Build rememhq-core (release)
+        run: cargo build --release -p rememhq-core
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build Swift package
+        working-directory: bindings/swift
+        run: swift build
+
+  # ──────────────────────────────────────────────
+  # Test
+  # ──────────────────────────────────────────────
+  test:
+    name: Test
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bindings-swift
+
+      - name: Build rememhq-core (release)
+        run: cargo build --release -p rememhq-core
+
+      - name: Run Swift tests
+        working-directory: bindings/swift
+        run: swift test
+
+  # ──────────────────────────────────────────────
+  # Header sync check
+  # ──────────────────────────────────────────────
+  header-sync:
+    name: Vendored header in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check rememhq.h matches the canonical source
+        run: |
+          bash bindings/swift/scripts/sync-header.sh
+          if ! git diff --quiet -- bindings/swift/Sources/CRemem/include/rememhq.h; then
+            echo "::error::bindings/swift/Sources/CRemem/include/rememhq.h is out of sync with rememhq-core/include/rememhq.h."
+            echo "Run bindings/swift/scripts/sync-header.sh and commit the result."
+            git diff -- bindings/swift/Sources/CRemem/include/rememhq.h
+            exit 1
+          fi
+
+  # ──────────────────────────────────────────────
+  # Gate
+  # ──────────────────────────────────────────────
+  swift-pass:
+    name: Swift Binding Pass
+    if: always()
+    needs: [build, test, header-sync]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate
+        run: |
+          if [[ "${{ needs.build.result }}" == "failure" || \
+                "${{ needs.test.result }}" == "failure" || \
+                "${{ needs.header-sync.result }}" == "failure" ]]; then
+            echo "❌ Swift binding checks failed"
+            exit 1
+          fi
+          echo "✅ Swift binding checks passed"
