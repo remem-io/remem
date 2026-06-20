@@ -6,9 +6,11 @@ ABI — no `remem serve` instance required. Built for iOS and macOS.
 ## Status
 
 🚧 **Early / in-progress.** The core `Memory` actor API works end-to-end
-against a real local engine (SQLite storage + HNSW vector index), but this
-hasn't shipped as a versioned release or compiled XCFramework yet. Treat
-this as a working development snapshot, not a stable public API.
+against a real local engine (SQLite storage + HNSW vector index), with CI
+verifying it on every change. It hasn't shipped as a versioned release,
+and the XCFramework distribution path exists as a script but hasn't been
+run-tested on real Apple hardware. Treat this as a working development
+snapshot, not a stable public API.
 
 **Implemented:**
 - `store`, `recall`, `search`, `update`, `forget`, `decay`
@@ -16,16 +18,28 @@ this as a working development snapshot, not a stable public API.
 - `startSession`, `endSession`, `getSession`, `listSessions`, `consolidate`
 - Full `Codable` models mirroring the engine's JSON shapes
   (`MemoryRecord`, `MemoryResult`, `Session`, `ConsolidationReport`, etc.)
+- CI on `macos-latest` builds `rememhq-core`, builds the Swift package,
+  and runs the full test suite against a real (mock-provider) engine —
+  see `.github/workflows/bindings-swift.yml`
+- A script to assemble a real XCFramework (`scripts/build-xcframework.sh`)
+  — see "Distributing as an XCFramework" below. **Caveat:** this script
+  has been reviewed carefully and is believed correct, but it hasn't
+  been run end-to-end (no macOS/Xcode environment was available while
+  writing it). Treat it as a strong starting point, not a guarantee.
 
 **Not yet implemented:**
-- Compiled XCFramework / binary distribution (see "Linking" below — for
-  now this links against a local `cargo build` output directory)
+- `Package.swift` still links against a local `cargo build` output
+  directory by default rather than the XCFramework above — switching
+  the default over needs the script run-tested on real hardware first
+  (see the script's own closing instructions for the manual swap)
 - CoreML execution provider for on-device embeddings (the engine still
   needs a configured reasoning/embedding provider — Anthropic, OpenAI,
   Google, or `local` pointed at an Ollama/llama.cpp endpoint; there's no
   Apple Silicon-native embedding path yet)
 - AppKit menu bar integration for macOS
-- CI coverage (no GitHub Actions workflow builds/tests this package yet)
+- Whether `tokio`'s full feature set behaves correctly under iOS's
+  sandboxed threading model hasn't been verified on a real device or
+  simulator — CI only exercises the macOS host target
 
 ## Architecture
 
@@ -39,7 +53,10 @@ bindings/swift/
 │       ├── MemoryModels.swift     — Codable structs (MemoryRecord, Session, ...)
 │       ├── EngineHandle.swift     — all unsafe FFI calls live here
 │       └── RememError.swift
-└── Tests/RememTests/
+├── Tests/RememTests/
+└── scripts/
+    ├── sync-header.sh          — keep the vendored C header in sync
+    └── build-xcframework.sh    — assemble a real XCFramework (macOS-only)
 ```
 
 `Memory` is a Swift `actor`, so calls are serialized per-instance and it's
@@ -101,6 +118,39 @@ you change the FFI surface in `rememhq-core/src/ffi/mod.rs`, update
 ```sh
 bindings/swift/scripts/sync-header.sh
 ```
+
+## Distributing as an XCFramework
+
+The local-cargo-build linking approach above is great for iterating on
+this repo, but it's not how a real app should depend on this package —
+that requires checking out the whole monorepo and running `cargo build`
+before every `swift build`. `scripts/build-xcframework.sh` assembles a
+proper `RememHQCore.xcframework` instead: it cross-compiles
+`rememhq-core` for macOS (arm64 + x86_64), iOS device (arm64), and iOS
+simulator (arm64 + x86_64), `lipo`s each platform's architectures into a
+single fat static library, bakes in a `module.modulemap` so the result
+is still importable as `CRemem`, and bundles it all with `xcodebuild
+-create-xcframework`.
+
+```sh
+# Run on macOS with Xcode (not just the Command Line Tools) installed
+rustup target add aarch64-apple-darwin x86_64-apple-darwin \
+                   aarch64-apple-ios aarch64-apple-ios-sim \
+                   x86_64-apple-ios-sim
+bindings/swift/scripts/build-xcframework.sh
+```
+
+This produces `bindings/swift/build/RememHQCore.xcframework`. It is **not
+yet wired into `Package.swift`** — switching the default linking
+strategy over to it needs to be run-tested on real macOS/iOS hardware
+first (this script was written and carefully reviewed, but couldn't be
+executed in the environment it was authored in). The script's own
+closing output explains the exact `Package.swift` changes needed once
+you've verified it builds correctly for you: swapping the `CRemem`
+source target for a `.binaryTarget` pointing at the xcframework, and
+adding an explicit `-lc++` link flag to the `Remem` target (static
+linking needs this explicitly; the current dynamic-library setup
+resolves it automatically at load time).
 
 ## Usage
 
