@@ -621,3 +621,245 @@ pub unsafe extern "C" fn remem_get_entity_context(
         }
     }
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn remem_session_create(
+    engine: *mut std::ffi::c_void,
+    session_id: *const c_char,
+    out_error: *mut *mut c_char,
+) -> bool {
+    if engine.is_null() || session_id.is_null() {
+        unsafe {
+            set_error(
+                out_error,
+                anyhow::anyhow!("Null pointer passed to remem_session_create"),
+            );
+        }
+        return false;
+    }
+
+    let wrapper = unsafe { &*(engine as *mut RememEngine) };
+    let id_str = unsafe { CStr::from_ptr(session_id) }
+        .to_string_lossy()
+        .to_string();
+
+    let rt = get_runtime();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rt.block_on(async { wrapper.engine.create_session(&id_str).await })
+    }));
+
+    match result {
+        Ok(Ok(())) => true,
+        Ok(Err(err)) => {
+            unsafe {
+                set_error(out_error, err);
+            }
+            false
+        }
+        Err(_) => {
+            unsafe {
+                set_error(out_error, anyhow::anyhow!("Panic in remem_session_create"));
+            }
+            false
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn remem_session_end(
+    engine: *mut std::ffi::c_void,
+    session_id: *const c_char,
+    out_error: *mut *mut c_char,
+) -> bool {
+    if engine.is_null() || session_id.is_null() {
+        unsafe {
+            set_error(
+                out_error,
+                anyhow::anyhow!("Null pointer passed to remem_session_end"),
+            );
+        }
+        return false;
+    }
+
+    let wrapper = unsafe { &*(engine as *mut RememEngine) };
+    let id_str = unsafe { CStr::from_ptr(session_id) }
+        .to_string_lossy()
+        .to_string();
+
+    let rt = get_runtime();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rt.block_on(async { wrapper.engine.end_session(&id_str).await })
+    }));
+
+    match result {
+        Ok(Ok(found)) => found,
+        Ok(Err(err)) => {
+            unsafe {
+                set_error(out_error, err);
+            }
+            false
+        }
+        Err(_) => {
+            unsafe {
+                set_error(out_error, anyhow::anyhow!("Panic in remem_session_end"));
+            }
+            false
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn remem_session_get(
+    engine: *mut std::ffi::c_void,
+    session_id: *const c_char,
+    out_error: *mut *mut c_char,
+) -> *mut c_char {
+    if engine.is_null() || session_id.is_null() {
+        unsafe {
+            set_error(
+                out_error,
+                anyhow::anyhow!("Null pointer passed to remem_session_get"),
+            );
+        }
+        return std::ptr::null_mut();
+    }
+
+    let wrapper = unsafe { &*(engine as *mut RememEngine) };
+    let id_str = unsafe { CStr::from_ptr(session_id) }
+        .to_string_lossy()
+        .to_string();
+
+    let rt = get_runtime();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rt.block_on(async { wrapper.engine.get_session(&id_str).await })
+    }));
+
+    match result {
+        // Mirror the null-pointer-with-no-error convention used by
+        // remem_query_knowledge/remem_get_entity_context for "found nothing":
+        // a missing session is not itself an error.
+        Ok(Ok(None)) => std::ptr::null_mut(),
+        Ok(Ok(Some(session))) => {
+            let json = serde_json::to_string(&session).unwrap_or_default();
+            alloc_cstring(json)
+        }
+        Ok(Err(err)) => {
+            unsafe {
+                set_error(out_error, err);
+            }
+            std::ptr::null_mut()
+        }
+        Err(_) => {
+            unsafe {
+                set_error(out_error, anyhow::anyhow!("Panic in remem_session_get"));
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn remem_session_list(
+    engine: *mut std::ffi::c_void,
+    limit: usize,
+    out_error: *mut *mut c_char,
+) -> *mut c_char {
+    if engine.is_null() {
+        unsafe {
+            set_error(
+                out_error,
+                anyhow::anyhow!("Null pointer passed to remem_session_list"),
+            );
+        }
+        return std::ptr::null_mut();
+    }
+
+    let wrapper = unsafe { &*(engine as *mut RememEngine) };
+    let rt = get_runtime();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rt.block_on(async { wrapper.engine.list_sessions(limit).await })
+    }));
+
+    match result {
+        Ok(Ok(sessions)) => {
+            let json = serde_json::to_string(&sessions).unwrap_or_default();
+            alloc_cstring(json)
+        }
+        Ok(Err(err)) => {
+            unsafe {
+                set_error(out_error, err);
+            }
+            std::ptr::null_mut()
+        }
+        Err(_) => {
+            unsafe {
+                set_error(out_error, anyhow::anyhow!("Panic in remem_session_list"));
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn remem_consolidate(
+    engine: *mut std::ffi::c_void,
+    session_id: *const c_char,
+    model: *const c_char,
+    out_error: *mut *mut c_char,
+) -> *mut c_char {
+    if engine.is_null() || session_id.is_null() {
+        unsafe {
+            set_error(
+                out_error,
+                anyhow::anyhow!("Null pointer passed to remem_consolidate"),
+            );
+        }
+        return std::ptr::null_mut();
+    }
+
+    let wrapper = unsafe { &*(engine as *mut RememEngine) };
+    let id_str = unsafe { CStr::from_ptr(session_id) }
+        .to_string_lossy()
+        .to_string();
+    let model_str = if model.is_null() {
+        wrapper.engine.config.reasoning.reasoning_model.clone()
+    } else {
+        unsafe { CStr::from_ptr(model) }
+            .to_string_lossy()
+            .to_string()
+    };
+
+    let rt = get_runtime();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rt.block_on(async {
+            crate::reasoning::consolidation::consolidate_session(
+                &*wrapper.engine.provider,
+                &*wrapper.engine.embeddings,
+                &wrapper.engine.store,
+                wrapper.engine.index.as_ref(),
+                &id_str,
+                &model_str,
+            )
+            .await
+        })
+    }));
+
+    match result {
+        Ok(Ok(report)) => {
+            let json = serde_json::to_string(&report).unwrap_or_default();
+            alloc_cstring(json)
+        }
+        Ok(Err(err)) => {
+            unsafe {
+                set_error(out_error, err);
+            }
+            std::ptr::null_mut()
+        }
+        Err(_) => {
+            unsafe {
+                set_error(out_error, anyhow::anyhow!("Panic in remem_consolidate"));
+            }
+            std::ptr::null_mut()
+        }
+    }
+}

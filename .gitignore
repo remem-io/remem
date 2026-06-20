@@ -123,3 +123,10 @@ desktop.ini
 *.tmp
 *.bak
 *.orig
+
+# ========================
+# Swift Package Manager
+# ========================
+bindings/swift/.build/
+bindings/swift/.swiftpm/
+bindings/swift/Package.resolved
