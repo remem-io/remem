@@ -1,1 +1,128 @@
-#
+name: Code Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: code-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Rust — rememhq-core, rememhq-api, rememhq-cli, rememhq-mcp, sdk/rust
+  # ──────────────────────────────────────────────
+  rust:
+    name: Rust coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: coverage-rust
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate coverage
+        run: cargo llvm-cov --workspace --lcov --output-path lcov-rust.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov-rust.info
+          flags: rust
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ──────────────────────────────────────────────
+  # Python — sdk/python
+  # ──────────────────────────────────────────────
+  python:
+    name: Python coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        working-directory: sdk/python
+        run: pip install -e ".[dev]"
+
+      - name: Generate coverage
+        working-directory: sdk/python
+        run: pytest tests/ --cov=rememhq --cov-report=xml:coverage.xml --tb=short
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: sdk/python/coverage.xml
+          flags: python
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ──────────────────────────────────────────────
+  # TypeScript — sdk/typescript
+  # ──────────────────────────────────────────────
+  typescript:
+    name: TypeScript coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: sdk/typescript/package-lock.json
+
+      - name: Install
+        working-directory: sdk/typescript
+        run: npm ci
+
+      - name: Build
+        working-directory: sdk/typescript
+        run: npm run build
+
+      - name: Generate coverage
+        working-directory: sdk/typescript
+        run: |
+          node --experimental-test-coverage --test-reporter=lcov \
+            --test-reporter-destination=coverage.info \
+            --test "dist/**/*.test.js"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: sdk/typescript/coverage.info
+          flags: typescript
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ──────────────────────────────────────────────
+  # Gate
+  # ──────────────────────────────────────────────
+  coverage-pass:
+    name: Coverage pass
+    runs-on: ubuntu-latest
+    needs: [rust, python, typescript]
+    if: always()
+    steps:
+      - name: Evaluate
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
+            echo "One or more coverage jobs failed."
+            exit 1
+          fi
+          echo "All coverage jobs passed."
