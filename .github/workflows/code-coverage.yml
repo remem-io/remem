@@ -96,10 +96,7 @@ jobs:
 
       - name: Generate coverage
         working-directory: sdk/typescript
-        run: |
-          node --experimental-test-coverage --test-reporter=lcov \
-            --test-reporter-destination=coverage.info \
-            --test "dist/**/*.test.js"
+        run: node --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage.info --test dist/**/*.test.js
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
