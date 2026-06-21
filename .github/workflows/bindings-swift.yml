@@ -145,15 +145,45 @@ jobs:
         working-directory: bindings/swift
         run: xcodebuild -list -json || true
 
+      - name: Boot the simulator ahead of time
+        # A common cause of xcodebuild exit code 65 in CI is the
+        # simulator not finishing boot before xcodebuild's internal
+        # timeouts expire. Booting it explicitly first, with time to
+        # settle, removes that as a variable. `|| true` because boot
+        # returns non-zero if it's already booted.
+        run: |
+          xcrun simctl boot "${{ steps.simulator.outputs.device }}" || true
+          sleep 15
+
       - name: Run tests on iOS Simulator
         working-directory: bindings/swift
         env:
           REMEM_LIB_DIR: ${{ github.workspace }}/ios-sim-static-lib
         run: |
+          set -o pipefail
           xcodebuild test \
             -scheme RememTests \
             -destination "platform=iOS Simulator,name=${{ steps.simulator.outputs.device }}" \
-            -skipPackagePluginValidation
+            -skipPackagePluginValidation \
+            -resultBundlePath "$RUNNER_TEMP/RememTests.xcresult" \
+            | tee "$RUNNER_TEMP/xcodebuild-test.log"
+
+      - name: Show failure details
+        if: failure()
+        run: |
+          echo "===== Full xcodebuild output ====="
+          cat "$RUNNER_TEMP/xcodebuild-test.log" || true
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-test-failure
+          path: |
+            ${{ runner.temp }}/xcodebuild-test.log
+            ${{ runner.temp }}/RememTests.xcresult
+          retention-days: 14
+          if-no-files-found: warn
 
   # ──────────────────────────────────────────────
   # Header sync check
