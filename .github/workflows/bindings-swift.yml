@@ -166,6 +166,8 @@ jobs:
             -destination "platform=iOS Simulator,name=${{ steps.simulator.outputs.device }}" \
             -skipPackagePluginValidation \
             -resultBundlePath "$RUNNER_TEMP/RememTests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             | tee "$RUNNER_TEMP/xcodebuild-test.log"
 
       - name: Show failure details
