@@ -21,6 +21,20 @@ snapshot, not a stable public API.
 - CI on `macos-latest` builds `rememhq-core`, builds the Swift package,
   and runs the full test suite against a real (mock-provider) engine —
   see `.github/workflows/bindings-swift.yml`
+- A second CI job cross-compiles `rememhq-core` for
+  `aarch64-apple-ios-sim` and runs the same test suite against a real
+  **iOS Simulator** via `xcodebuild test -scheme RememTests`, giving
+  actual signal on whether the engine's Tokio runtime behaves correctly
+  under iOS rather than leaving it as a documented unknown. **Caveat:**
+  `xcodebuild` against a bare SwiftPM package (no `.xcodeproj`) is known
+  to be fragile across Xcode versions — for example, `xcodebuild -list`
+  threw an internal error on Xcode 16.3 specifically when run against a
+  plain package directory ([Apple Developer Forums
+  thread](https://developer.apple.com/forums/thread/779744)). This job's
+  own `-list` step is non-fatal (`|| true`) for exactly this reason, and
+  a failure in this job doesn't block the overall CI gate — check the
+  job logs to tell a real regression apart from a toolchain quirk on
+  whatever Xcode version the runner happened to have.
 - A script to assemble a real XCFramework (`scripts/build-xcframework.sh`)
   — see "Distributing as an XCFramework" below. **Caveat:** this script
   has been reviewed carefully and is believed correct, but it hasn't
@@ -37,9 +51,10 @@ snapshot, not a stable public API.
   Google, or `local` pointed at an Ollama/llama.cpp endpoint; there's no
   Apple Silicon-native embedding path yet)
 - AppKit menu bar integration for macOS
-- Whether `tokio`'s full feature set behaves correctly under iOS's
-  sandboxed threading model hasn't been verified on a real device or
-  simulator — CI only exercises the macOS host target
+- A real iOS **device** (as opposed to simulator) build has never been
+  attempted — only `aarch64-apple-ios-sim` is exercised in CI today, not
+  `aarch64-apple-ios`. Device builds also need code signing, which CI
+  can't do without a provisioning profile/certificate.
 
 ## Architecture
 
@@ -145,12 +160,12 @@ yet wired into `Package.swift`** — switching the default linking
 strategy over to it needs to be run-tested on real macOS/iOS hardware
 first (this script was written and carefully reviewed, but couldn't be
 executed in the environment it was authored in). The script's own
-closing output explains the exact `Package.swift` changes needed once
+closing output explains the exact `Package.swift` change needed once
 you've verified it builds correctly for you: swapping the `CRemem`
-source target for a `.binaryTarget` pointing at the xcframework, and
-adding an explicit `-lc++` link flag to the `Remem` target (static
-linking needs this explicitly; the current dynamic-library setup
-resolves it automatically at load time).
+source target for a `.binaryTarget` pointing at the xcframework. (The
+explicit `-lc++` link flag this introduces is already unconditional in
+`Package.swift` — static linking needs it; the dynamic-library setup
+used by default doesn't, but it's a harmless no-op there.)
 
 ## Usage
 

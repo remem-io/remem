@@ -4,10 +4,10 @@ import PackageDescription
 // MARK: - Linking against the Rust-built rememhq-core library
 //
 // rememhq-core compiles to `librememhq_core.{dylib,a}` via a standard cargo
-// build (crate-type = ["cdylib", "rlib"] in rememhq-core/Cargo.toml). There
-// is no published XCFramework yet (see bindings/swift/README.md for the
-// roadmap), so for now this package links against a local cargo build
-// output directory.
+// build (crate-type = ["cdylib", "staticlib", "rlib"] in
+// rememhq-core/Cargo.toml). There is no published XCFramework yet (see
+// bindings/swift/README.md for the roadmap), so for now this package links
+// against a local cargo build output directory.
 //
 // Before building this package, run from the repo root:
 //   cargo build --release -p rememhq-core
@@ -54,6 +54,14 @@ let package = Package(
                 .unsafeFlags([
                     "-L\(libDir)",
                     "-lrememhq_core",
+                    // libremem's C++ sources are compiled into
+                    // rememhq-core. The cdylib path (the default, used on
+                    // macOS) resolves this automatically at load time, but
+                    // any static-linking path (e.g. the iOS Simulator CI
+                    // job, which isolates librememhq_core.a to dodge
+                    // Apple's dylib-over-.a linker preference) needs it
+                    // explicit. Harmless no-op for the dynamic path.
+                    "-lc++",
                 ])
             ]
         ),
@@ -66,6 +74,7 @@ let package = Package(
                 .unsafeFlags([
                     "-L\(libDir)",
                     "-lrememhq_core",
+                    "-lc++",
                 ])
             ]
         ),

@@ -73,6 +73,89 @@ jobs:
         run: swift test
 
   # ──────────────────────────────────────────────
+  # Test — iOS Simulator
+  # ──────────────────────────────────────────────
+  # `swift test` always runs on the macOS host, so it can't tell us
+  # anything about how the engine's Tokio runtime behaves under iOS's
+  # sandboxed threading model. This job cross-compiles rememhq-core for
+  # the iOS Simulator target and runs the real test suite there via
+  # `xcodebuild test`, which (since Xcode 13) can target a SwiftPM
+  # package's implicit scheme directly with no .xcodeproj required.
+  test-ios-simulator:
+    name: Test (iOS Simulator)
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bindings-swift-ios-sim
+
+      - name: Build rememhq-core for iOS Simulator (release)
+        run: cargo build --release -p rememhq-core --target aarch64-apple-ios-sim
+
+      - name: Isolate the static library
+        # cargo's crate-type = ["cdylib", "staticlib", "rlib"] produces
+        # librememhq_core.dylib AND librememhq_core.a side by side in the
+        # same target directory. Apple's linker prefers a .dylib over a
+        # .a when both are present in the same -L search path — even
+        # though static linking is what we actually want here (a bare
+        # dylib isn't properly embedded/code-signed for a simulator test
+        # bundle). Isolating just the .a into its own directory is the
+        # documented workaround.
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/ios-sim-static-lib"
+          cp target/aarch64-apple-ios-sim/release/librememhq_core.a "$GITHUB_WORKSPACE/ios-sim-static-lib/"
+
+      - name: Find an available iOS Simulator
+        id: simulator
+        run: |
+          set -uo pipefail
+          # Pick the first available iPhone simulator rather than
+          # hardcoding a device name/OS version that may not exist on
+          # whatever Xcode version the runner image ships. Using --json
+          # instead of scraping simctl's human-readable text output,
+          # since device names aren't guaranteed to avoid parentheses.
+          # (set -e is intentionally omitted: we need to fall through to
+          # our own error message below if the python script finds
+          # nothing, rather than the shell aborting immediately on its
+          # non-zero exit inside the command substitution.)
+          DEVICE=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime_devices in data["devices"].values():
+              for device in runtime_devices:
+                  if "iPhone" in device["name"] and device.get("isAvailable", True):
+                      print(device["name"])
+                      sys.exit(0)
+          sys.exit(1)
+          ') || true
+          if [[ -z "$DEVICE" ]]; then
+            echo "::error::No available iPhone simulator found on this runner."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
+          echo "Using simulator device: $DEVICE"
+
+      - name: List available schemes
+        working-directory: bindings/swift
+        run: xcodebuild -list -json || true
+
+      - name: Run tests on iOS Simulator
+        working-directory: bindings/swift
+        env:
+          REMEM_LIB_DIR: ${{ github.workspace }}/ios-sim-static-lib
+        run: |
+          xcodebuild test \
+            -scheme RememTests \
+            -destination "platform=iOS Simulator,name=${{ steps.simulator.outputs.device }}" \
+            -skipPackagePluginValidation
+
+  # ──────────────────────────────────────────────
   # Header sync check
   # ──────────────────────────────────────────────
   header-sync:
@@ -96,7 +179,7 @@ jobs:
   swift-pass:
     name: Swift Binding Pass
     if: always()
-    needs: [build, test, header-sync]
+    needs: [build, test, test-ios-simulator, header-sync]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate
@@ -106,5 +189,14 @@ jobs:
                 "${{ needs.header-sync.result }}" == "failure" ]]; then
             echo "❌ Swift binding checks failed"
             exit 1
+          fi
+          if [[ "${{ needs.test-ios-simulator.result }}" == "failure" ]]; then
+            echo "⚠️  iOS Simulator tests failed or could not run — this does not"
+            echo "    block the gate. xcodebuild against a bare SwiftPM package"
+            echo "    (no .xcodeproj) is known to be fragile across Xcode versions"
+            echo "    (e.g. a documented internal error in 'xcodebuild -list' on"
+            echo "    Xcode 16.3 — see bindings/swift/README.md). Check the"
+            echo "    'Test (iOS Simulator)' job logs to see whether this is a"
+            echo "    real regression or a toolchain-level issue."
           fi
           echo "✅ Swift binding checks passed"
