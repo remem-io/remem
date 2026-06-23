@@ -130,3 +130,16 @@ desktop.ini
 bindings/swift/.build/
 bindings/swift/.swiftpm/
 bindings/swift/Package.resolved
+
+# ========================
+# React Native / Expo module (bindings/react-native)
+# ========================
+bindings/react-native/build/
+bindings/react-native/ios/Pods/
+bindings/react-native/ios/build/
+bindings/react-native/android/build/
+bindings/react-native/android/.gradle/
+bindings/react-native/example/node_modules/
+bindings/react-native/example/ios/
+bindings/react-native/example/android/
+bindings/react-native/example/.expo/

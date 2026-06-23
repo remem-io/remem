@@ -197,11 +197,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check rememhq.h matches the canonical source
         run: |
-          bash bindings/swift/scripts/sync-header.sh
-          if ! git diff --quiet -- bindings/swift/Sources/CRemem/include/rememhq.h; then
-            echo "::error::bindings/swift/Sources/CRemem/include/rememhq.h is out of sync with rememhq-core/include/rememhq.h."
-            echo "Run bindings/swift/scripts/sync-header.sh and commit the result."
-            git diff -- bindings/swift/Sources/CRemem/include/rememhq.h
+          bash bindings/scripts/sync-headers.sh
+          if ! git diff --quiet -- bindings/swift/Sources/CRemem/include/rememhq.h bindings/react-native/ios/RememCore/rememhq.h; then
+            echo "::error::A vendored copy of rememhq.h is out of sync with rememhq-core/include/rememhq.h."
+            echo "Run bindings/scripts/sync-headers.sh and commit the result."
+            git diff -- bindings/swift/Sources/CRemem/include/rememhq.h bindings/react-native/ios/RememCore/rememhq.h
             exit 1
           fi
 

@@ -2,8 +2,8 @@
 //
 // ⚠️ VENDORED COPY. The source of truth is
 // `rememhq-core/include/rememhq.h` in the main remem repository.
-// This copy exists so the Swift package can build standalone (e.g. via Swift
-// Package Index) without checking out the whole monorepo.
+// This copy exists so the Expo module can build standalone (e.g. when
+// consumed as an npm package) without checking out the whole monorepo.
 // Run `bindings/scripts/sync-headers.sh` from the repo root after
 // editing the canonical header to keep this copy in sync.
 // This header mirrors `rememhq-core/src/ffi/mod.rs` exactly. It is

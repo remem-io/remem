@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["RememModule"]
+  },
+  "android": {
+    "modules": ["io.remem.expo.RememModule"]
+  }
+}

@@ -8,8 +8,8 @@ public enum RememError: Error, LocalizedError, CustomStringConvertible, Equatabl
     /// human-readable message produced on the Rust side.
     case engine(String)
 
-    /// `Memory.open` was given a project or data directory that could not
-    /// be turned into a valid engine.
+    /// `EngineHandle.init` was given a project or data directory that
+    /// could not be turned into a valid engine.
     case engineInitFailed(String)
 
     /// A JSON payload returned by the engine could not be decoded into the
@@ -35,7 +35,11 @@ public enum RememError: Error, LocalizedError, CustomStringConvertible, Equatabl
         }
     }
 
-    /// `LocalizedError`'s requirement. Without this, `localizedDescription`
-    /// falls back to a generic message instead of the real one.
+    /// `LocalizedError`'s requirement. Many error-surfacing paths
+    /// (including, in practice, the React Native bridge's generic error
+    /// handling) read `localizedDescription` rather than a custom
+    /// `description` property — without this, those paths fall back to
+    /// a generic "The operation couldn't be completed" message instead
+    /// of the real one.
     public var errorDescription: String? { description }
 }

@@ -70,9 +70,12 @@ bindings/swift/
 │       └── RememError.swift
 ├── Tests/RememTests/
 └── scripts/
-    ├── sync-header.sh          — keep the vendored C header in sync
     └── build-xcframework.sh    — assemble a real XCFramework (macOS-only)
 ```
+
+The header-sync script now lives at `bindings/scripts/sync-headers.sh`,
+shared with `bindings/react-native`'s own vendored copy of the same
+header — see "Keeping the vendored header in sync" below.
 
 `Memory` is a Swift `actor`, so calls are serialized per-instance and it's
 safe to share one across concurrent tasks. All `unsafe` pointer handling
@@ -131,8 +134,11 @@ you change the FFI surface in `rememhq-core/src/ffi/mod.rs`, update
 `rememhq-core/include/rememhq.h` first, then run:
 
 ```sh
-bindings/swift/scripts/sync-header.sh
+bindings/scripts/sync-headers.sh
 ```
+
+This also syncs `bindings/react-native`'s own vendored copy of the same
+header in one pass.
 
 ## Distributing as an XCFramework
 

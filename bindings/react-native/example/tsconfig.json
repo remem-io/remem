@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@remem-io/react-native": ["../src/index"],
+      "@remem-io/react-native/*": ["../src/*"]
+    }
+  }
+}
