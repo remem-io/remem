@@ -31,26 +31,39 @@ remem is a reasoning memory layer for AI agents. Unlike simple vector stores, re
 └─────────────┘          └─────────────────────────────┘
 ```
 
-## Crate Structure
+## Workspace & Crate Structure
 
-### rememhq-core
-The central library. Contains:
-- **memory/** — Core types (MemoryRecord, MemoryType, request/response structs)
-- **storage/** — SQLite persistence (WAL + FTS5) and vector index
-- **providers/** — Cloud LLM clients (Anthropic, OpenAI) and embedding providers
-- **reasoning/** — The differentiator: scoring, guided retrieval, consolidation, contradiction detection
-- **config** — TOML + env var configuration
+The repository operates as a polyglot workspace with Rust at its core, a C++ engine for high-performance indexing, and SDKs spanning Python, TypeScript, and React Native.
 
-### rememhq-mcp
-MCP server exposing 6 tools over stdio JSON-RPC:
-`mem_store`, `mem_recall`, `mem_search`, `mem_update`, `mem_forget`, `mem_consolidate`
+### 1. Engine & Core Logic (`rememhq-core`)
+The central library implementing all business logic, storage, and reasoning. No other crate interacts directly with the database or LLMs; they all route through `rememhq-core`.
+- **`src/memory/`** — Core domain models (`MemoryRecord`, `MemoryType`, request/response structs).
+- **`src/storage/`** — SQLite persistence (WAL mode + FTS5 full-text search) and vector index orchestration.
+- **`src/providers/`** — Cloud LLM clients (Anthropic, OpenAI) and local ONNX models for generating reasoning outputs and embeddings.
+- **`src/reasoning/`** — The reasoning engine: handles importance scoring, guided retrieval, session consolidation, and contradiction detection.
+- **`src/config/`** — Unified configuration management utilizing TOML and environment variables.
 
-### rememhq-api
-REST API server (Axum) mirroring the MCP tools as HTTP endpoints.
-Includes bearer auth, CORS, and request tracing.
+### 2. High-Performance Vector Search (`libremem`)
+A dedicated C++17 library powering local vector similarity search and fast embeddings.
+- **`src/` & `include/`** — Implements `hnswlib` for Hierarchical Navigable Small World vector indexing and `ONNX Runtime` for local embedding models (e.g., `nomic-embed-text`).
+- **Integration** — Compiled dynamically via `build.rs` in `rememhq-core` using the `cc` crate. Communication happens strictly over a zero-cost C-FFI bridge.
 
-### rememhq-cli
-CLI binary (`remem`) with subcommands: serve, mcp, store, recall, search, inspect, models.
+### 3. Server Interfaces (Transports)
+Thin transport layers that wrap the `rememhq-core` engine and expose it over different protocols.
+- **`rememhq-api/`** — An HTTP REST API server built with `Axum`. Mirrors core operations as HTTP endpoints, injecting bearer auth, CORS, and request tracing via `tracing-subscriber`.
+- **`rememhq-mcp/`** — A Model Context Protocol (MCP) server communicating via `stdio` JSON-RPC. Heavily utilized by agent consumers (Claude Code, Cursor) and exposes tools like `mem_store`, `mem_recall`, and `mem_consolidate`.
+
+### 4. Client Tooling (`rememhq-cli`)
+The primary CLI entrypoint (`remem.exe`). 
+- **Subcommands** — Provides commands such as `agent` (an interactive terminal companion), `mcp`, `serve`, `store`, `recall`, `search`, and `inspect`.
+
+### 5. SDKs & Bindings
+Client libraries for consuming the `rememhq-api` or directly embedding the core library.
+- **`sdk/python/`** — Async Python SDK built atop `httpx` and `pydantic`.
+- **`sdk/typescript/`** — Node/Browser-compatible TypeScript SDK using modern `fetch`.
+- **`sdk/rust/`** — Rust SDK (`rememhq`) re-exporting the `rememhq-core` client.
+- **`bindings/react-native/`** — Specialized bindings allowing `remem` logic to be embedded natively into mobile environments using JSI.
+- **`evals/`** — Evaluation benchmarks for testing recall accuracy and latency regressions across models.
 
 ## Data Flow
 
