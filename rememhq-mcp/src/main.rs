@@ -1,7 +1,7 @@
 //! remem MCP server — exposes memory tools over stdio (JSON-RPC).
 //!
 //! Implements the Model Context Protocol for integration with
-//! Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode,
+//! Claude Code, Codex, Cursor, Copilot, Antigravity CLI, OpenCode,
 //! and any other MCP-compatible agent.
 
 mod tools;

@@ -15,14 +15,14 @@
 
 remem provides agents with **persistent, reasoned memory** that spans across sessions. It enhances AI assistants and agents with an **intelligent memory layer** that enables truly personalized AI interactions — it **remembers user preferences**, **adapts to individual needs**, and **continuously learns over time**, turning stateless AI tools into persistent, context-aware partners.
 
-Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems. Whether you're using Claude Code, Codex, Cursor, Copilot, Gemini CLI, or OpenCode, remem gives your AI a durable, cross-session memory that grows smarter with every interaction.
+Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems. Whether you're using Claude Code, Codex, Cursor, Copilot, Antigravity CLI, or OpenCode, remem gives your AI a durable, cross-session memory that grows smarter with every interaction.
 
 ## Architecture
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        Agent Consumers                               │
-│  Claude Code · Codex · Cursor · Copilot · Gemini CLI · OpenCode      │
+│  Claude Code · Codex · Cursor · Copilot · Antigravity CLI · OpenCode      │
 │  Python agents · TypeScript agents · Any MCP-compatible client       │
 └──────────┬──────────────────────┬────────────────────────────────────┘
            │ MCP stdio            │ REST API / SDK
@@ -55,7 +55,7 @@ remem integrates with the leading AI coding assistants and agent frameworks. Eac
 | **[Codex](https://github.com/openai/codex)** | MCP (stdio) | Connects via MCP server configuration, enabling persistent context across coding sessions |
 | **[Cursor](https://cursor.com)** | MCP (stdio) | Add remem to Cursor's MCP settings for cross-session memory in your IDE |
 | **[GitHub Copilot](https://github.com/features/copilot)** | MCP (stdio) | MCP server integration provides durable project context alongside Copilot suggestions |
-| **[Gemini CLI](https://github.com/google-gemini/gemini-cli)** | MCP (stdio) | Configure remem as an MCP tool server for Gemini CLI agents |
+| **[Antigravity CLI](https://github.com/google-gemini/antigravity-cli)** | MCP (stdio) | Configure remem as an MCP tool server for Antigravity CLI agents |
 | **[OpenCode](https://github.com/nichochar/opencode)** | MCP (stdio) | MCP-compatible — works out of the box with remem's stdio transport |
 | **Python agents** | REST API / Python SDK | `pip install rememhq` — use `Memory.store()` and `Memory.recall()` in any async Python agent |
 | **TypeScript agents** | REST API / TypeScript SDK | `npm install @rememhq/sdk` — typed client for Node.js and Deno agents |
@@ -82,7 +82,7 @@ Traditional vector stores suffer from "confident recall of irrelevant context." 
 
 ## Quickstart
 
-### Model Context Protocol (MCP) — Claude Code / Codex / Cursor / Copilot / Gemini CLI / OpenCode
+### Model Context Protocol (MCP) — Claude Code / Codex / Cursor / Copilot / Antigravity CLI / OpenCode
 
 remem works seamlessly with any MCP-compliant AI assistant. Add the following to your tool's MCP configuration:
 

@@ -60,7 +60,7 @@ cargo run -p rememhq-mcp
 cargo run -p rememhq-cli -- --help
 
 # Initialize MCP config for an agent consumer
-# Supported: claude-code, codex, cursor, copilot, gemini-cli, opencode, all
+# Supported: claude-code, codex, cursor, copilot, antigravity-cli, opencode, all
 remem init cursor --project my-project
 remem init all --project my-project
 

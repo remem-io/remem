@@ -16,7 +16,7 @@ remem integrates with the following AI coding assistants via MCP (stdio):
 | **Codex** | `.codex/config.json` | `remem init codex` |
 | **Cursor** | `.cursor/mcp.json` | `remem init cursor` |
 | **GitHub Copilot** | `.github/copilot/mcp.json` | `remem init copilot` |
-| **Gemini CLI** | `.gemini/settings.json` | `remem init gemini-cli` |
+| **Antigravity CLI** | `.antigravity/settings.json` | `remem init antigravity-cli` |
 | **OpenCode** | `.opencode/config.json` | `remem init opencode` |
 
 Use `remem init all` to generate configs for every consumer at once.

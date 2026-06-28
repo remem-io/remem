@@ -116,7 +116,7 @@ enum AgentConsumer {
     Codex,
     Cursor,
     Copilot,
-    GeminiCli,
+    AntigravityCli,
     OpenCode,
     All,
 }
@@ -129,11 +129,11 @@ impl std::str::FromStr for AgentConsumer {
             "codex" => Ok(Self::Codex),
             "cursor" => Ok(Self::Cursor),
             "copilot" | "github-copilot" => Ok(Self::Copilot),
-            "gemini-cli" | "gemini" => Ok(Self::GeminiCli),
+            "antigravity-cli" | "gemini" => Ok(Self::AntigravityCli),
             "opencode" => Ok(Self::OpenCode),
             "all" => Ok(Self::All),
             _ => Err(format!(
-                "Unknown consumer '{}'. Valid options: claude-code, codex, cursor, copilot, gemini-cli, opencode, all",
+                "Unknown consumer '{}'. Valid options: claude-code, codex, cursor, copilot, antigravity-cli, opencode, all",
                 s
             )),
         }
@@ -147,7 +147,7 @@ impl std::fmt::Display for AgentConsumer {
             Self::Codex => write!(f, "codex"),
             Self::Cursor => write!(f, "cursor"),
             Self::Copilot => write!(f, "copilot"),
-            Self::GeminiCli => write!(f, "gemini-cli"),
+            Self::AntigravityCli => write!(f, "antigravity-cli"),
             Self::OpenCode => write!(f, "opencode"),
             Self::All => write!(f, "all"),
         }
@@ -222,7 +222,7 @@ async fn main() -> anyhow::Result<()> {
                     AgentConsumer::Codex,
                     AgentConsumer::Cursor,
                     AgentConsumer::Copilot,
-                    AgentConsumer::GeminiCli,
+                    AgentConsumer::AntigravityCli,
                     AgentConsumer::OpenCode,
                 ],
                 other => vec![other],
@@ -589,7 +589,7 @@ fn generate_consumer_config(
                 }
             }),
         ),
-        AgentConsumer::GeminiCli => (
+        AgentConsumer::AntigravityCli => (
             ".gemini",
             "settings.json",
             serde_json::json!({

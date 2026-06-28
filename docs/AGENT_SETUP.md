@@ -41,7 +41,7 @@ remem init claude-code --project my-project
 remem init codex       --project my-project
 remem init cursor      --project my-project
 remem init copilot     --project my-project
-remem init gemini-cli  --project my-project
+remem init antigravity-cli  --project my-project
 remem init opencode    --project my-project
 
 # All consumers at once
@@ -140,9 +140,9 @@ Create `.github/copilot/mcp.json` in your project root:
 }
 ```
 
-### Gemini CLI
+### Antigravity CLI
 
-Create `.gemini/settings.json` in your project root:
+Create `.antigravity/settings.json` in your project root:
 
 ```json
 {
@@ -160,7 +160,7 @@ Create `.gemini/settings.json` in your project root:
 }
 ```
 
-> **Note:** Gemini CLI does not use a `"type"` field — the `command` field implies stdio transport.
+> **Note:** Antigravity CLI does not use a `"type"` field — the `command` field implies stdio transport.
 
 ### OpenCode
 
