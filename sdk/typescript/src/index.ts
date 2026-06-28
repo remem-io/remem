@@ -13,6 +13,7 @@
 
 import type {
   ConsolidationReport,
+  CompactResponse,
   ForgetMode,
   MemoryConfig,
   MemoryResult,
@@ -25,6 +26,7 @@ import type {
 
 export type {
   ConsolidationReport,
+  CompactResponse,
   ForgetMode,
   MemoryConfig,
   MemoryResult,
@@ -127,6 +129,20 @@ export class Memory {
       success: boolean;
       archived_count: number;
     }>;
+  }
+
+  /**
+   * Compact a conversation trace to save context window tokens.
+   */
+  async compactContext(
+    conversationText: string,
+    focusAreas?: string[]
+  ): Promise<CompactResponse> {
+    const body: Record<string, unknown> = { conversation_text: conversationText };
+    if (focusAreas) {
+      body.focus_areas = focusAreas;
+    }
+    return this.request("POST", "/v1/memories/compact", body) as Promise<CompactResponse>;
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {

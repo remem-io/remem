@@ -1,3 +1,4 @@
+mod compact;
 mod consolidate;
 mod decay;
 mod forget;
@@ -21,6 +22,7 @@ pub fn list_tools() -> Vec<Value> {
         forget::schema(),
         consolidate::schema(),
         decay::schema(),
+        compact::schema(),
         knowledge::query_schema(),
         knowledge::entity_schema(),
     ]
@@ -46,6 +48,7 @@ pub async fn call_tool(engine: &Arc<ReasoningEngine>, params: &Value) -> anyhow:
         "mem_forget" => forget::handle(engine, &arguments).await,
         "mem_consolidate" => consolidate::handle(engine, &arguments).await,
         "mem_decay" => decay::handle(engine, &arguments).await,
+        "mem_compact" => compact::handle(engine, &arguments).await,
         "mem_query_knowledge" => knowledge::handle_query(engine, &arguments).await,
         "mem_get_entity_context" => knowledge::handle_entity(engine, &arguments).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),

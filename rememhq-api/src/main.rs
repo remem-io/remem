@@ -99,6 +99,20 @@ struct ConsolidateBody {
     model: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, ToSchema)]
+struct CompactBody {
+    conversation_text: String,
+    #[serde(default)]
+    focus_areas: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+struct CompactResponse {
+    compressed_context: String,
+    original_length: usize,
+    compressed_length: usize,
+}
+
 #[derive(Deserialize)]
 struct ListQuery {
     #[serde(default = "default_20")]
@@ -525,6 +539,46 @@ async fn consolidate_session(
     Ok(Json(report))
 }
 
+/// Compact a conversation trace to save context window tokens.
+#[utoipa::path(
+    post,
+    path = "/v1/memories/compact",
+    request_body = CompactBody,
+    responses(
+        (status = 200, description = "Context compacted successfully", body = CompactResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+async fn compact_context(
+    State(engine): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<CompactBody>,
+) -> Result<Json<CompactResponse>, (StatusCode, Json<ErrorResponse>)> {
+    check_auth(&headers)?;
+
+    let report = engine
+        .compact_context(&body.conversation_text, body.focus_areas.as_deref())
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
+
+    Ok(Json(CompactResponse {
+        compressed_context: report.compressed_context,
+        original_length: report.original_length,
+        compressed_length: report.compressed_length,
+    }))
+}
+
 // ── List Memories ───────────────────────────────────────────────────
 
 #[utoipa::path(
@@ -769,6 +823,7 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
         create_session,
         end_session,
         consolidate_session,
+        compact_context,
         routes::memories::get_memory,
         routes::memories::query_knowledge,
         routes::memories::get_entity_context,
@@ -787,6 +842,8 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
             DecayBody,
             ConsolidateBody,
             ConsolidationReport,
+            CompactBody,
+            CompactResponse,
             Contradiction,
             KnowledgeGraphUpdate,
             SessionResponse,
@@ -891,6 +948,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/memories/search", get(search_memories))
         .route("/v1/memories/decay", post(apply_decay))
         .route("/v1/memories/expire", post(expire_memories))
+        .route("/v1/memories/compact", post(compact_context))
         .route("/v1/memories/{id}", get(routes::memories::get_memory))
         .route("/v1/memories/{id}", patch(update_memory))
         .route("/v1/memories/{id}", delete(forget_memory))

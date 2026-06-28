@@ -10,6 +10,7 @@ import httpx
 from rememhq.config import RememConfig
 from rememhq.models import (
     ConsolidationReport,
+    CompactResponse,
     ForgetMode,
     MemoryResult,
     MemoryType,
@@ -175,6 +176,21 @@ class Memory:
         resp = await self._client.post("/v1/memories/decay", json={"factor": factor})
         resp.raise_for_status()
         return resp.json()
+
+    async def compact_context(
+        self,
+        conversation_text: str,
+        *,
+        focus_areas: list[str] | None = None,
+    ) -> CompactResponse:
+        """Compact a conversation trace to save context window tokens."""
+        payload: dict = {"conversation_text": conversation_text}
+        if focus_areas is not None:
+            payload["focus_areas"] = focus_areas
+
+        resp = await self._client.post("/v1/memories/compact", json=payload)
+        resp.raise_for_status()
+        return CompactResponse.model_validate(resp.json())
 
     async def close(self) -> None:
         """Close the HTTP client."""

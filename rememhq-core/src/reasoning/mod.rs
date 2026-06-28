@@ -3,6 +3,7 @@
 //! Uses cloud LLMs to add intelligence to every memory operation:
 //! scoring, guided retrieval, consolidation, and contradiction detection.
 
+pub mod compaction;
 pub mod consolidation;
 pub mod contradiction;
 pub mod resolution;
@@ -167,6 +168,21 @@ impl ReasoningEngine {
         entity: &str,
     ) -> anyhow::Result<Vec<KnowledgeGraphUpdate>> {
         self.store.get_knowledge_for_entity(entity).await
+    }
+
+    /// Compact a conversation trace to save context window tokens.
+    pub async fn compact_context(
+        &self,
+        conversation_text: &str,
+        focus_areas: Option<&[String]>,
+    ) -> anyhow::Result<compaction::CompactionReport> {
+        compaction::compact_context(
+            &*self.provider,
+            &self.config.reasoning.reasoning_model,
+            conversation_text,
+            focus_areas,
+        )
+        .await
     }
 
     /// Query the knowledge graph with filters.

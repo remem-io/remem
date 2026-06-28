@@ -58,6 +58,12 @@ export interface ConsolidationReport {
   knowledge_graph_updates: KnowledgeGraphUpdate[];
 }
 
+export interface CompactResponse {
+  compressed_context: string;
+  original_length: number;
+  compressed_length: number;
+}
+
 export interface Contradiction {
   existing_memory_id: string;
   new_content: string;

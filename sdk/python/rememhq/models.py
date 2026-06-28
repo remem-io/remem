@@ -30,6 +30,12 @@ class StoreResponse(BaseModel):
     created_at: datetime
 
 
+class CompactResponse(BaseModel):
+    compressed_context: str
+    original_length: int
+    compressed_length: int
+
+
 class MemoryResult(BaseModel):
     id: UUID
     content: str
