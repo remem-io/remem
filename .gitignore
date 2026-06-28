@@ -139,6 +139,8 @@ bindings/react-native/ios/Pods/
 bindings/react-native/ios/build/
 bindings/react-native/android/build/
 bindings/react-native/android/.gradle/
+bindings/react-native/android/.cxx/
+bindings/react-native/android/rust/target/
 bindings/react-native/example/node_modules/
 bindings/react-native/example/ios/
 bindings/react-native/example/android/

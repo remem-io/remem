@@ -8,13 +8,7 @@ borrows heavily from.
 
 ## Status
 
-🚧 **iOS only, early / in-progress.** The TypeScript API, native module
-wiring, and Swift implementation are written and compile cleanly, but
-this hasn't been run against a real engine yet (no macOS/Xcode
-environment was available while writing it — see "What's verified" vs
-"What's not verified" below). **Android has no native implementation at
-all** — the generated stub (`hello`/`setValueAsync`) is still in place,
-so calling any `Memory` method on Android will fail. See "Android" below.
+🚧 **In-progress.** The TypeScript API, native module wiring, and Swift/JNI implementations are written and compile cleanly. The **Android** implementation uses JNI + Rust via Corrosion and is fully wired up to Expo. However, both platforms still need runtime testing against a real engine (see "What's verified" vs "What's not verified" below).
 
 ### Why Expo Modules API, not Nitro Modules
 
@@ -60,8 +54,7 @@ tooling, at the cost of being somewhat more boilerplate-heavy than Nitro.
   `ios/RememCore/EngineHandle.swift`) has not been compiled — no
   macOS/Xcode environment was available while writing it. Treat it with
   the same caution as `bindings/swift`'s own unverified pieces.
-- Nothing has been run on a real iOS Simulator or device, or in an actual
-  Expo development build.
+- Nothing has been run on a real iOS Simulator, Android emulator, physical device, or in an actual Expo development build.
 - Whether `Exception` (Expo's typed-error mechanism, which can attach a
   JS-visible `.code`) is the right replacement for the current "throw a
   plain `RememError`" approach — see the note at the top of
@@ -87,8 +80,12 @@ bindings/react-native/
 │       ├── EngineHandle.swift               — ported from bindings/swift, unsafe FFI calls
 │       ├── MemoryModels.swift               — just ForgetMode (see file for why)
 │       └── RememError.swift
-├── android/                  — STUB ONLY, see "Android" below
-└── example/                  — a real (if minimal) Expo app exercising store/search
+├── android/
+│   ├── build.gradle              — includes Corrosion CMake configuration
+│   ├── CMakeLists.txt            — Corrosion bridge to build Rust
+│   ├── rust/                     — Rust JNI crate (remem_android_jni) bridging Core and Expo
+│   └── src/main/java/...         — Expo Kotlin module (RememModule.kt)
+└── example/                      — a real (if minimal) Expo app exercising store/search
 ```
 
 Unlike `bindings/swift` (a Swift Package, using a `CRemem` module target
@@ -147,20 +144,11 @@ load time.
 
 ## Android
 
-There is currently no Android implementation. `android/src/main/java/io/remem/expo/RememModule.kt`
-is still the unmodified `create-expo-module` stub. Building this out
-needs:
+The Android implementation builds a custom Rust crate (`remem_android_jni`) through the Android NDK, integrated natively into the Android build pipeline using [Corrosion](https://github.com/corrosion-rs/corrosion) (a CMake-Cargo bridge).
 
-- Cross-compiling `rememhq-core` for `aarch64-linux-android`,
-  `armv7-linux-androideabi`, `x86_64-linux-android` (and likely
-  `i686-linux-android` for older emulators) via the Android NDK
-- A JNI layer calling into the same `rememhq.h` C ABI the iOS side uses
-  (no Kotlin-native FFI shortcut exists the way Swift's bridging header
-  works — JNI is the standard, more boilerplate-heavy path)
-- Wiring that JNI layer into `RememModule.kt`'s `AsyncFunction`s, mirroring
-  the structure already established in `RememModule.swift`
+When you run an Android build (e.g. `npx expo run:android`), Gradle invokes CMake, which in turn invokes Cargo to cross-compile the Rust codebase for the target Android architecture (e.g., `aarch64-linux-android`). The resulting `.so` binary is then automatically packaged in the `aar`.
 
-This is real, substantial work, not yet started.
+The `RememModule.kt` Kotlin module accesses the Rust code using a JNI interface configured in `bindings/react-native/android/rust/src/lib.rs`. This JNI interface mirrors the C ABI used on iOS to efficiently pass data without excessive serialization.
 
 ## Usage
 
@@ -214,5 +202,9 @@ Modules API, not Nitro Modules" above — Expo Go won't work):
 ```sh
 cd example
 npm install
+npx expo run:android
+# Or for iOS (Requires macOS / Xcode):
 npx expo run:ios
 ```
+
+> **Note on Windows / iOS:** If you are developing on a Windows machine, you cannot run `npx expo run:ios` locally. You must either test iOS using a Mac, or use [EAS Build](https://docs.expo.dev/build/introduction/) (`eas build -p ios`) to compile a custom Dev Client in the cloud.

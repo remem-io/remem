@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "remem-example",
+    "slug": "remem-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "io.remem.example"
+    },
+    "android": {
+      "package": "io.remem.example"
+    }
+  }
+}
