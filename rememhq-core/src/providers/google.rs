@@ -84,6 +84,124 @@ impl Provider for GoogleProvider {
         Ok(text.to_string())
     }
 
+    async fn chat(&self, messages: &[crate::providers::ChatMessage], tools: &[crate::providers::Tool], model: &str) -> anyhow::Result<crate::providers::ChatResponse> {
+        let model_name = if model.is_empty() {
+            DEFAULT_REASONING_MODEL
+        } else {
+            model
+        };
+
+        let mut openai_messages = Vec::new();
+
+        for msg in messages {
+            let role_str = match msg.role {
+                crate::providers::ChatRole::System => "system",
+                crate::providers::ChatRole::User => "user",
+                crate::providers::ChatRole::Assistant => "assistant",
+                crate::providers::ChatRole::Tool => "tool",
+            };
+
+            let mut msg_json = serde_json::json!({
+                "role": role_str,
+                "content": msg.content
+            });
+
+            if let Some(tool_calls) = &msg.tool_calls {
+                let mut openai_tool_calls = Vec::new();
+                for tc in tool_calls {
+                    openai_tool_calls.push(serde_json::json!({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": tc.arguments.to_string()
+                        }
+                    }));
+                }
+                msg_json["tool_calls"] = serde_json::json!(openai_tool_calls);
+            }
+
+            if let Some(tool_call_id) = &msg.tool_call_id {
+                msg_json["tool_call_id"] = serde_json::json!(tool_call_id);
+            }
+
+            openai_messages.push(msg_json);
+        }
+
+        let mut request = serde_json::json!({
+            "model": model_name,
+            "max_tokens": 4096,
+            "messages": openai_messages
+        });
+
+        if !tools.is_empty() {
+            let mut openai_tools = Vec::new();
+            for t in tools {
+                openai_tools.push(serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema
+                    }
+                }));
+            }
+            request["tools"] = serde_json::json!(openai_tools);
+        }
+
+        let url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+        let response = super::resiliency::execute_with_retry(
+            || {
+                self.client
+                    .post(url)
+                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .header("Content-Type", "application/json")
+                    .json(&request)
+                    .send()
+            },
+            3,
+            std::time::Duration::from_millis(500),
+        )
+        .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Google API error {}: {}", status, text));
+        }
+
+        let resp: serde_json::Value = response.json().await?;
+        
+        let choice = resp["choices"][0]["message"].clone();
+        let content = choice["content"].as_str().unwrap_or_default().to_string();
+        
+        let mut parsed_tool_calls = Vec::new();
+        if let Some(tcs) = choice["tool_calls"].as_array() {
+            for tc in tcs {
+                let id = tc["id"].as_str().unwrap_or_default().to_string();
+                let function = &tc["function"];
+                let name = function["name"].as_str().unwrap_or_default().to_string();
+                let arguments_str = function["arguments"].as_str().unwrap_or("{}");
+                let arguments: serde_json::Value = serde_json::from_str(arguments_str).unwrap_or(serde_json::json!({}));
+                
+                parsed_tool_calls.push(crate::providers::ToolCall {
+                    id,
+                    name,
+                    arguments,
+                });
+            }
+        }
+
+        let msg = crate::providers::ChatMessage {
+            role: crate::providers::ChatRole::Assistant,
+            content,
+            tool_calls: if parsed_tool_calls.is_empty() { None } else { Some(parsed_tool_calls) },
+            tool_call_id: None,
+        };
+
+        Ok(crate::providers::ChatResponse { message: msg })
+    }
+
     fn name(&self) -> &str {
         "google"
     }

@@ -55,15 +55,13 @@ remem integrates with the leading AI coding assistants and agent frameworks. Eac
 | **[Codex](https://github.com/openai/codex)** | MCP (stdio) | Connects via MCP server configuration, enabling persistent context across coding sessions |
 | **[Cursor](https://cursor.com)** | MCP (stdio) | Add remem to Cursor's MCP settings for cross-session memory in your IDE |
 | **[GitHub Copilot](https://github.com/features/copilot)** | MCP (stdio) | MCP server integration provides durable project context alongside Copilot suggestions |
-| **[Antigravity CLI](https://github.com/google-gemini/antigravity-cli)** | MCP (stdio) | Configure remem as an MCP tool server for Antigravity CLI agents |
+| **[Antigravity CLI](https://github.com/google-antigravity/antigravity-cli)** | MCP (stdio) | Configure remem as an MCP tool server for Antigravity CLI agents |
 | **[OpenCode](https://github.com/nichochar/opencode)** | MCP (stdio) | MCP-compatible — works out of the box with remem's stdio transport |
 | **Python agents** | REST API / Python SDK | `pip install rememhq` — use `Memory.store()` and `Memory.recall()` in any async Python agent |
 | **TypeScript agents** | REST API / TypeScript SDK | `npm install @rememhq/sdk` — typed client for Node.js and Deno agents |
 | **Any MCP client** | MCP (stdio) | Any tool implementing the [Model Context Protocol](https://modelcontextprotocol.io) works with remem |
 
 ## Why remem?
-
-AI assistants today are **stateless by default** — every conversation starts from scratch. remem solves this by giving your AI tools a memory that:
 
 - **Remembers preferences**: Coding style, tool choices, architecture decisions — stored once, recalled every time.
 - **Adapts to you**: The more you interact, the better remem understands your project context and working patterns.
@@ -184,6 +182,10 @@ remem decay
 # Start an interactive REPL mode
 remem repl
 
+# Start the Remem AI terminal agent (uses native tool calling to run shell commands)
+# Ensure REMEM_PROVIDER is set to anthropic, openai, gemini, or local
+remem agent
+
 # List downloaded local models
 remem models list
 
@@ -210,6 +212,9 @@ cargo run -p rememhq-mcp
 
 # Run the CLI tool
 cargo run -p rememhq-cli -- --help
+
+# Run the Remen AI terminal agent
+cargo run -p rememhq-cli -- agent
 ```
 
 ### SDKs
@@ -221,13 +226,6 @@ cd sdk/python && pip install -e ".[dev]" && pytest tests/
 # TypeScript SDK
 cd sdk/typescript && npm install && npm run build
 ```
-
-## How it Works
-
-1.  **Guided Retrieval**: When you query remem, it first retrieves the top 50 candidates using cosine similarity on the vector index. These candidates are then passed to an LLM (e.g., Claude 4.6 or GPT-4) along with your query. The LLM reason about each candidate and returns the top 8 most relevant results, along with a trace of its reasoning.
-2.  **Session Consolidation**: At the end of a session, remem can ingest the entire interaction log. An LLM extracts durable, high-signal facts, scores their importance, and identifies relationships, building a structured knowledge base out of raw interaction data.
-3.  **Knowledge Graph & Contradiction Detection**: Facts are stored as structured nodes and edges (triples) in a knowledge graph. When new information is added that conflicts with existing knowledge, the LLM flags the contradiction, allowing you to resolve it manually or apply custom rules.
-4.  **Local First**: Using `libremem`, a custom C++ engine, remem supports local HNSW indexing and BERT-compatible tokenization for privacy-first, offline embedding generation.
 
 ## Contributing
 

@@ -1,43 +1,15 @@
 //! OpenAI provider for reasoning operations.
 
-use super::Provider;
+use super::{Provider, ChatMessage, ChatRole, ChatResponse, Tool, ToolCall};
 use async_trait::async_trait;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 /// OpenAI API client.
 pub struct OpenAIProvider {
     client: Client,
     api_key: String,
     base_url: String,
-}
-
-#[derive(Serialize)]
-struct ChatRequest {
-    model: String,
-    messages: Vec<ChatMessage>,
-    max_tokens: u32,
-}
-
-#[derive(Serialize)]
-struct ChatMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Deserialize)]
-struct ChatResponse {
-    choices: Vec<Choice>,
-}
-
-#[derive(Deserialize)]
-struct Choice {
-    message: ResponseMessage,
-}
-
-#[derive(Deserialize)]
-struct ResponseMessage {
-    content: Option<String>,
 }
 
 impl OpenAIProvider {
@@ -60,14 +32,74 @@ impl OpenAIProvider {
 #[async_trait]
 impl Provider for OpenAIProvider {
     async fn complete(&self, prompt: &str, model: &str) -> anyhow::Result<String> {
-        let request = ChatRequest {
-            model: model.to_string(),
-            messages: vec![ChatMessage {
-                role: "user".into(),
-                content: prompt.to_string(),
-            }],
-            max_tokens: 4096,
-        };
+        let messages = vec![ChatMessage {
+            role: ChatRole::User,
+            content: prompt.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+        }];
+        let resp = self.chat(&messages, &[], model).await?;
+        Ok(resp.message.content)
+    }
+
+    async fn chat(&self, messages: &[ChatMessage], tools: &[Tool], model: &str) -> anyhow::Result<ChatResponse> {
+        let mut openai_messages = Vec::new();
+
+        for msg in messages {
+            let role_str = match msg.role {
+                ChatRole::System => "system",
+                ChatRole::User => "user",
+                ChatRole::Assistant => "assistant",
+                ChatRole::Tool => "tool",
+            };
+
+            let mut msg_json = json!({
+                "role": role_str,
+                "content": msg.content
+            });
+
+            if let Some(tool_calls) = &msg.tool_calls {
+                let mut openai_tool_calls = Vec::new();
+                for tc in tool_calls {
+                    openai_tool_calls.push(json!({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": tc.arguments.to_string()
+                        }
+                    }));
+                }
+                msg_json["tool_calls"] = json!(openai_tool_calls);
+            }
+
+            if let Some(tool_call_id) = &msg.tool_call_id {
+                msg_json["tool_call_id"] = json!(tool_call_id);
+            }
+
+            openai_messages.push(msg_json);
+        }
+
+        let mut request = json!({
+            "model": model,
+            "max_tokens": 4096,
+            "messages": openai_messages
+        });
+
+        if !tools.is_empty() {
+            let mut openai_tools = Vec::new();
+            for t in tools {
+                openai_tools.push(json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema
+                    }
+                }));
+            }
+            request["tools"] = json!(openai_tools);
+        }
 
         let response = super::resiliency::execute_with_retry(
             || {
@@ -83,14 +115,43 @@ impl Provider for OpenAIProvider {
         )
         .await?;
 
-        let resp: ChatResponse = response.json().await?;
-        let text = resp
-            .choices
-            .first()
-            .and_then(|c| c.message.content.clone())
-            .unwrap_or_default();
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("OpenAI API error {}: {}", status, text));
+        }
 
-        Ok(text)
+        let resp: Value = response.json().await?;
+        
+        let choice = resp["choices"][0]["message"].clone();
+        
+        let content = choice["content"].as_str().unwrap_or_default().to_string();
+        
+        let mut parsed_tool_calls = Vec::new();
+        if let Some(tcs) = choice["tool_calls"].as_array() {
+            for tc in tcs {
+                let id = tc["id"].as_str().unwrap_or_default().to_string();
+                let function = &tc["function"];
+                let name = function["name"].as_str().unwrap_or_default().to_string();
+                let arguments_str = function["arguments"].as_str().unwrap_or("{}");
+                let arguments: Value = serde_json::from_str(arguments_str).unwrap_or(json!({}));
+                
+                parsed_tool_calls.push(ToolCall {
+                    id,
+                    name,
+                    arguments,
+                });
+            }
+        }
+
+        let msg = ChatMessage {
+            role: ChatRole::Assistant,
+            content,
+            tool_calls: if parsed_tool_calls.is_empty() { None } else { Some(parsed_tool_calls) },
+            tool_call_id: None,
+        };
+
+        Ok(ChatResponse { message: msg })
     }
 
     fn name(&self) -> &str {

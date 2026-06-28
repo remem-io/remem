@@ -9,8 +9,10 @@
 
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
-use std::io::Write;
 use std::sync::Arc;
+use std::io::Write;
+
+mod agent;
 
 use rememhq_core::config::RememConfig;
 use rememhq_core::memory::types::{MemoryRecord, MemoryType};
@@ -96,6 +98,8 @@ enum Commands {
     },
     /// Interactive REPL mode
     Repl,
+    /// AI Companion Terminal
+    Agent,
     /// Bulk import memories from a JSONL file
     Import {
         /// Path to JSONL file (one JSON object per line)
@@ -408,6 +412,11 @@ async fn main() -> anyhow::Result<()> {
         Commands::Repl => {
             let engine = build_engine(&config).await?;
             run_repl(engine, &config).await
+        }
+
+        Commands::Agent => {
+            let engine = build_engine(&config).await?;
+            agent::run_agent(engine, &config).await
         }
 
         Commands::Import { file } => {

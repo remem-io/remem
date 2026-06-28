@@ -1,38 +1,15 @@
 //! Anthropic Claude provider for reasoning operations.
 
-use super::Provider;
+use super::{Provider, ChatMessage, ChatRole, ChatResponse, Tool, ToolCall};
 use async_trait::async_trait;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 /// Anthropic Claude API client.
 pub struct AnthropicProvider {
     client: Client,
     api_key: String,
     base_url: String,
-}
-
-#[derive(Serialize)]
-struct MessagesRequest {
-    model: String,
-    max_tokens: u32,
-    messages: Vec<Message>,
-}
-
-#[derive(Serialize)]
-struct Message {
-    role: String,
-    content: String,
-}
-
-#[derive(Deserialize)]
-struct MessagesResponse {
-    content: Vec<ContentBlock>,
-}
-
-#[derive(Deserialize)]
-struct ContentBlock {
-    text: Option<String>,
 }
 
 impl AnthropicProvider {
@@ -55,14 +32,113 @@ impl AnthropicProvider {
 #[async_trait]
 impl Provider for AnthropicProvider {
     async fn complete(&self, prompt: &str, model: &str) -> anyhow::Result<String> {
-        let request = MessagesRequest {
-            model: model.to_string(),
-            max_tokens: 4096,
-            messages: vec![Message {
-                role: "user".into(),
-                content: prompt.to_string(),
-            }],
-        };
+        let messages = vec![ChatMessage {
+            role: ChatRole::User,
+            content: prompt.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+        }];
+        let resp = self.chat(&messages, &[], model).await?;
+        Ok(resp.message.content)
+    }
+
+    async fn chat(&self, messages: &[ChatMessage], tools: &[Tool], model: &str) -> anyhow::Result<ChatResponse> {
+        let mut system_prompt = String::new();
+        let mut anthropic_messages = Vec::new();
+
+        for msg in messages {
+            match msg.role {
+                ChatRole::System => {
+                    if !system_prompt.is_empty() {
+                        system_prompt.push_str("\n");
+                    }
+                    system_prompt.push_str(&msg.content);
+                }
+                ChatRole::User => {
+                    if let Some(tool_call_id) = &msg.tool_call_id {
+                        anthropic_messages.push(json!({
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_call_id,
+                                    "content": msg.content.clone()
+                                }
+                            ]
+                        }));
+                    } else {
+                        anthropic_messages.push(json!({
+                            "role": "user",
+                            "content": msg.content.clone()
+                        }));
+                    }
+                }
+                ChatRole::Assistant => {
+                    if let Some(tool_calls) = &msg.tool_calls {
+                        let mut content_blocks = Vec::new();
+                        if !msg.content.is_empty() {
+                            content_blocks.push(json!({
+                                "type": "text",
+                                "text": msg.content.clone()
+                            }));
+                        }
+                        for tc in tool_calls {
+                            content_blocks.push(json!({
+                                "type": "tool_use",
+                                "id": tc.id,
+                                "name": tc.name,
+                                "input": tc.arguments
+                            }));
+                        }
+                        anthropic_messages.push(json!({
+                            "role": "assistant",
+                            "content": content_blocks
+                        }));
+                    } else {
+                        anthropic_messages.push(json!({
+                            "role": "assistant",
+                            "content": msg.content.clone()
+                        }));
+                    }
+                }
+                ChatRole::Tool => {
+                    if let Some(tool_call_id) = &msg.tool_call_id {
+                        anthropic_messages.push(json!({
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_call_id,
+                                    "content": msg.content.clone()
+                                }
+                            ]
+                        }));
+                    }
+                }
+            }
+        }
+
+        let mut request = json!({
+            "model": model,
+            "max_tokens": 4096,
+            "messages": anthropic_messages
+        });
+
+        if !system_prompt.is_empty() {
+            request["system"] = json!(system_prompt);
+        }
+
+        if !tools.is_empty() {
+            let mut anthropic_tools = Vec::new();
+            for t in tools {
+                anthropic_tools.push(json!({
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.input_schema
+                }));
+            }
+            request["tools"] = json!(anthropic_tools);
+        }
 
         let response = super::resiliency::execute_with_retry(
             || {
@@ -79,15 +155,41 @@ impl Provider for AnthropicProvider {
         )
         .await?;
 
-        let resp: MessagesResponse = response.json().await?;
-        let text = resp
-            .content
-            .into_iter()
-            .filter_map(|c| c.text)
-            .collect::<Vec<_>>()
-            .join("");
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Anthropic API error {}: {}", status, text));
+        }
 
-        Ok(text)
+        let resp: Value = response.json().await?;
+        
+        let mut final_content = String::new();
+        let mut tool_calls = Vec::new();
+
+        if let Some(content_arr) = resp["content"].as_array() {
+            for block in content_arr {
+                if block["type"] == "text" {
+                    if let Some(t) = block["text"].as_str() {
+                        final_content.push_str(t);
+                    }
+                } else if block["type"] == "tool_use" {
+                    tool_calls.push(ToolCall {
+                        id: block["id"].as_str().unwrap_or_default().to_string(),
+                        name: block["name"].as_str().unwrap_or_default().to_string(),
+                        arguments: block["input"].clone(),
+                    });
+                }
+            }
+        }
+
+        let msg = ChatMessage {
+            role: ChatRole::Assistant,
+            content: final_content,
+            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            tool_call_id: None,
+        };
+
+        Ok(ChatResponse { message: msg })
     }
 
     fn name(&self) -> &str {

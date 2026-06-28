@@ -87,7 +87,7 @@ pub fn reasoning_model_for(provider: &str) -> String {
     }
     match provider {
         "openai" => "gpt-4o".into(),
-        "google" => "gemini-2.0-flash".into(),
+        "google" | "gemini" => "gemini-2.5-flash".into(),
         "local" => std::env::var("REMEM_LOCAL_MODEL_NAME").unwrap_or_else(|_| "phi-3-mini".into()),
         "mock" => "mock".into(),
         _ => "claude-sonnet-4-5".into(), // anthropic default
@@ -103,7 +103,7 @@ pub fn scoring_model_for(provider: &str) -> String {
     }
     match provider {
         "openai" => "gpt-4o-mini".into(),
-        "google" => "gemini-2.0-flash".into(),
+        "google" | "gemini" => "gemini-2.5-flash".into(),
         "local" => std::env::var("REMEM_LOCAL_MODEL_NAME").unwrap_or_else(|_| "phi-3-mini".into()),
         "mock" => "mock".into(),
         _ => "claude-haiku-4-5".into(), // anthropic default

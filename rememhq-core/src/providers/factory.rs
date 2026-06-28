@@ -40,7 +40,7 @@ pub fn build_reasoning_provider(config: &RememConfig) -> Arc<dyn Provider> {
             ProviderKind::OpenAI,
             ProviderKind::Google,
         ]),
-        "google" => try_provider_chain(&[
+        "google" | "gemini" => try_provider_chain(&[
             ProviderKind::Google,
             ProviderKind::Anthropic,
             ProviderKind::OpenAI,
@@ -111,23 +111,36 @@ fn try_provider_chain(chain: &[ProviderKind]) -> Arc<dyn Provider> {
 }
 
 fn auto_detect_provider() -> Arc<dyn Provider> {
-    if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        if let Some(p) = try_provider(&ProviderKind::Anthropic) {
-            return p;
+    if let Ok(k) = std::env::var("ANTHROPIC_API_KEY") {
+        if !k.trim().is_empty() {
+            if let Some(p) = try_provider(&ProviderKind::Anthropic) {
+                return p;
+            }
         }
     }
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        if let Some(p) = try_provider(&ProviderKind::OpenAI) {
-            return p;
+    if let Ok(k) = std::env::var("OPENAI_API_KEY") {
+        if !k.trim().is_empty() {
+            if let Some(p) = try_provider(&ProviderKind::OpenAI) {
+                return p;
+            }
         }
     }
-    if std::env::var("GOOGLE_API_KEY").is_ok() {
-        if let Some(p) = try_provider(&ProviderKind::Google) {
-            return p;
+    if let Ok(k) = std::env::var("GOOGLE_API_KEY") {
+        if !k.trim().is_empty() {
+            if let Some(p) = try_provider(&ProviderKind::Google) {
+                return p;
+            }
         }
     }
-    if std::env::var("LLAMA_API_BASE").is_ok() || std::env::var("OLLAMA_API_BASE").is_ok() {
-        return Arc::new(LocalProvider::new(None));
+    if let Ok(k) = std::env::var("LLAMA_API_BASE") {
+        if !k.trim().is_empty() {
+            return Arc::new(LocalProvider::new(None));
+        }
+    }
+    if let Ok(k) = std::env::var("OLLAMA_API_BASE") {
+        if !k.trim().is_empty() {
+            return Arc::new(LocalProvider::new(None));
+        }
     }
     tracing::warn!("No reasoning API keys set. Falling back to MockProvider.");
     Arc::new(MockProvider)
