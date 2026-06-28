@@ -1,0 +1,29 @@
+[package]
+name = "remem-android-jni"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "JNI bridge exposing rememhq-core to the Android side of the React Native binding"
+
+# Deliberately NOT a member of the root workspace (see ../../../../Cargo.toml).
+# JNI is an Android/React-Native-specific concern irrelevant to the CLI/API/
+# MCP binaries that live in the main workspace, so this stays a standalone
+# crate, mirroring how bindings/swift and bindings/react-native/ios keep
+# their own glue code outside the workspace too.
+
+[lib]
+name = "remem_android_jni"
+# cdylib only: this produces the .so that Kotlin loads via System.loadLibrary.
+# No rlib/staticlib needed since nothing in Rust depends on this crate.
+crate-type = ["cdylib"]
+
+[dependencies]
+# Path dependency on rememhq-core. This pulls in rememhq-core's own
+# dependency tree (tokio, serde_json, etc.) — no version pin needed here
+# since cargo resolves it against rememhq-core/Cargo.toml directly.
+rememhq-core = { path = "../../../../rememhq-core" }
+
+jni = "0.21"
+anyhow = { version = "1", default-features = false }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }

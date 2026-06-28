@@ -6,6 +6,15 @@ members = [
     "rememhq-cli",
     "sdk/rust",
 ]
+# bindings/react-native/android/rust is a standalone crate (its own
+# Cargo.lock, built independently via cargo-ndk) that path-depends on
+# rememhq-core but is NOT a member of this workspace. Cargo's workspace
+# discovery automatically absorbs any path dependency nested inside the
+# workspace directory tree unless explicitly excluded — see
+# bindings/react-native/android/rust/Cargo.toml for the full rationale.
+exclude = [
+    "bindings/react-native/android/rust",
+]
 resolver = "2"
 
 [workspace.package]
