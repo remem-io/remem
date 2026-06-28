@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
-from remem.client import Memory
-from remem.models import MemoryType
+from rememhq.client import Memory
+from rememhq.models import MemoryType
 
 async def main():
     print("🧠 Starting remem Agent Loop Simulation...")

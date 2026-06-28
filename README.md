@@ -22,7 +22,7 @@ Unlike traditional vector stores that rely solely on semantic similarity, remem 
 ```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        Agent Consumers                               │
-│  Claude Code · Codex · Cursor · Copilot · Antigravity CLI · OpenCode      │
+│  Claude Code · Codex · Cursor · Copilot · Antigravity CLI · OpenCode │
 │  Python agents · TypeScript agents · Any MCP-compatible client       │
 └──────────┬──────────────────────┬────────────────────────────────────┘
            │ MCP stdio            │ REST API / SDK
