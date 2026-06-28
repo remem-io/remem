@@ -71,6 +71,9 @@ mod tests {
             async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
                 Ok("15".to_string())
             }
+            async fn chat(&self, _messages: &[crate::providers::ChatMessage], _tools: &[crate::providers::Tool], _model: &str) -> anyhow::Result<crate::providers::ChatResponse> {
+                Err(anyhow::anyhow!("mock chat not supported"))
+            }
             fn name(&self) -> &str {
                 "high_score_mock"
             }
@@ -91,6 +94,9 @@ mod tests {
             async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
                 Ok("-3".to_string())
             }
+            async fn chat(&self, _messages: &[crate::providers::ChatMessage], _tools: &[crate::providers::Tool], _model: &str) -> anyhow::Result<crate::providers::ChatResponse> {
+                Err(anyhow::anyhow!("mock chat not supported"))
+            }
             fn name(&self) -> &str {
                 "low_score_mock"
             }
@@ -110,6 +116,9 @@ mod tests {
         impl Provider for ExactScoreProvider {
             async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
                 Ok("  7  \n".to_string()) // whitespace + newline
+            }
+            async fn chat(&self, _messages: &[crate::providers::ChatMessage], _tools: &[crate::providers::Tool], _model: &str) -> anyhow::Result<crate::providers::ChatResponse> {
+                Err(anyhow::anyhow!("mock chat not supported"))
             }
             fn name(&self) -> &str {
                 "exact_score_mock"
