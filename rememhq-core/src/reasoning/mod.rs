@@ -225,7 +225,7 @@ impl ReasoningEngine {
         let resolver = resolution::LlmEntityResolver::new(
             &*self.provider,
             self.config.reasoning.reasoning_model.clone(),
-            &*self.store,
+            &self.store,
         );
         use resolution::EntityResolver;
 

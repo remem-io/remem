@@ -193,7 +193,7 @@ pub async fn get_store_memory(
 ) -> Result<Json<MemoryRecord>, (StatusCode, Json<ErrorResponse>)> {
     check_auth(&headers)?;
 
-    let memory = if let Ok(id) = Uuid::parse_str(&path_or_id) {
+    let memory = if let Ok(_id) = Uuid::parse_str(&path_or_id) {
         // Since we don't have get_memory_by_id_and_store exposed easily, let's just use path.
         engine
             .get_memory_by_path(&store_id, &path_or_id)

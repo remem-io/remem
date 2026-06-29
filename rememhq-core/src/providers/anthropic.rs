@@ -55,7 +55,7 @@ impl Provider for AnthropicProvider {
             match msg.role {
                 ChatRole::System => {
                     if !system_prompt.is_empty() {
-                        system_prompt.push_str("\n");
+                        system_prompt.push('\n');
                     }
                     system_prompt.push_str(&msg.content);
                 }
