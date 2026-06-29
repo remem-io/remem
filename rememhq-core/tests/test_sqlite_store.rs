@@ -161,3 +161,33 @@ async fn test_apply_decay() {
     let affected = store.apply_decay(0.95).await.unwrap();
     assert!(affected >= 1);
 }
+
+#[tokio::test]
+async fn test_session_branching() {
+    use rememhq_core::memory::types::SessionObservation;
+    use uuid::Uuid;
+
+    let store = make_store();
+    let session_id = "test-session-branching".to_string();
+
+    let obs1 = SessionObservation::new(session_id.clone(), "prompt", "Initial prompt", None);
+    store.log_session_observation(&obs1).await.unwrap();
+
+    let obs2 = SessionObservation::new(
+        session_id.clone(),
+        "result",
+        "Initial result",
+        Some(obs1.id),
+    );
+    store.log_session_observation(&obs2).await.unwrap();
+
+    let transcript = store.get_session_transcript(&session_id).await.unwrap();
+    assert_eq!(transcript.len(), 2);
+
+    // Check parent_id mapping
+    let t1 = transcript.iter().find(|t| t.id == obs1.id).unwrap();
+    assert_eq!(t1.parent_id, None);
+
+    let t2 = transcript.iter().find(|t| t.id == obs2.id).unwrap();
+    assert_eq!(t2.parent_id, Some(obs1.id));
+}

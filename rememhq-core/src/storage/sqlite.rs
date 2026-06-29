@@ -134,6 +134,7 @@ impl SqliteStore {
             -- Session Logs
             CREATE TABLE IF NOT EXISTS session_logs (
                 id               TEXT PRIMARY KEY,
+                parent_id        TEXT REFERENCES session_logs(id),
                 session_id       TEXT NOT NULL,
                 observation_type TEXT NOT NULL,
                 content          TEXT NOT NULL,
@@ -799,9 +800,10 @@ impl MemoryStore for SqliteStore {
     ) -> anyhow::Result<()> {
         let conn = self.conn.lock().await;
         conn.execute(
-            "INSERT INTO session_logs (id, session_id, observation_type, content, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO session_logs (id, parent_id, session_id, observation_type, content, timestamp) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 observation.id.to_string(),
+                observation.parent_id.map(|id| id.to_string()),
                 observation.session_id,
                 observation.observation_type,
                 observation.content,
@@ -817,25 +819,26 @@ impl MemoryStore for SqliteStore {
     ) -> anyhow::Result<Vec<crate::memory::types::SessionObservation>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, session_id, observation_type, content, timestamp FROM session_logs WHERE session_id = ?1 ORDER BY timestamp ASC"
+            "SELECT id, parent_id, session_id, observation_type, content, timestamp FROM session_logs WHERE session_id = ?1 ORDER BY timestamp ASC"
         )?;
 
         let observations = stmt
             .query_map(params![session_id], |row| {
                 let id_str: String = row.get(0)?;
-                let ts_str: String = row.get(4)?;
+                let parent_id_str: Option<String> = row.get(1)?;
+                let ts_str: String = row.get(5)?;
                 Ok(crate::memory::types::SessionObservation {
                     id: Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()),
-                    session_id: row.get(1)?,
-                    observation_type: row.get(2)?,
-                    content: row.get(3)?,
+                    parent_id: parent_id_str.and_then(|id| Uuid::parse_str(&id).ok()),
+                    session_id: row.get(2)?,
+                    observation_type: row.get(3)?,
+                    content: row.get(4)?,
                     timestamp: DateTime::parse_from_rfc3339(&ts_str)
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(|_| Utc::now()),
                 })
             })?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(observations)
     }

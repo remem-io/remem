@@ -1,10 +1,12 @@
 use owo_colors::OwoColorize;
 use rememhq_core::config::RememConfig;
 use rememhq_core::providers::{ChatMessage, ChatRole, Tool};
-use rememhq_core::reasoning::ReasoningEngine;
+use rememhq_core::reasoning::{ReasoningEngine, ReasoningEvent};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use serde_json::json;
+use indicatif::{ProgressBar, ProgressStyle};
+use std::time::Duration;
 
 pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Result<()> {
     let version = env!("CARGO_PKG_VERSION");
@@ -98,6 +100,29 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
         tool_call_id: None,
     });
 
+    let mut rx = engine.event_bus.subscribe();
+    tokio::spawn(async move {
+        while let Ok(event) = rx.recv().await {
+            match event {
+                ReasoningEvent::ConsolidationStarted { session_id } => {
+                    println!("{}", format!("  [Memory] Consolidation started for {}...", session_id).dimmed());
+                }
+                ReasoningEvent::FactExtracted { content } => {
+                    println!("{}", format!("  [Fact] {}", content).dimmed());
+                }
+                ReasoningEvent::ContradictionDetected { existing_id, new_content } => {
+                    println!("{}", format!("  [Contradiction] {} -> {}", existing_id, new_content).yellow().dimmed());
+                }
+                ReasoningEvent::KnowledgeTripleFound { subject, predicate, object } => {
+                    println!("{}", format!("  [Graph] {} - {} - {}", subject, predicate, object).dimmed());
+                }
+                ReasoningEvent::ConsolidationCompleted { new_facts, .. } => {
+                    println!("{}", format!("  [Memory] Consolidation complete ({} new facts).", new_facts).dimmed());
+                }
+            }
+        }
+    });
+
     let mut rl = DefaultEditor::new()?;
 
     loop {
@@ -159,11 +184,25 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
 
         // Agent loop
         loop {
+            let spinner = ProgressBar::new_spinner();
+            spinner.set_style(
+                ProgressStyle::default_spinner()
+                    .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+                    .template("{spinner:.blue} {msg}")
+                    .unwrap(),
+            );
+            spinner.set_message("Thinking...");
+            spinner.enable_steady_tick(Duration::from_millis(100));
+
             // Call the LLM provider
             let response = engine
                 .provider
                 .chat(&messages, &tools, &config.reasoning.reasoning_model)
-                .await?;
+                .await;
+                
+            spinner.finish_and_clear();
+            
+            let response = response?;
             let mut assistant_msg = response.message.clone();
 
             if !assistant_msg.content.is_empty() {
@@ -178,7 +217,9 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
                     }
                 }
 
-                println!("\n{}\n", display_content);
+                println!();
+                termimad::print_text(&display_content);
+                println!();
             }
 
             messages.push(assistant_msg.clone());

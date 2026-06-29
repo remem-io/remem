@@ -96,7 +96,8 @@ pub unsafe extern "C" fn remem_engine_new(
             let index = Arc::new(HNSWVectorIndex::new(embeddings.dimension(), 10000));
             let _ = index.load(&config.index_path()).await;
 
-            let engine = ReasoningEngine::new(config, provider, embeddings, store, index);
+            let engine =
+                ReasoningEngine::new(config, provider, embeddings, store, index, Vec::new());
             Ok(RememEngine {
                 engine: Arc::new(engine),
             })

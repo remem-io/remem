@@ -778,6 +778,7 @@ async fn build_engine(config: &RememConfig) -> anyhow::Result<ReasoningEngine> {
         embeddings,
         store,
         index,
+        Vec::new(),
     ))
 }
 

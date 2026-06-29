@@ -24,6 +24,9 @@ pub enum MemoryType {
 pub struct SessionObservation {
     /// Unique ID for this observation
     pub id: Uuid,
+    /// Optional parent observation ID to support session branching
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<Uuid>,
     /// The session this observation belongs to
     pub session_id: String,
     /// Type of observation (e.g., "tool_call", "prompt", "result")
@@ -39,9 +42,11 @@ impl SessionObservation {
         session_id: impl Into<String>,
         observation_type: impl Into<String>,
         content: impl Into<String>,
+        parent_id: Option<Uuid>,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
+            parent_id,
             session_id: session_id.into(),
             observation_type: observation_type.into(),
             content: content.into(),

@@ -21,6 +21,10 @@ pub fn schema() -> Value {
                 "content": {
                     "type": "string",
                     "description": "The content to log."
+                },
+                "parent_id": {
+                    "type": "string",
+                    "description": "Optional ID of the parent observation to support session branching."
                 }
             },
             "required": ["session_id", "observation_type", "content"]
@@ -44,7 +48,15 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing content"))?;
 
-    let obs = SessionObservation::new(session_id, observation_type, content);
+    let parent_id = match args.get("parent_id").and_then(|v| v.as_str()) {
+        Some(id_str) => Some(
+            uuid::Uuid::parse_str(id_str)
+                .map_err(|_| anyhow::anyhow!("Invalid parent_id UUID format"))?,
+        ),
+        None => None,
+    };
+
+    let obs = SessionObservation::new(session_id, observation_type, content, parent_id);
 
     // Store observation in session_logs
     use rememhq_core::storage::MemoryStore;

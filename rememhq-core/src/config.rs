@@ -261,7 +261,7 @@ mod tests {
     fn test_reasoning_model_for_google() {
         let _guard = ENV_TEST_LOCK.lock().unwrap();
         clear_env();
-        assert_eq!(reasoning_model_for("google"), "gemini-2.0-flash");
+        assert_eq!(reasoning_model_for("google"), "gemini-2.5-flash");
     }
 
     #[test]

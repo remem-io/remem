@@ -16,8 +16,49 @@ use crate::providers::{EmbeddingProvider, Provider};
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum ReasoningEvent {
+    ConsolidationStarted {
+        session_id: String,
+    },
+    FactExtracted {
+        content: String,
+    },
+    ContradictionDetected {
+        existing_id: uuid::Uuid,
+        new_content: String,
+    },
+    KnowledgeTripleFound {
+        subject: String,
+        predicate: String,
+        object: String,
+    },
+    ConsolidationCompleted {
+        session_id: String,
+        new_facts: usize,
+    },
+}
+
+#[async_trait::async_trait]
+pub trait MemoryHook: Send + Sync {
+    async fn before_store(&self, _record: &mut MemoryRecord) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn after_store(&self, _record: &MemoryRecord) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn before_recall(&self, _query: &mut String) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn after_recall(&self, _results: &mut Vec<MemoryResult>) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
 
 /// The reasoning engine orchestrates all intelligent memory operations.
 pub struct ReasoningEngine {
@@ -27,6 +68,8 @@ pub struct ReasoningEngine {
     pub store: Arc<SqliteStore>,
     pub index: Arc<dyn VectorIndex>,
     pub write_counter: AtomicUsize,
+    pub event_bus: tokio::sync::broadcast::Sender<ReasoningEvent>,
+    pub hooks: Vec<Arc<dyn MemoryHook>>,
 }
 
 impl ReasoningEngine {
@@ -37,7 +80,9 @@ impl ReasoningEngine {
         embeddings: Arc<dyn EmbeddingProvider>,
         store: Arc<SqliteStore>,
         index: Arc<dyn VectorIndex>,
+        hooks: Vec<Arc<dyn MemoryHook>>,
     ) -> Self {
+        let (event_bus, _) = tokio::sync::broadcast::channel(1024);
         Self {
             config,
             provider,
@@ -45,6 +90,8 @@ impl ReasoningEngine {
             store,
             index,
             write_counter: AtomicUsize::new(0),
+            event_bus,
+            hooks,
         }
     }
 
@@ -54,6 +101,10 @@ impl ReasoningEngine {
         mut record: MemoryRecord,
         auto_score: bool,
     ) -> anyhow::Result<MemoryRecord> {
+        for hook in &self.hooks {
+            hook.before_store(&mut record).await?;
+        }
+
         // Generate embedding
         let embedding = self.embeddings.embed(&record.content).await?;
         record.embedding = Some(embedding.clone());
@@ -84,6 +135,10 @@ impl ReasoningEngine {
 
         self.check_auto_save().await?;
 
+        for hook in &self.hooks {
+            hook.after_store(&record).await?;
+        }
+
         Ok(record)
     }
 
@@ -96,19 +151,30 @@ impl ReasoningEngine {
         since: Option<chrono::DateTime<chrono::Utc>>,
         memory_type: Option<crate::memory::types::MemoryType>,
     ) -> anyhow::Result<Vec<MemoryResult>> {
-        retrieval::guided_retrieval(
+        let mut query_str = query.to_string();
+        for hook in &self.hooks {
+            hook.before_recall(&mut query_str).await?;
+        }
+
+        let mut results = retrieval::guided_retrieval(
             &*self.provider,
             &*self.embeddings,
             &self.store,
             self.index.as_ref(),
-            query,
+            &query_str,
             limit,
             filter_tags,
             since,
             memory_type,
             &self.config.reasoning.reasoning_model,
         )
-        .await
+        .await?;
+
+        for hook in &self.hooks {
+            hook.after_recall(&mut results).await?;
+        }
+
+        Ok(results)
     }
 
     /// Simple vector + FTS search without LLM re-ranking.
@@ -190,6 +256,10 @@ impl ReasoningEngine {
         &self,
         session_id: &str,
     ) -> anyhow::Result<crate::memory::types::ConsolidationReport> {
+        let _ = self.event_bus.send(ReasoningEvent::ConsolidationStarted {
+            session_id: session_id.to_string(),
+        });
+
         // Fetch transcript from SQLite
         let transcript = self.store.get_session_transcript(session_id).await?;
         if transcript.is_empty() {
@@ -220,6 +290,12 @@ impl ReasoningEngine {
             &self.config.reasoning.reasoning_model,
         )
         .await?;
+
+        for f in &facts {
+            let _ = self.event_bus.send(ReasoningEvent::FactExtracted {
+                content: f.content.clone(),
+            });
+        }
 
         // Resolve entities in Knowledge Graph triples
         let resolver = resolution::LlmEntityResolver::new(
@@ -260,6 +336,10 @@ impl ReasoningEngine {
 
         // Handle auto-resolution
         for c in &contradictions {
+            let _ = self.event_bus.send(ReasoningEvent::ContradictionDetected {
+                existing_id: c.existing_memory_id,
+                new_content: c.new_content.clone(),
+            });
             self.store.archive(c.existing_memory_id).await?;
         }
 
@@ -280,12 +360,22 @@ impl ReasoningEngine {
             self.index.add(record.id, &embedding).await?;
 
             if let Some(triple) = fact.knowledge_triple {
+                let _ = self.event_bus.send(ReasoningEvent::KnowledgeTripleFound {
+                    subject: triple.subject.clone(),
+                    predicate: triple.predicate.clone(),
+                    object: triple.object.clone(),
+                });
                 self.store
                     .insert_knowledge_triple(&triple, record.id)
                     .await?;
             }
             new_count += 1;
         }
+
+        let _ = self.event_bus.send(ReasoningEvent::ConsolidationCompleted {
+            session_id: session_id.to_string(),
+            new_facts: new_count,
+        });
 
         self.check_auto_save().await?;
 
@@ -566,6 +656,7 @@ pub struct EngineBuilder {
     store: Option<Arc<SqliteStore>>,
     index: Option<Arc<dyn VectorIndex>>,
     max_index_capacity: usize,
+    hooks: Vec<Arc<dyn MemoryHook>>,
 }
 
 impl EngineBuilder {
@@ -578,6 +669,7 @@ impl EngineBuilder {
             store: None,
             index: None,
             max_index_capacity: 10_000,
+            hooks: Vec::new(),
         }
     }
 
@@ -608,6 +700,12 @@ impl EngineBuilder {
     /// Set the HNSW max capacity.
     pub fn max_capacity(mut self, n: usize) -> Self {
         self.max_index_capacity = n;
+        self
+    }
+
+    /// Register a memory hook.
+    pub fn with_hook(mut self, hook: Arc<dyn MemoryHook>) -> Self {
+        self.hooks.push(hook);
         self
     }
 
@@ -644,6 +742,7 @@ impl EngineBuilder {
             embeddings,
             store,
             index,
+            self.hooks,
         ))
     }
 }
