@@ -1,7 +1,6 @@
 <div align="center">
   <h1>remem</h1>
-  <p><strong>The reasoning memory layer for AI agents.</strong></p>
-  <p><em>Give your AI assistant a memory that learns, adapts and reasons.</em></p>
+  <p><strong>Give your AI assistant a memory that learns, adapts and reasons.</strong></p>
   <p>
     <a href="https://github.com/remem-io/remem/actions"><img src="https://github.com/remem-io/remem/workflows/CI/badge.svg" alt="CI Status" /></a>
     <a href="https://github.com/remem-io/remem/releases"><img src="https://img.shields.io/github/v/release/remem-io/remem" alt="Release" /></a>
@@ -15,7 +14,7 @@
 
 remem provides agents with **persistent, reasoned memory** that spans across sessions. It enhances AI assistants and agents with an **intelligent memory layer** that enables truly personalized AI interactions — it **remembers user preferences**, **adapts to individual needs**, and **continuously learns over time**, turning stateless AI tools into persistent, context-aware partners.
 
-Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems. Whether you're using Claude Code, Codex, Cursor, Copilot, Antigravity CLI, or OpenCode, remem gives your AI a durable, cross-session memory that grows smarter with every interaction.
+Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems. Whether you're using Claude Code, Codex CLI, Cursor, Copilot, Antigravity CLI, or OpenCode, remem gives your AI a durable, cross-session memory that grows smarter with every interaction.
 
 ## Architecture
 

@@ -158,7 +158,12 @@ impl Provider for LocalProvider {
         Ok(text)
     }
 
-    async fn chat(&self, messages: &[crate::providers::ChatMessage], tools: &[crate::providers::Tool], model: &str) -> anyhow::Result<crate::providers::ChatResponse> {
+    async fn chat(
+        &self,
+        messages: &[crate::providers::ChatMessage],
+        tools: &[crate::providers::Tool],
+        model: &str,
+    ) -> anyhow::Result<crate::providers::ChatResponse> {
         let mut openai_messages = Vec::new();
 
         for msg in messages {
@@ -237,10 +242,10 @@ impl Provider for LocalProvider {
         }
 
         let resp: serde_json::Value = response.json().await?;
-        
+
         let choice = resp["choices"][0]["message"].clone();
         let content = choice["content"].as_str().unwrap_or_default().to_string();
-        
+
         let mut parsed_tool_calls = Vec::new();
         if let Some(tcs) = choice["tool_calls"].as_array() {
             for tc in tcs {
@@ -248,8 +253,9 @@ impl Provider for LocalProvider {
                 let function = &tc["function"];
                 let name = function["name"].as_str().unwrap_or_default().to_string();
                 let arguments_str = function["arguments"].as_str().unwrap_or("{}");
-                let arguments: serde_json::Value = serde_json::from_str(arguments_str).unwrap_or(serde_json::json!({}));
-                
+                let arguments: serde_json::Value =
+                    serde_json::from_str(arguments_str).unwrap_or(serde_json::json!({}));
+
                 parsed_tool_calls.push(crate::providers::ToolCall {
                     id,
                     name,
@@ -261,7 +267,11 @@ impl Provider for LocalProvider {
         let msg = crate::providers::ChatMessage {
             role: crate::providers::ChatRole::Assistant,
             content,
-            tool_calls: if parsed_tool_calls.is_empty() { None } else { Some(parsed_tool_calls) },
+            tool_calls: if parsed_tool_calls.is_empty() {
+                None
+            } else {
+                Some(parsed_tool_calls)
+            },
             tool_call_id: None,
         };
 

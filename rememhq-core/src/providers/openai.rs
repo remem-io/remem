@@ -1,6 +1,6 @@
 //! OpenAI provider for reasoning operations.
 
-use super::{Provider, ChatMessage, ChatRole, ChatResponse, Tool, ToolCall};
+use super::{ChatMessage, ChatResponse, ChatRole, Provider, Tool, ToolCall};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -42,7 +42,12 @@ impl Provider for OpenAIProvider {
         Ok(resp.message.content)
     }
 
-    async fn chat(&self, messages: &[ChatMessage], tools: &[Tool], model: &str) -> anyhow::Result<ChatResponse> {
+    async fn chat(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[Tool],
+        model: &str,
+    ) -> anyhow::Result<ChatResponse> {
         let mut openai_messages = Vec::new();
 
         for msg in messages {
@@ -122,11 +127,11 @@ impl Provider for OpenAIProvider {
         }
 
         let resp: Value = response.json().await?;
-        
+
         let choice = resp["choices"][0]["message"].clone();
-        
+
         let content = choice["content"].as_str().unwrap_or_default().to_string();
-        
+
         let mut parsed_tool_calls = Vec::new();
         if let Some(tcs) = choice["tool_calls"].as_array() {
             for tc in tcs {
@@ -135,7 +140,7 @@ impl Provider for OpenAIProvider {
                 let name = function["name"].as_str().unwrap_or_default().to_string();
                 let arguments_str = function["arguments"].as_str().unwrap_or("{}");
                 let arguments: Value = serde_json::from_str(arguments_str).unwrap_or(json!({}));
-                
+
                 parsed_tool_calls.push(ToolCall {
                     id,
                     name,
@@ -147,7 +152,11 @@ impl Provider for OpenAIProvider {
         let msg = ChatMessage {
             role: ChatRole::Assistant,
             content,
-            tool_calls: if parsed_tool_calls.is_empty() { None } else { Some(parsed_tool_calls) },
+            tool_calls: if parsed_tool_calls.is_empty() {
+                None
+            } else {
+                Some(parsed_tool_calls)
+            },
             tool_call_id: None,
         };
 

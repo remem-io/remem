@@ -5,8 +5,8 @@
   "mcpServers": {
     "remem": {
       "type": "stdio",
-      "command": "cargo",
-      "args": ["run", "-q", "-p", "rememhq-mcp"],
+      "command": "c:\\Users\\frimp\\Documents\\remem\\target\\debug\\rememhq-mcp.exe",
+      "args": [],
       "env": {
         "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}",

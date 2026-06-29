@@ -27,6 +27,7 @@ ndarray = { workspace = true }
 utoipa = { workspace = true }
 # needed by models::pull_model for streaming response body to disk
 futures-util = "0.3"
+sha2 = "0.11.0"
 
 [build-dependencies]
 cc = { workspace = true }

@@ -42,10 +42,7 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, arguments: &Value) -> anyhow:
         });
 
     let report = engine
-        .compact_context(
-            conversation_text,
-            focus_areas.as_deref(),
-        )
+        .compact_context(conversation_text, focus_areas.as_deref())
         .await?;
 
     Ok(serde_json::json!({

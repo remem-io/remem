@@ -9,8 +9,8 @@
 
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
-use std::sync::Arc;
 use std::io::Write;
+use std::sync::Arc;
 
 mod agent;
 
@@ -111,6 +111,29 @@ enum Commands {
         #[arg(long, short)]
         output: Option<String>,
     },
+    /// Project management
+    Projects {
+        #[command(subcommand)]
+        action: ProjectAction,
+    },
+    /// Session management
+    Session {
+        #[command(subcommand)]
+        action: SessionAction,
+    },
+    /// Get project context
+    Context {
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// Forget a memory by ID
+    Forget { id: String },
+}
+
+#[derive(Subcommand)]
+enum SessionAction {
+    /// Compress a session transcript into durable facts
+    Compress { session_id: String },
 }
 
 /// Supported AI agent consumers for `remem init`.
@@ -156,6 +179,12 @@ impl std::fmt::Display for AgentConsumer {
             Self::All => write!(f, "all"),
         }
     }
+}
+
+#[derive(Subcommand)]
+enum ProjectAction {
+    /// List all projects
+    List,
 }
 
 #[derive(Subcommand)]
@@ -408,6 +437,87 @@ async fn main() -> anyhow::Result<()> {
                 Ok(())
             }
         },
+
+        Commands::Projects { action } => match action {
+            ProjectAction::List => {
+                let projects_dir = config.storage.data_dir.join("projects");
+                println!("Projects (data dir: {}):\n", projects_dir.display());
+
+                if !projects_dir.exists() {
+                    println!("  No projects found.");
+                    return Ok(());
+                }
+
+                let mut count = 0;
+                let mut entries: Vec<_> = std::fs::read_dir(&projects_dir)?
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().is_dir())
+                    .filter_map(|e| e.file_name().into_string().ok())
+                    .collect();
+
+                entries.sort();
+
+                for project_name in entries {
+                    // Simple check if it's a valid project directory
+                    let project_dir = projects_dir.join(&project_name);
+                    let db_exists = project_dir.join("remem.db").exists();
+                    if db_exists {
+                        println!("  - {}", project_name);
+                        count += 1;
+                    }
+                }
+
+                if count == 0 {
+                    println!("  No projects found.");
+                } else {
+                    println!("\nTotal: {} project(s)", count);
+                }
+                Ok(())
+            }
+        },
+
+        Commands::Session { action } => match action {
+            SessionAction::Compress { session_id } => {
+                let engine = build_engine(&config).await?;
+                println!("Compressing session '{}' into durable facts...", session_id);
+                let report = engine.compress_session_transcript(&session_id).await?;
+                println!("✓ Session compressed successfully!");
+                println!("  New facts created: {}", report.new_facts);
+                println!("  Contradictions resolved: {}", report.contradictions.len());
+                // Save index
+                engine.index.save(&config.index_path()).await?;
+                Ok(())
+            }
+        },
+
+        Commands::Context { limit } => {
+            let engine = build_engine(&config).await?;
+            let memories = engine.store.list(&[], None, None, limit).await?;
+            if memories.is_empty() {
+                println!("No context available for project '{}'.", cli.project);
+            } else {
+                println!("Project Context (Top {} memories):\n", limit);
+                for (i, m) in memories.iter().enumerate() {
+                    println!("{}. [{}] {}", i + 1, m.memory_type, m.content);
+                }
+            }
+            Ok(())
+        }
+
+        Commands::Forget { id } => {
+            let engine = build_engine(&config).await?;
+            let uuid = uuid::Uuid::parse_str(&id)?;
+            let success = engine
+                .forget(uuid, rememhq_core::memory::types::ForgetMode::Archive)
+                .await?;
+            if success {
+                println!("✓ Archived memory {}", id);
+                engine.index.save(&config.index_path()).await?;
+            } else {
+                println!("Memory {} not found or could not be archived.", id);
+            }
+            Ok(())
+        }
 
         Commands::Repl => {
             let engine = build_engine(&config).await?;

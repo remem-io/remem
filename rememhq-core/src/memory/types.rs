@@ -19,6 +19,37 @@ pub enum MemoryType {
     Decision,
 }
 
+/// An observation made during an agent session.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SessionObservation {
+    /// Unique ID for this observation
+    pub id: Uuid,
+    /// The session this observation belongs to
+    pub session_id: String,
+    /// Type of observation (e.g., "tool_call", "prompt", "result")
+    pub observation_type: String,
+    /// The actual content/payload
+    pub content: String,
+    /// When it was recorded
+    pub timestamp: DateTime<Utc>,
+}
+
+impl SessionObservation {
+    pub fn new(
+        session_id: impl Into<String>,
+        observation_type: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            session_id: session_id.into(),
+            observation_type: observation_type.into(),
+            content: content.into(),
+            timestamp: Utc::now(),
+        }
+    }
+}
+
 impl std::fmt::Display for MemoryType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -70,6 +101,12 @@ pub struct MemoryRecord {
     pub source_session: Option<String>,
     /// Time-to-live in days (None = permanent).
     pub ttl_days: Option<u32>,
+    /// The memory store this memory belongs to (None = legacy global store).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub store_id: Option<String>,
+    /// The file-like path for the memory within the store (e.g., "preferences.txt").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 impl MemoryRecord {
@@ -88,6 +125,8 @@ impl MemoryRecord {
             decay_score: 1.0,
             source_session: None,
             ttl_days: None,
+            store_id: None,
+            path: None,
         }
     }
 
@@ -156,6 +195,28 @@ impl From<MemoryRecord> for MemoryResult {
             reasoning: None,
         }
     }
+}
+
+/// A workspace-scoped memory store.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MemoryStoreRecord {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+/// An immutable version record of a memory's history.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MemoryVersionRecord {
+    pub id: String,
+    pub store_id: String,
+    pub memory_id: Uuid,
+    pub operation: String,
+    pub content: String,
+    pub content_sha256: String,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Parameters for storing a new memory.

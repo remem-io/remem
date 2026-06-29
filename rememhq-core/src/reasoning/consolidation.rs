@@ -11,6 +11,7 @@ use crate::providers::{EmbeddingProvider, Provider};
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
+use serde::{Deserialize, Serialize};
 
 /// Run a consolidation pass over a session's memories.
 pub async fn consolidate_session(
@@ -165,17 +166,18 @@ pub async fn consolidate_session(
 }
 
 /// A fact extracted by the LLM during consolidation.
-#[derive(Debug)]
-pub(crate) struct ExtractedFact {
-    pub(crate) content: String,
-    pub(crate) importance: f32,
-    pub(crate) memory_type: MemoryType,
-    pub(crate) tags: Vec<String>,
-    pub(crate) knowledge_triple: Option<KnowledgeGraphUpdate>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExtractedFact {
+    pub content: String,
+    pub importance: f32,
+    pub memory_type: MemoryType,
+    pub tags: Vec<String>,
+    pub knowledge_triple: Option<KnowledgeGraphUpdate>,
 }
 
 /// Use the LLM to extract durable facts from raw session content.
-async fn extract_facts(
+// Note: exposed for session compression
+pub async fn extract_facts(
     provider: &dyn Provider,
     session_content: &str,
     model: &str,

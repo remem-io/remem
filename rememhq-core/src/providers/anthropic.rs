@@ -1,6 +1,6 @@
 //! Anthropic Claude provider for reasoning operations.
 
-use super::{Provider, ChatMessage, ChatRole, ChatResponse, Tool, ToolCall};
+use super::{ChatMessage, ChatResponse, ChatRole, Provider, Tool, ToolCall};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -42,7 +42,12 @@ impl Provider for AnthropicProvider {
         Ok(resp.message.content)
     }
 
-    async fn chat(&self, messages: &[ChatMessage], tools: &[Tool], model: &str) -> anyhow::Result<ChatResponse> {
+    async fn chat(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[Tool],
+        model: &str,
+    ) -> anyhow::Result<ChatResponse> {
         let mut system_prompt = String::new();
         let mut anthropic_messages = Vec::new();
 
@@ -162,7 +167,7 @@ impl Provider for AnthropicProvider {
         }
 
         let resp: Value = response.json().await?;
-        
+
         let mut final_content = String::new();
         let mut tool_calls = Vec::new();
 
@@ -185,7 +190,11 @@ impl Provider for AnthropicProvider {
         let msg = ChatMessage {
             role: ChatRole::Assistant,
             content: final_content,
-            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            },
             tool_call_id: None,
         };
 

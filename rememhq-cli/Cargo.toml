@@ -22,3 +22,6 @@ dotenvy = "0.15"
 chrono = { workspace = true }
 clap = { workspace = true }
 async-trait = { workspace = true }
+owo-colors = "4.3.0"
+crossterm = "0.29.0"
+rustyline = "18.0.1"

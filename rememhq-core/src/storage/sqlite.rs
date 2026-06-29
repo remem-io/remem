@@ -1,9 +1,12 @@
 //! SQLite storage backend with WAL mode and FTS5 full-text search.
 
-use crate::memory::types::{KnowledgeGraphUpdate, MemoryRecord, MemoryType};
+use crate::memory::types::{
+    KnowledgeGraphUpdate, MemoryRecord, MemoryStoreRecord, MemoryType, MemoryVersionRecord,
+};
 use crate::storage::{MemoryStore, StoreStats};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -68,7 +71,9 @@ impl SqliteStore {
                 decay_score     REAL NOT NULL DEFAULT 1.0,
                 source_session  TEXT,
                 ttl_days        INTEGER,
-                archived        INTEGER NOT NULL DEFAULT 0
+                archived        INTEGER NOT NULL DEFAULT 0,
+                store_id        TEXT,
+                path            TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
@@ -125,8 +130,42 @@ impl SqliteStore {
                 consolidated    INTEGER NOT NULL DEFAULT 0,
                 memory_count    INTEGER NOT NULL DEFAULT 0
             );
+            
+            -- Session Logs
+            CREATE TABLE IF NOT EXISTS session_logs (
+                id               TEXT PRIMARY KEY,
+                session_id       TEXT NOT NULL,
+                observation_type TEXT NOT NULL,
+                content          TEXT NOT NULL,
+                timestamp        TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_logs_session ON session_logs(session_id);
+            
+            -- Memory Stores
+            CREATE TABLE IF NOT EXISTS memory_stores (
+                id              TEXT PRIMARY KEY,
+                name            TEXT NOT NULL,
+                description     TEXT,
+                created_at      TEXT NOT NULL,
+                archived_at     TEXT
+            );
+
+            -- Memory Versions
+            CREATE TABLE IF NOT EXISTS memory_versions (
+                id              TEXT PRIMARY KEY,
+                store_id        TEXT NOT NULL,
+                memory_id       TEXT NOT NULL,
+                operation       TEXT NOT NULL,
+                content         TEXT NOT NULL,
+                content_sha256  TEXT NOT NULL,
+                created_at      TEXT NOT NULL
+            );
             ",
         )?;
+
+        // Apply schema migrations for existing databases
+        let _ = conn.execute("ALTER TABLE memories ADD COLUMN store_id TEXT", []);
+        let _ = conn.execute("ALTER TABLE memories ADD COLUMN path TEXT", []);
 
         Ok(())
     }
@@ -154,6 +193,17 @@ impl SqliteStore {
         let source_session: Option<String> = row.get(8)?;
         let ttl_days: Option<u32> = row.get(9)?;
 
+        let store_id: Option<String> = if row.as_ref().column_count() > 11 {
+            row.get(11).unwrap_or(None)
+        } else {
+            None
+        };
+        let path: Option<String> = if row.as_ref().column_count() > 12 {
+            row.get(12).unwrap_or(None)
+        } else {
+            None
+        };
+
         Ok(MemoryRecord {
             id: Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()),
             content,
@@ -170,13 +220,41 @@ impl SqliteStore {
             decay_score: decay_score as f32,
             source_session,
             ttl_days,
+            store_id,
+            path,
         })
+    }
+
+    fn insert_version_inner(
+        conn: &Connection,
+        store_id: &str,
+        memory_id: &Uuid,
+        operation: &str,
+        content: &str,
+    ) -> anyhow::Result<()> {
+        let mut hasher = Sha256::new();
+        hasher.update(content.as_bytes());
+        let hash_result = hasher.finalize();
+        let content_sha256 = hash_result
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
+
+        let id = format!("mem_ver_{}", Uuid::new_v4().to_string().replace("-", ""));
+        let now = Utc::now().to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO memory_versions (id, store_id, memory_id, operation, content, content_sha256, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![id, store_id, memory_id.to_string(), operation, content, content_sha256, now],
+        )?;
+        Ok(())
     }
 
     fn insert_inner(conn: &Connection, record: &MemoryRecord) -> anyhow::Result<()> {
         conn.execute(
-            "INSERT INTO memories (id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO memories (id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days, store_id, path)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 record.id.to_string(),
                 record.content,
@@ -188,15 +266,22 @@ impl SqliteStore {
                 record.decay_score as f64,
                 record.source_session,
                 record.ttl_days,
+                record.store_id,
+                record.path,
             ],
         )?;
+
+        if let Some(store_id) = &record.store_id {
+            Self::insert_version_inner(conn, store_id, &record.id, "insert", &record.content)?;
+        }
+
         Ok(())
     }
 
     fn update_inner(conn: &Connection, record: &MemoryRecord) -> anyhow::Result<()> {
         conn.execute(
-            "UPDATE memories SET content = ?1, importance = ?2, tags = ?3, memory_type = ?4, updated_at = ?5, decay_score = ?6
-             WHERE id = ?7",
+            "UPDATE memories SET content = ?1, importance = ?2, tags = ?3, memory_type = ?4, updated_at = ?5, decay_score = ?6, store_id = ?7, path = ?8
+             WHERE id = ?9",
             params![
                 record.content,
                 record.importance as f64,
@@ -204,13 +289,33 @@ impl SqliteStore {
                 record.memory_type.to_string(),
                 Utc::now().to_rfc3339(),
                 record.decay_score as f64,
+                record.store_id,
+                record.path,
                 record.id.to_string(),
             ],
         )?;
+
+        if let Some(store_id) = &record.store_id {
+            Self::insert_version_inner(conn, store_id, &record.id, "update", &record.content)?;
+        }
+
         Ok(())
     }
 
     fn archive_inner(conn: &Connection, id: Uuid) -> anyhow::Result<bool> {
+        let mut stmt = conn.prepare(
+            "SELECT store_id, content FROM memories WHERE id = ?1 AND store_id IS NOT NULL",
+        )?;
+        let result: Option<(String, String)> = stmt
+            .query_row(params![id.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()?;
+
+        if let Some((store_id, content)) = result {
+            Self::insert_version_inner(conn, &store_id, &id, "delete", &content)?;
+        }
+
         let rows = conn.execute(
             "UPDATE memories SET archived = 1, updated_at = ?1 WHERE id = ?2",
             params![Utc::now().to_rfc3339(), id.to_string()],
@@ -534,6 +639,205 @@ impl MemoryStore for SqliteStore {
             .collect();
 
         Ok(ids)
+    }
+
+    async fn create_store(
+        &self,
+        name: &str,
+        description: Option<&str>,
+    ) -> anyhow::Result<MemoryStoreRecord> {
+        let conn = self.conn.lock().await;
+        let id = format!("store_{}", Uuid::new_v4().to_string().replace("-", ""));
+        let now = Utc::now();
+        let now_str = now.to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO memory_stores (id, name, description, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![id, name, description, now_str],
+        )?;
+
+        Ok(MemoryStoreRecord {
+            id,
+            name: name.to_string(),
+            description: description.map(|s| s.to_string()),
+            created_at: now,
+            archived_at: None,
+        })
+    }
+
+    async fn get_store(&self, store_id: &str) -> anyhow::Result<Option<MemoryStoreRecord>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT id, name, description, created_at, archived_at FROM memory_stores WHERE id = ?1")?;
+
+        let result = stmt
+            .query_row(params![store_id], |row| {
+                let created_str: String = row.get(3)?;
+                let archived_str: Option<String> = row.get(4)?;
+                Ok(MemoryStoreRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    created_at: DateTime::parse_from_rfc3339(&created_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                    archived_at: archived_str.and_then(|s| {
+                        DateTime::parse_from_rfc3339(&s)
+                            .map(|dt| dt.with_timezone(&Utc))
+                            .ok()
+                    }),
+                })
+            })
+            .optional()?;
+
+        Ok(result)
+    }
+
+    async fn list_stores(&self) -> anyhow::Result<Vec<MemoryStoreRecord>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT id, name, description, created_at, archived_at FROM memory_stores WHERE archived_at IS NULL ORDER BY created_at DESC")?;
+
+        let stores = stmt
+            .query_map([], |row| {
+                let created_str: String = row.get(3)?;
+                let archived_str: Option<String> = row.get(4)?;
+                Ok(MemoryStoreRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    created_at: DateTime::parse_from_rfc3339(&created_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                    archived_at: archived_str.and_then(|s| {
+                        DateTime::parse_from_rfc3339(&s)
+                            .map(|dt| dt.with_timezone(&Utc))
+                            .ok()
+                    }),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(stores)
+    }
+
+    async fn archive_store(&self, store_id: &str) -> anyhow::Result<bool> {
+        let conn = self.conn.lock().await;
+        let rows = conn.execute(
+            "UPDATE memory_stores SET archived_at = ?1 WHERE id = ?2",
+            params![Utc::now().to_rfc3339(), store_id],
+        )?;
+        Ok(rows > 0)
+    }
+
+    async fn get_memory_by_path(
+        &self,
+        store_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Option<MemoryRecord>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days, store_id, path
+             FROM memories WHERE store_id = ?1 AND path = ?2 AND archived = 0"
+        )?;
+
+        let result = stmt
+            .query_row(params![store_id, path], Self::row_to_record)
+            .optional()?;
+        Ok(result)
+    }
+
+    async fn list_memories_by_store(&self, store_id: &str) -> anyhow::Result<Vec<MemoryRecord>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days, store_id, path
+             FROM memories WHERE store_id = ?1 AND archived = 0 ORDER BY path ASC"
+        )?;
+
+        let memories = stmt
+            .query_map(params![store_id], Self::row_to_record)?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(memories)
+    }
+
+    async fn list_memory_versions(
+        &self,
+        store_id: &str,
+        memory_id: Uuid,
+    ) -> anyhow::Result<Vec<MemoryVersionRecord>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, store_id, memory_id, operation, content, content_sha256, created_at
+             FROM memory_versions WHERE store_id = ?1 AND memory_id = ?2 ORDER BY created_at DESC",
+        )?;
+
+        let versions = stmt
+            .query_map(params![store_id, memory_id.to_string()], |row| {
+                let created_str: String = row.get(6)?;
+                let mem_id_str: String = row.get(2)?;
+                Ok(MemoryVersionRecord {
+                    id: row.get(0)?,
+                    store_id: row.get(1)?,
+                    memory_id: Uuid::parse_str(&mem_id_str).unwrap_or_else(|_| Uuid::new_v4()),
+                    operation: row.get(3)?,
+                    content: row.get(4)?,
+                    content_sha256: row.get(5)?,
+                    created_at: DateTime::parse_from_rfc3339(&created_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(versions)
+    }
+
+    async fn log_session_observation(
+        &self,
+        observation: &crate::memory::types::SessionObservation,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "INSERT INTO session_logs (id, session_id, observation_type, content, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                observation.id.to_string(),
+                observation.session_id,
+                observation.observation_type,
+                observation.content,
+                observation.timestamp.to_rfc3339()
+            ],
+        )?;
+        Ok(())
+    }
+
+    async fn get_session_transcript(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<crate::memory::types::SessionObservation>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, session_id, observation_type, content, timestamp FROM session_logs WHERE session_id = ?1 ORDER BY timestamp ASC"
+        )?;
+
+        let observations = stmt
+            .query_map(params![session_id], |row| {
+                let id_str: String = row.get(0)?;
+                let ts_str: String = row.get(4)?;
+                Ok(crate::memory::types::SessionObservation {
+                    id: Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()),
+                    session_id: row.get(1)?,
+                    observation_type: row.get(2)?,
+                    content: row.get(3)?,
+                    timestamp: DateTime::parse_from_rfc3339(&ts_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(observations)
     }
 }
 

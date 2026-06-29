@@ -56,7 +56,12 @@ pub trait Provider: Send + Sync {
     async fn complete(&self, prompt: &str, model: &str) -> anyhow::Result<String>;
 
     /// Generate a multi-turn chat response, optionally with tool calling.
-    async fn chat(&self, messages: &[ChatMessage], tools: &[Tool], model: &str) -> anyhow::Result<ChatResponse>;
+    async fn chat(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[Tool],
+        model: &str,
+    ) -> anyhow::Result<ChatResponse>;
 
     /// Get the provider name.
     fn name(&self) -> &str;

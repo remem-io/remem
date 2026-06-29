@@ -185,6 +185,119 @@ impl ReasoningEngine {
         .await
     }
 
+    /// Compress a raw session transcript into durable facts (claude-mem style).
+    pub async fn compress_session_transcript(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<crate::memory::types::ConsolidationReport> {
+        // Fetch transcript from SQLite
+        let transcript = self.store.get_session_transcript(session_id).await?;
+        if transcript.is_empty() {
+            return Ok(crate::memory::types::ConsolidationReport {
+                session_id: session_id.to_string(),
+                new_facts: 0,
+                updated_facts: 0,
+                contradictions: Vec::new(),
+                knowledge_graph_updates: Vec::new(),
+            });
+        }
+
+        // Format into a single text block
+        let mut session_content = String::new();
+        for obs in transcript {
+            session_content.push_str(&format!(
+                "[{}] {}: {}\n",
+                obs.timestamp.to_rfc3339(),
+                obs.observation_type,
+                obs.content
+            ));
+        }
+
+        // Pass to consolidation engine which extracts facts and resolves contradictions
+        let mut facts = consolidation::extract_facts(
+            &*self.provider,
+            &session_content,
+            &self.config.reasoning.reasoning_model,
+        )
+        .await?;
+
+        // Resolve entities in Knowledge Graph triples
+        let resolver = resolution::LlmEntityResolver::new(
+            &*self.provider,
+            self.config.reasoning.reasoning_model.clone(),
+            &*self.store,
+        );
+        use resolution::EntityResolver;
+
+        let mut triples = Vec::new();
+        for f in &facts {
+            if let Some(t) = &f.knowledge_triple {
+                triples.push(t.clone());
+            }
+        }
+
+        if !triples.is_empty() {
+            let resolved_triples = resolver.resolve(triples).await?;
+            let mut triple_idx = 0;
+            for f in &mut facts {
+                if f.knowledge_triple.is_some() {
+                    f.knowledge_triple = Some(resolved_triples[triple_idx].clone());
+                    triple_idx += 1;
+                }
+            }
+        }
+
+        // Detect contradictions
+        let contradictions = contradiction::detect_contradictions(
+            &*self.provider,
+            &*self.embeddings,
+            self.index.as_ref(),
+            &*self.store,
+            &facts,
+            &self.config.reasoning.reasoning_model,
+        )
+        .await?;
+
+        // Handle auto-resolution
+        for c in &contradictions {
+            self.store.archive(c.existing_memory_id).await?;
+        }
+
+        // Store new facts
+        let mut new_count = 0;
+        for fact in facts {
+            let mut record =
+                MemoryRecord::new(&fact.content, crate::memory::types::MemoryType::Fact);
+            record.importance = fact.importance;
+            record.tags = fact.tags;
+            record.source_session = Some(session_id.to_string());
+
+            // Generate embedding
+            let embedding = self.embeddings.embed(&record.content).await?;
+            record.embedding = Some(embedding.clone());
+
+            self.store.insert(&record).await?;
+            self.index.add(record.id, &embedding).await?;
+
+            if let Some(triple) = fact.knowledge_triple {
+                self.store
+                    .insert_knowledge_triple(&triple, record.id)
+                    .await?;
+            }
+            new_count += 1;
+        }
+
+        self.check_auto_save().await?;
+
+        Ok(crate::memory::types::ConsolidationReport {
+            session_id: session_id.to_string(),
+            new_facts: new_count,
+            updated_facts: 0,
+            contradictions,
+            knowledge_graph_updates: Vec::new(),
+        })
+    }
+
     /// Query the knowledge graph with filters.
     pub async fn query_knowledge(
         &self,
@@ -203,18 +316,24 @@ impl ReasoningEngine {
         importance: Option<f32>,
         tags: Option<Vec<String>>,
     ) -> anyhow::Result<MemoryRecord> {
+        tracing::info!("update_memory: start for id {}", id);
         let mut record = self
             .store
             .get(id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Memory not found: {}", id))?;
+        tracing::info!("update_memory: fetched from store");
 
         if let Some(new_content) = content {
+            tracing::info!("update_memory: embedding content...");
             record.content = new_content;
             // Re-embed if content changed
             let embedding = self.embeddings.embed(&record.content).await?;
+            tracing::info!("update_memory: generated embedding");
             record.embedding = Some(embedding.clone());
+            tracing::info!("update_memory: adding to index...");
             self.index.add(record.id, &embedding).await?;
+            tracing::info!("update_memory: added to index");
         }
 
         if let Some(new_importance) = importance {
@@ -226,9 +345,12 @@ impl ReasoningEngine {
         }
 
         record.updated_at = chrono::Utc::now();
+        tracing::info!("update_memory: updating sqlite store...");
         self.store.update(&record).await?;
+        tracing::info!("update_memory: updated sqlite store");
 
         self.check_auto_save().await?;
+        tracing::info!("update_memory: finished");
 
         Ok(record)
     }
@@ -328,6 +450,63 @@ impl ReasoningEngine {
         session_id: &str,
     ) -> anyhow::Result<Option<crate::storage::sqlite::SessionRecord>> {
         self.store.get_session(session_id).await
+    }
+
+    // ── Memory Stores ───────────────────────────────────────────────────
+
+    /// Create a memory store.
+    pub async fn create_store(
+        &self,
+        name: &str,
+        description: Option<&str>,
+    ) -> anyhow::Result<crate::memory::types::MemoryStoreRecord> {
+        self.store.create_store(name, description).await
+    }
+
+    /// Get a memory store.
+    pub async fn get_store(
+        &self,
+        store_id: &str,
+    ) -> anyhow::Result<Option<crate::memory::types::MemoryStoreRecord>> {
+        self.store.get_store(store_id).await
+    }
+
+    /// List memory stores.
+    pub async fn list_stores(
+        &self,
+    ) -> anyhow::Result<Vec<crate::memory::types::MemoryStoreRecord>> {
+        self.store.list_stores().await
+    }
+
+    /// Archive a memory store.
+    pub async fn archive_store(&self, store_id: &str) -> anyhow::Result<bool> {
+        self.store.archive_store(store_id).await
+    }
+
+    /// Get memory by path.
+    pub async fn get_memory_by_path(
+        &self,
+        store_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Option<MemoryRecord>> {
+        self.store.get_memory_by_path(store_id, path).await
+    }
+
+    /// List memories by store.
+    pub async fn list_memories_by_store(
+        &self,
+        store_id: &str,
+    ) -> anyhow::Result<Vec<MemoryRecord>> {
+        self.store.list_memories_by_store(store_id).await
+    }
+
+    /// List memory versions.
+    pub async fn list_memory_versions(
+        &self,
+        store_id: &str,
+        memory_id: uuid::Uuid,
+    ) -> anyhow::Result<Vec<crate::memory::types::MemoryVersionRecord>> {
+        self.store.list_memory_versions(store_id, memory_id).await
     }
 
     // ── List Memories ───────────────────────────────────────────────────

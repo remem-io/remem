@@ -8,6 +8,9 @@ mod search;
 mod store;
 mod update;
 
+mod log_action;
+mod project_context;
+
 use rememhq_core::reasoning::ReasoningEngine;
 use serde_json::Value;
 use std::sync::Arc;
@@ -25,6 +28,8 @@ pub fn list_tools() -> Vec<Value> {
         compact::schema(),
         knowledge::query_schema(),
         knowledge::entity_schema(),
+        log_action::schema(),
+        project_context::schema(),
     ]
 }
 
@@ -51,6 +56,8 @@ pub async fn call_tool(engine: &Arc<ReasoningEngine>, params: &Value) -> anyhow:
         "mem_compact" => compact::handle(engine, &arguments).await,
         "mem_query_knowledge" => knowledge::handle_query(engine, &arguments).await,
         "mem_get_entity_context" => knowledge::handle_entity(engine, &arguments).await,
+        "mem_log_action" => log_action::handle(engine, &arguments).await,
+        "mem_get_project_context" => project_context::handle(engine, &arguments).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }

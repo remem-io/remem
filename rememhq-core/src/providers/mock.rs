@@ -35,7 +35,12 @@ FACT | procedure | 7 | baking | Then, mix the batter"#
         Ok("Mock response".to_string())
     }
 
-    async fn chat(&self, _messages: &[super::ChatMessage], _tools: &[super::Tool], _model: &str) -> anyhow::Result<super::ChatResponse> {
+    async fn chat(
+        &self,
+        _messages: &[super::ChatMessage],
+        _tools: &[super::Tool],
+        _model: &str,
+    ) -> anyhow::Result<super::ChatResponse> {
         Err(anyhow::anyhow!("MockProvider does not support chat API"))
     }
 

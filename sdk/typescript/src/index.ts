@@ -22,6 +22,8 @@ import type {
   StoreOptions,
   StoreResponse,
   UpdateOptions,
+  MemoryStoreRecord,
+  MemoryVersionRecord,
 } from "./types.js";
 
 export type {
@@ -35,12 +37,16 @@ export type {
   StoreOptions,
   StoreResponse,
   UpdateOptions,
+  MemoryStoreRecord,
+  MemoryVersionRecord,
 } from "./types.js";
 
 export class Memory {
   private baseUrl: string;
   private headers: Record<string, string>;
   private timeout: number;
+
+  public stores: MemoryStoresClient;
 
   constructor(config: MemoryConfig) {
     this.baseUrl = config.baseUrl ?? process.env.REMEM_BASE_URL ?? "http://localhost:7474";
@@ -51,6 +57,8 @@ export class Memory {
     if (apiKey) {
       this.headers["Authorization"] = `Bearer ${apiKey}`;
     }
+
+    this.stores = new MemoryStoresClient(this);
   }
 
   /**
@@ -165,5 +173,55 @@ export class Memory {
     }
 
     return resp.json();
+  }
+}
+
+export class StoreMemoriesClient {
+  constructor(private memory: Memory) {}
+
+  async list(storeId: string): Promise<MemoryResult[]> {
+    return (this.memory as any).request("GET", `/v1/memory_stores/${storeId}/memories`) as Promise<MemoryResult[]>;
+  }
+
+  async create(storeId: string, path: string, content: string): Promise<MemoryResult> {
+    return (this.memory as any).request("POST", `/v1/memory_stores/${storeId}/memories`, { path, content }) as Promise<MemoryResult>;
+  }
+
+  async get(storeId: string, pathOrId: string): Promise<MemoryResult> {
+    return (this.memory as any).request("GET", `/v1/memory_stores/${storeId}/memories/${pathOrId}`) as Promise<MemoryResult>;
+  }
+
+  async update(storeId: string, pathOrId: string, content: string): Promise<MemoryResult> {
+    return (this.memory as any).request("POST", `/v1/memory_stores/${storeId}/memories/${pathOrId}`, { content }) as Promise<MemoryResult>;
+  }
+
+  async listVersions(storeId: string, pathOrId: string): Promise<MemoryVersionRecord[]> {
+    return (this.memory as any).request("GET", `/v1/memory_stores/${storeId}/memories/${pathOrId}/versions`) as Promise<MemoryVersionRecord[]>;
+  }
+}
+
+export class MemoryStoresClient {
+  public memories: StoreMemoriesClient;
+
+  constructor(private memory: Memory) {
+    this.memories = new StoreMemoriesClient(memory);
+  }
+
+  async create(name: string, description?: string): Promise<MemoryStoreRecord> {
+    const body: Record<string, string> = { name };
+    if (description) body.description = description;
+    return (this.memory as any).request("POST", "/v1/memory_stores", body) as Promise<MemoryStoreRecord>;
+  }
+
+  async list(): Promise<MemoryStoreRecord[]> {
+    return (this.memory as any).request("GET", "/v1/memory_stores") as Promise<MemoryStoreRecord[]>;
+  }
+
+  async get(storeId: string): Promise<MemoryStoreRecord> {
+    return (this.memory as any).request("GET", `/v1/memory_stores/${storeId}`) as Promise<MemoryStoreRecord>;
+  }
+
+  async archive(storeId: string): Promise<void> {
+    await (this.memory as any).request("POST", `/v1/memory_stores/${storeId}/archive`);
   }
 }

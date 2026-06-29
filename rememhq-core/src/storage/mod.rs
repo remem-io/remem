@@ -3,7 +3,9 @@
 pub mod sqlite;
 pub mod vector;
 
-use crate::memory::types::{KnowledgeGraphUpdate, MemoryRecord, MemoryType};
+use crate::memory::types::{
+    KnowledgeGraphUpdate, MemoryRecord, MemoryStoreRecord, MemoryType, MemoryVersionRecord,
+};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -72,6 +74,48 @@ pub trait MemoryStore: Send + Sync {
 
     /// Get list of memory IDs that have decayed below the threshold.
     async fn get_decayed_ids(&self, threshold: f32) -> anyhow::Result<Vec<Uuid>>;
+
+    // Memory Store & Version Methods
+
+    async fn create_store(
+        &self,
+        name: &str,
+        description: Option<&str>,
+    ) -> anyhow::Result<MemoryStoreRecord>;
+
+    async fn get_store(&self, store_id: &str) -> anyhow::Result<Option<MemoryStoreRecord>>;
+
+    async fn list_stores(&self) -> anyhow::Result<Vec<MemoryStoreRecord>>;
+
+    async fn archive_store(&self, store_id: &str) -> anyhow::Result<bool>;
+
+    async fn get_memory_by_path(
+        &self,
+        store_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Option<MemoryRecord>>;
+
+    async fn list_memories_by_store(&self, store_id: &str) -> anyhow::Result<Vec<MemoryRecord>>;
+
+    async fn list_memory_versions(
+        &self,
+        store_id: &str,
+        memory_id: Uuid,
+    ) -> anyhow::Result<Vec<MemoryVersionRecord>>;
+
+    // Session Tracking
+
+    /// Log an observation for a specific session.
+    async fn log_session_observation(
+        &self,
+        observation: &crate::memory::types::SessionObservation,
+    ) -> anyhow::Result<()>;
+
+    /// Get all observations for a specific session.
+    async fn get_session_transcript(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<crate::memory::types::SessionObservation>>;
 }
 
 /// Database statistics.

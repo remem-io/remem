@@ -962,6 +962,39 @@ async fn main() -> anyhow::Result<()> {
             get(routes::memories::get_entity_context),
         )
         .route("/v1/stats", get(routes::memories::get_stats))
+        .route(
+            "/v1/memory_stores",
+            post(routes::memory_stores::create_store),
+        )
+        .route("/v1/memory_stores", get(routes::memory_stores::list_stores))
+        .route(
+            "/v1/memory_stores/{store_id}",
+            get(routes::memory_stores::get_store),
+        )
+        .route(
+            "/v1/memory_stores/{store_id}/archive",
+            post(routes::memory_stores::archive_store),
+        )
+        .route(
+            "/v1/memory_stores/{store_id}/memories",
+            get(routes::memory_stores::list_store_memories),
+        )
+        .route(
+            "/v1/memory_stores/{store_id}/memories",
+            post(routes::memory_stores::create_store_memory),
+        )
+        .route(
+            "/v1/memory_stores/{store_id}/memories/{path_or_id}",
+            get(routes::memory_stores::get_store_memory),
+        )
+        .route(
+            "/v1/memory_stores/{store_id}/memories/{path_or_id}",
+            post(routes::memory_stores::update_store_memory),
+        )
+        .route(
+            "/v1/memory_stores/{store_id}/memories/{path_or_id}/versions",
+            get(routes::memory_stores::list_memory_versions),
+        )
         .layer(axum::middleware::from_fn_with_state(
             rate_limit_state,
             middleware::rate_limit::rate_limit_middleware,

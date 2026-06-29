@@ -85,3 +85,22 @@ export interface MemoryConfig {
   apiKey?: string;
   timeout?: number;
 }
+
+export interface MemoryStoreRecord {
+  id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+  archived: boolean;
+}
+
+export interface MemoryVersionRecord {
+  id: string;
+  store_id: string;
+  memory_id: string;
+  operation: string;
+  content: string;
+  content_sha256: string;
+  created_at: string;
+}
