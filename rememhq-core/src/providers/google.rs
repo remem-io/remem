@@ -4,7 +4,7 @@
 //! Default models: `gemini-2.0-flash` for reasoning/scoring,
 //! `text-embedding-004` for embeddings (768 dimensions).
 
-use crate::providers::{EmbeddingProvider, Provider};
+use crate::providers::{EmbeddingProvider, Provider, ProviderOptions};
 use anyhow::{anyhow, Context};
 use reqwest::Client;
 use serde_json::json;
@@ -44,16 +44,20 @@ impl GoogleProvider {
 
 #[async_trait::async_trait]
 impl Provider for GoogleProvider {
-    async fn complete(&self, prompt: &str, model: &str) -> anyhow::Result<String> {
+    async fn complete(&self, prompt: &str, model: &str, options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
         let model_name = if model.is_empty() {
             DEFAULT_REASONING_MODEL
         } else {
             model
         };
 
+        let active_api_key = options
+            .and_then(|o| o.api_key.as_deref())
+            .unwrap_or(&self.api_key);
+
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            model_name, self.api_key
+            model_name, active_api_key
         );
 
         let body = json!({
@@ -81,7 +85,13 @@ impl Provider for GoogleProvider {
             .as_str()
             .ok_or_else(|| anyhow!("Unexpected Google response format: {:?}", json))?;
 
-        Ok(text.to_string())
+        let usage = json.get("usageMetadata").map(|u| crate::providers::TokenUsage {
+            prompt_tokens: u["promptTokenCount"].as_u64().unwrap_or(0) as usize,
+            completion_tokens: u["candidatesTokenCount"].as_u64().unwrap_or(0) as usize,
+            total_tokens: u["totalTokenCount"].as_u64().unwrap_or(0) as usize,
+        });
+
+        Ok((text.to_string(), usage))
     }
 
     async fn chat(
@@ -89,6 +99,7 @@ impl Provider for GoogleProvider {
         messages: &[crate::providers::ChatMessage],
         tools: &[crate::providers::Tool],
         model: &str,
+        options: Option<&ProviderOptions>,
     ) -> anyhow::Result<crate::providers::ChatResponse> {
         let model_name = if model.is_empty() {
             DEFAULT_REASONING_MODEL
@@ -154,12 +165,17 @@ impl Provider for GoogleProvider {
             request["tools"] = serde_json::json!(openai_tools);
         }
 
+        let active_api_key = options
+            .and_then(|o| o.api_key.as_deref())
+            .unwrap_or(&self.api_key)
+            .to_string();
+
         let url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
         let response = super::resiliency::execute_with_retry(
             || {
                 self.client
                     .post(url)
-                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .header("Authorization", format!("Bearer {}", active_api_key))
                     .header("Content-Type", "application/json")
                     .json(&request)
                     .send()
@@ -209,7 +225,13 @@ impl Provider for GoogleProvider {
             tool_call_id: None,
         };
 
-        Ok(crate::providers::ChatResponse { message: msg })
+        let usage = resp.get("usage").map(|u| crate::providers::TokenUsage {
+            prompt_tokens: u["prompt_tokens"].as_u64().unwrap_or(0) as usize,
+            completion_tokens: u["completion_tokens"].as_u64().unwrap_or(0) as usize,
+            total_tokens: u["total_tokens"].as_u64().unwrap_or(0) as usize,
+        });
+
+        Ok(crate::providers::ChatResponse { message: msg, usage })
     }
 
     fn name(&self) -> &str {
@@ -244,10 +266,14 @@ impl GoogleEmbeddings {
 
 #[async_trait::async_trait]
 impl EmbeddingProvider for GoogleEmbeddings {
-    async fn embed(&self, text: &str) -> anyhow::Result<Vec<f32>> {
+    async fn embed(&self, text: &str, options: Option<&ProviderOptions>) -> anyhow::Result<Vec<f32>> {
+        let active_api_key = options
+            .and_then(|o| o.api_key.as_deref())
+            .unwrap_or(&self.api_key);
+
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:embedContent?key={}",
-            DEFAULT_EMBEDDING_MODEL, self.api_key
+            DEFAULT_EMBEDDING_MODEL, active_api_key
         );
 
         let body = json!({
@@ -274,10 +300,14 @@ impl EmbeddingProvider for GoogleEmbeddings {
         parse_embedding(&json["embedding"]["values"])
     }
 
-    async fn embed_batch(&self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+    async fn embed_batch(&self, texts: &[String], options: Option<&ProviderOptions>) -> anyhow::Result<Vec<Vec<f32>>> {
+        let active_api_key = options
+            .and_then(|o| o.api_key.as_deref())
+            .unwrap_or(&self.api_key);
+
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:batchEmbedContents?key={}",
-            DEFAULT_EMBEDDING_MODEL, self.api_key
+            DEFAULT_EMBEDDING_MODEL, active_api_key
         );
 
         let requests: Vec<serde_json::Value> = texts

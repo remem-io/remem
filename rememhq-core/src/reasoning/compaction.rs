@@ -4,7 +4,7 @@
 //! while preserving critical architectural decisions, bugs, and states, and
 //! stripping out redundant tool outputs.
 
-use crate::providers::Provider;
+use crate::providers::{Provider, ProviderOptions};
 
 /// A report of the compaction process.
 #[derive(Debug)]
@@ -20,6 +20,7 @@ pub async fn compact_context(
     model: &str,
     conversation_text: &str,
     focus_areas: Option<&[String]>,
+    options: Option<&ProviderOptions>,
 ) -> anyhow::Result<CompactionReport> {
     let focus_prompt = if let Some(areas) = focus_areas {
         if !areas.is_empty() {
@@ -50,7 +51,7 @@ Conversation Trace:
 Output the compressed context now:"#
     );
 
-    let compressed_context = provider.complete(&prompt, model).await?;
+    let (compressed_context, _usage) = provider.complete(&prompt, model, options).await?;
 
     Ok(CompactionReport {
         compressed_context: compressed_context.trim().to_string(),

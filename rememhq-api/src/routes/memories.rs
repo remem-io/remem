@@ -16,7 +16,7 @@ use rememhq_core::memory::types::*;
 use rememhq_core::reasoning::ReasoningEngine;
 use rememhq_core::storage::{MemoryStore, StoreStats};
 
-use crate::middleware::auth::check_auth;
+use crate::middleware::auth::{check_auth, extract_provider_options};
 
 type AppState = Arc<ReasoningEngine>;
 
@@ -97,7 +97,8 @@ pub async fn store_memory(
         record = record.with_ttl(ttl);
     }
 
-    let stored = engine.store_memory(record, auto_score).await.map_err(|e| {
+    let options = extract_provider_options(&headers);
+    let stored = engine.store_memory(record, auto_score, options.as_ref()).await.map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -140,8 +141,9 @@ pub async fn recall_memories(
     let limit = q.limit;
     let fetch_limit = offset + limit;
 
+    let options = extract_provider_options(&headers);
     let results = engine
-        .recall(&q.q, fetch_limit, &filter_tags, since, memory_type)
+        .recall(&q.q, fetch_limit, &filter_tags, since, memory_type, options.as_ref())
         .await
         .map_err(|e| {
             (
@@ -176,8 +178,9 @@ pub async fn search_memories(
     let limit = q.limit;
     let fetch_limit = offset + limit;
 
+    let options = extract_provider_options(&headers);
     let results = engine
-        .search(&q.q, fetch_limit, &filter_tags)
+        .search(&q.q, fetch_limit, &filter_tags, options.as_ref())
         .await
         .map_err(|e| {
             (
@@ -213,8 +216,9 @@ pub async fn update_memory(
         )
     })?;
 
+    let options = extract_provider_options(&headers);
     let updated = engine
-        .update_memory(id, body.content, body.importance, body.tags)
+        .update_memory(id, body.content, body.importance, body.tags, options.as_ref())
         .await
         .map_err(|e| {
             (

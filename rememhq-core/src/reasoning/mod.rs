@@ -100,13 +100,14 @@ impl ReasoningEngine {
         &self,
         mut record: MemoryRecord,
         auto_score: bool,
+        options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<MemoryRecord> {
         for hook in &self.hooks {
             hook.before_store(&mut record).await?;
         }
 
         // Generate embedding
-        let embedding = self.embeddings.embed(&record.content).await?;
+        let embedding = self.embeddings.embed(&record.content, options).await?;
         record.embedding = Some(embedding.clone());
 
         // Auto-score importance if requested
@@ -115,6 +116,7 @@ impl ReasoningEngine {
                 &*self.provider,
                 &record.content,
                 &self.config.reasoning.scoring_model,
+                options,
             )
             .await?;
             record.importance = importance;
@@ -150,6 +152,7 @@ impl ReasoningEngine {
         filter_tags: &[String],
         since: Option<chrono::DateTime<chrono::Utc>>,
         memory_type: Option<crate::memory::types::MemoryType>,
+        options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<Vec<MemoryResult>> {
         let mut query_str = query.to_string();
         for hook in &self.hooks {
@@ -167,6 +170,7 @@ impl ReasoningEngine {
             since,
             memory_type,
             &self.config.reasoning.reasoning_model,
+            options,
         )
         .await?;
 
@@ -183,9 +187,10 @@ impl ReasoningEngine {
         query: &str,
         limit: usize,
         filter_tags: &[String],
+        options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<Vec<MemoryResult>> {
         // Get embedding for query
-        let query_embedding = self.embeddings.embed(query).await?;
+        let query_embedding = self.embeddings.embed(query, options).await?;
 
         // Vector search
         let vector_results = self.index.search(&query_embedding, limit * 2).await?;
@@ -241,12 +246,14 @@ impl ReasoningEngine {
         &self,
         conversation_text: &str,
         focus_areas: Option<&[String]>,
+        options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<compaction::CompactionReport> {
         compaction::compact_context(
             &*self.provider,
             &self.config.reasoning.reasoning_model,
             conversation_text,
             focus_areas,
+            options,
         )
         .await
     }
@@ -255,6 +262,7 @@ impl ReasoningEngine {
     pub async fn compress_session_transcript(
         &self,
         session_id: &str,
+        options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<crate::memory::types::ConsolidationReport> {
         let _ = self.event_bus.send(ReasoningEvent::ConsolidationStarted {
             session_id: session_id.to_string(),
@@ -288,6 +296,7 @@ impl ReasoningEngine {
             &*self.provider,
             &session_content,
             &self.config.reasoning.reasoning_model,
+            options,
         )
         .await?;
 
@@ -302,6 +311,7 @@ impl ReasoningEngine {
             &*self.provider,
             self.config.reasoning.reasoning_model.clone(),
             &self.store,
+            options,
         );
         use resolution::EntityResolver;
 
@@ -331,6 +341,7 @@ impl ReasoningEngine {
             &*self.store,
             &facts,
             &self.config.reasoning.reasoning_model,
+            options,
         )
         .await?;
 
@@ -353,7 +364,7 @@ impl ReasoningEngine {
             record.source_session = Some(session_id.to_string());
 
             // Generate embedding
-            let embedding = self.embeddings.embed(&record.content).await?;
+            let embedding = self.embeddings.embed(&record.content, options).await?;
             record.embedding = Some(embedding.clone());
 
             self.store.insert(&record).await?;
@@ -405,6 +416,7 @@ impl ReasoningEngine {
         content: Option<String>,
         importance: Option<f32>,
         tags: Option<Vec<String>>,
+        options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<MemoryRecord> {
         tracing::info!("update_memory: start for id {}", id);
         let mut record = self
@@ -418,7 +430,7 @@ impl ReasoningEngine {
             tracing::info!("update_memory: embedding content...");
             record.content = new_content;
             // Re-embed if content changed
-            let embedding = self.embeddings.embed(&record.content).await?;
+            let embedding = self.embeddings.embed(&record.content, options).await?;
             tracing::info!("update_memory: generated embedding");
             record.embedding = Some(embedding.clone());
             tracing::info!("update_memory: adding to index...");

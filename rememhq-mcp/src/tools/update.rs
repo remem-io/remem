@@ -14,7 +14,8 @@ pub fn schema() -> Value {
                 "id": { "type": "string", "description": "Memory UUID" },
                 "content": { "type": "string", "description": "New content" },
                 "importance": { "type": "number", "description": "New importance score" },
-                "tags": { "type": "array", "items": { "type": "string" }, "description": "New tags" }
+                "tags": { "type": "array", "items": { "type": "string" }, "description": "New tags" },
+                "api_key": { "type": "string", "description": "Optional API key for dynamic configuration" }
             },
             "required": ["id"]
         }
@@ -40,7 +41,17 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .get("tags")
         .and_then(|v| serde_json::from_value(v.clone()).ok());
 
-    let updated = engine.update_memory(id, content, importance, tags).await?;
+    let api_key = args
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+        
+    let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
+        api_key: Some(key),
+        ..Default::default()
+    });
+
+    let updated = engine.update_memory(id, content, importance, tags, options.as_ref()).await?;
 
     let text = serde_json::to_string_pretty(&serde_json::json!({
         "id": updated.id,

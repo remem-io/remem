@@ -174,7 +174,8 @@ pub async fn create_store_memory(
     record.store_id = Some(store_id);
     record.path = Some(req.path);
 
-    let stored = engine.store_memory(record, false).await.map_err(|e| {
+    let options = crate::middleware::auth::extract_provider_options(&headers);
+    let stored = engine.store_memory(record, false, options.as_ref()).await.map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -253,8 +254,9 @@ pub async fn update_store_memory(
         })?;
 
     if let Some(mem) = memory {
+        let options = crate::middleware::auth::extract_provider_options(&headers);
         let updated = engine
-            .update_memory(mem.id, Some(req.content), None, None)
+            .update_memory(mem.id, Some(req.content), None, None, options.as_ref())
             .await
             .map_err(|e| {
                 (

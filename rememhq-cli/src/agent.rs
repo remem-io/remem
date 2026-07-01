@@ -88,6 +88,36 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
             },
             "required": ["command"]
         }),
+    }, Tool {
+        name: "read_file".to_string(),
+        description: "Read the contents of a file at the specified path.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "The absolute or relative path to the file to read"
+                }
+            },
+            "required": ["path"]
+        }),
+    }, Tool {
+        name: "write_file".to_string(),
+        description: "Write content to a file at the specified path. Overwrites the file if it exists.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "The absolute or relative path to the file to write"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The text content to write to the file"
+                }
+            },
+            "required": ["path", "content"]
+        }),
     }];
 
     let mut messages: Vec<ChatMessage> = vec![];
@@ -160,7 +190,7 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
         }
 
         // Before sending to LLM, recall relevant memories
-        if let Ok(memories) = engine.recall(input, 3, &[], None, None).await {
+        if let Ok(memories) = engine.recall(input, 3, &[], None, None, None).await {
             if !memories.is_empty() {
                 let mut context = String::from("Relevant past memories:\n");
                 for mem in memories {
@@ -197,7 +227,7 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
             // Call the LLM provider
             let response = engine
                 .provider
-                .chat(&messages, &tools, &config.reasoning.reasoning_model)
+                .chat(&messages, &tools, &config.reasoning.reasoning_model, None)
                 .await;
                 
             spinner.finish_and_clear();
@@ -220,6 +250,11 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
                 println!();
                 termimad::print_text(&display_content);
                 println!();
+                
+                if let Some(usage) = &response.usage {
+                    let usage_str = format!("  [Tokens: {} prompt, {} completion, {} total]", usage.prompt_tokens, usage.completion_tokens, usage.total_tokens);
+                    println!("{}", usage_str.dimmed());
+                }
             }
 
             messages.push(assistant_msg.clone());
@@ -272,6 +307,43 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
                                 }
                             };
 
+                            messages.push(ChatMessage {
+                                role: ChatRole::Tool,
+                                content: result_content,
+                                tool_calls: None,
+                                tool_call_id: Some(tc.id),
+                            });
+                        }
+                    } else if tc.name == "read_file" {
+                        if let Some(path_str) = tc.arguments.get("path").and_then(|v| v.as_str()) {
+                            let exec_text = format!("> Reading file: {}", path_str);
+                            println!("{}", exec_text.blue().bold());
+                            
+                            let result_content = match std::fs::read_to_string(path_str) {
+                                Ok(content) => content,
+                                Err(e) => format!("Failed to read file: {}", e),
+                            };
+                            
+                            messages.push(ChatMessage {
+                                role: ChatRole::Tool,
+                                content: result_content,
+                                tool_calls: None,
+                                tool_call_id: Some(tc.id),
+                            });
+                        }
+                    } else if tc.name == "write_file" {
+                        if let (Some(path_str), Some(content_str)) = (
+                            tc.arguments.get("path").and_then(|v| v.as_str()),
+                            tc.arguments.get("content").and_then(|v| v.as_str())
+                        ) {
+                            let exec_text = format!("> Writing file: {}", path_str);
+                            println!("{}", exec_text.blue().bold());
+                            
+                            let result_content = match std::fs::write(path_str, content_str) {
+                                Ok(_) => format!("Successfully wrote to {}", path_str),
+                                Err(e) => format!("Failed to write file: {}", e),
+                            };
+                            
                             messages.push(ChatMessage {
                                 role: ChatRole::Tool,
                                 content: result_content,

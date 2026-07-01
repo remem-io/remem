@@ -206,7 +206,8 @@ async fn store_memory(
         record = record.with_ttl(ttl);
     }
 
-    let stored = engine.store_memory(record, auto_score).await.map_err(|e| {
+    let options = crate::middleware::auth::extract_provider_options(&headers);
+    let stored = engine.store_memory(record, auto_score, options.as_ref()).await.map_err(|e| {
         tracing::error!("store_memory failed: {:?}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -271,8 +272,9 @@ async fn recall_memories(
     let limit = q.limit;
     let fetch_limit = offset + limit;
 
+    let options = crate::middleware::auth::extract_provider_options(&headers);
     let results = engine
-        .recall(&q.q, fetch_limit, &filter_tags, since, memory_type)
+        .recall(&q.q, fetch_limit, &filter_tags, since, memory_type, options.as_ref())
         .await
         .map_err(|e| {
             (
@@ -326,8 +328,9 @@ async fn search_memories(
     let limit = q.limit;
     let fetch_limit = offset + limit;
 
+    let options = crate::middleware::auth::extract_provider_options(&headers);
     let results = engine
-        .search(&q.q, fetch_limit, &filter_tags)
+        .search(&q.q, fetch_limit, &filter_tags, options.as_ref())
         .await
         .map_err(|e| {
             (
@@ -381,8 +384,9 @@ async fn update_memory(
         )
     })?;
 
+    let options = crate::middleware::auth::extract_provider_options(&headers);
     let updated = engine
-        .update_memory(id, body.content, body.importance, body.tags)
+        .update_memory(id, body.content, body.importance, body.tags, options.as_ref())
         .await
         .map_err(|e| {
             (
@@ -525,6 +529,7 @@ async fn consolidate_session(
         engine.index.as_ref(),
         &session_id,
         &model,
+        crate::middleware::auth::extract_provider_options(&headers).as_ref(),
     )
     .await
     .map_err(|e| {
@@ -561,7 +566,11 @@ async fn compact_context(
     check_auth(&headers)?;
 
     let report = engine
-        .compact_context(&body.conversation_text, body.focus_areas.as_deref())
+        .compact_context(
+            &body.conversation_text,
+            body.focus_areas.as_deref(),
+            crate::middleware::auth::extract_provider_options(&headers).as_ref(),
+        )
         .await
         .map_err(|e| {
             (

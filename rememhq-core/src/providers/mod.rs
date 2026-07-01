@@ -44,16 +44,31 @@ pub struct Tool {
     pub input_schema: serde_json::Value,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TokenUsage {
+    pub prompt_tokens: usize,
+    pub completion_tokens: usize,
+    pub total_tokens: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatResponse {
     pub message: ChatMessage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<TokenUsage>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProviderOptions {
+    /// Optional dynamic API key to override the environment/configured key.
+    pub api_key: Option<String>,
 }
 
 /// Trait for cloud LLM providers used in reasoning operations.
 #[async_trait]
 pub trait Provider: Send + Sync {
     /// Generate a completion from the LLM.
-    async fn complete(&self, prompt: &str, model: &str) -> anyhow::Result<String>;
+    async fn complete(&self, prompt: &str, model: &str, options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<TokenUsage>)>;
 
     /// Generate a multi-turn chat response, optionally with tool calling.
     async fn chat(
@@ -61,6 +76,7 @@ pub trait Provider: Send + Sync {
         messages: &[ChatMessage],
         tools: &[Tool],
         model: &str,
+        options: Option<&ProviderOptions>,
     ) -> anyhow::Result<ChatResponse>;
 
     /// Get the provider name.
@@ -71,10 +87,10 @@ pub trait Provider: Send + Sync {
 #[async_trait]
 pub trait EmbeddingProvider: Send + Sync {
     /// Generate an embedding vector for the given text.
-    async fn embed(&self, text: &str) -> anyhow::Result<Vec<f32>>;
+    async fn embed(&self, text: &str, options: Option<&ProviderOptions>) -> anyhow::Result<Vec<f32>>;
 
     /// Generate embeddings for multiple texts (batch).
-    async fn embed_batch(&self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>>;
+    async fn embed_batch(&self, texts: &[String], options: Option<&ProviderOptions>) -> anyhow::Result<Vec<Vec<f32>>>;
 
     /// Embedding dimension.
     fn dimension(&self) -> usize;

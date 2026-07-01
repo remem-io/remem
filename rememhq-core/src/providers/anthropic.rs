@@ -1,6 +1,6 @@
 //! Anthropic Claude provider for reasoning operations.
 
-use super::{ChatMessage, ChatResponse, ChatRole, Provider, Tool, ToolCall};
+use super::{ChatMessage, ChatResponse, ChatRole, Provider, ProviderOptions, Tool, ToolCall};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -31,15 +31,15 @@ impl AnthropicProvider {
 
 #[async_trait]
 impl Provider for AnthropicProvider {
-    async fn complete(&self, prompt: &str, model: &str) -> anyhow::Result<String> {
+    async fn complete(&self, prompt: &str, model: &str, options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
         let messages = vec![ChatMessage {
             role: ChatRole::User,
             content: prompt.to_string(),
             tool_calls: None,
             tool_call_id: None,
         }];
-        let resp = self.chat(&messages, &[], model).await?;
-        Ok(resp.message.content)
+        let resp = self.chat(&messages, &[], model, options).await?;
+        Ok((resp.message.content, resp.usage))
     }
 
     async fn chat(
@@ -47,6 +47,7 @@ impl Provider for AnthropicProvider {
         messages: &[ChatMessage],
         tools: &[Tool],
         model: &str,
+        options: Option<&ProviderOptions>,
     ) -> anyhow::Result<ChatResponse> {
         let mut system_prompt = String::new();
         let mut anthropic_messages = Vec::new();
@@ -145,11 +146,16 @@ impl Provider for AnthropicProvider {
             request["tools"] = json!(anthropic_tools);
         }
 
+        let active_api_key = options
+            .and_then(|o| o.api_key.as_deref())
+            .unwrap_or(&self.api_key)
+            .to_string();
+
         let response = super::resiliency::execute_with_retry(
             || {
                 self.client
                     .post(format!("{}/v1/messages", self.base_url))
-                    .header("x-api-key", &self.api_key)
+                    .header("x-api-key", &active_api_key)
                     .header("anthropic-version", "2023-06-01")
                     .header("content-type", "application/json")
                     .json(&request)
@@ -198,7 +204,17 @@ impl Provider for AnthropicProvider {
             tool_call_id: None,
         };
 
-        Ok(ChatResponse { message: msg })
+        let usage = resp.get("usage").map(|u| {
+            let prompt_tokens = u["input_tokens"].as_u64().unwrap_or(0) as usize;
+            let completion_tokens = u["output_tokens"].as_u64().unwrap_or(0) as usize;
+            crate::providers::TokenUsage {
+                prompt_tokens,
+                completion_tokens,
+                total_tokens: prompt_tokens + completion_tokens,
+            }
+        });
+
+        Ok(ChatResponse { message: msg, usage })
     }
 
     fn name(&self) -> &str {

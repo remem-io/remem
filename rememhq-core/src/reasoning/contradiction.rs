@@ -1,5 +1,5 @@
 use crate::memory::types::Contradiction;
-use crate::providers::{EmbeddingProvider, Provider};
+use crate::providers::{EmbeddingProvider, Provider, ProviderOptions};
 use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
 
@@ -12,6 +12,7 @@ pub(crate) async fn detect_contradictions(
     store: &dyn MemoryStore,
     new_facts: &[super::consolidation::ExtractedFact],
     model: &str,
+    options: Option<&ProviderOptions>,
 ) -> anyhow::Result<Vec<Contradiction>> {
     if new_facts.is_empty() {
         return Ok(Vec::new());
@@ -21,7 +22,7 @@ pub(crate) async fn detect_contradictions(
 
     for fact in new_facts.iter() {
         // Find top-5 potential conflicts using vector similarity
-        let embedding = embeddings.embed(&fact.content).await?;
+        let embedding = embeddings.embed(&fact.content, options).await?;
         let results = index.search(&embedding, 5).await?;
 
         if results.is_empty() {
@@ -67,7 +68,7 @@ If no contradiction exists, output: NONE"#,
             fact.content, candidates_text
         );
 
-        let response = provider.complete(&prompt, model).await?;
+        let (response, _usage) = provider.complete(&prompt, model, options).await?;
 
         for line in response.lines() {
             let line = line.trim();

@@ -237,7 +237,7 @@ impl MemoryBuilder {
             ))
         };
 
-        let engine = ReasoningEngine::new(config.clone(), provider, embeddings, store, index);
+        let engine = ReasoningEngine::new(config.clone(), provider, embeddings, store, index, vec![]);
 
         Ok(Memory {
             engine: Arc::new(engine),
@@ -275,7 +275,7 @@ impl Memory {
         if let Some(imp) = importance {
             record = record.with_importance(imp);
         }
-        self.engine.store_memory(record, auto_score).await
+        self.engine.store_memory(record, auto_score, None).await
     }
 
     /// Store a typed memory (Fact, Procedure, Preference, Episode).
@@ -292,12 +292,12 @@ impl Memory {
         if let Some(imp) = importance {
             record = record.with_importance(imp);
         }
-        self.engine.store_memory(record, auto_score).await
+        self.engine.store_memory(record, auto_score, None).await
     }
 
     /// Recall memories using LLM-guided retrieval (semantic + re-ranking).
     pub async fn recall(&self, query: &str, limit: usize) -> anyhow::Result<Vec<MemoryResult>> {
-        self.engine.recall(query, limit, &[], None, None).await
+        self.engine.recall(query, limit, &[], None, None, None).await
     }
 
     /// Recall with tag filtering.
@@ -307,12 +307,12 @@ impl Memory {
         limit: usize,
         tags: &[String],
     ) -> anyhow::Result<Vec<MemoryResult>> {
-        self.engine.recall(query, limit, tags, None, None).await
+        self.engine.recall(query, limit, tags, None, None, None).await
     }
 
     /// Simple vector + FTS search without LLM re-ranking.
     pub async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<MemoryResult>> {
-        self.engine.search(query, limit, &[]).await
+        self.engine.search(query, limit, &[], None).await
     }
 
     /// Update a memory's content, importance, or tags.
@@ -324,7 +324,7 @@ impl Memory {
         tags: Option<Vec<String>>,
     ) -> anyhow::Result<MemoryRecord> {
         self.engine
-            .update_memory(id, content, importance, tags)
+            .update_memory(id, content, importance, tags, None)
             .await
     }
 

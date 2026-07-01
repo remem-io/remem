@@ -4,6 +4,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Json;
 
 use crate::routes::memories::ErrorResponse;
+use rememhq_core::providers::ProviderOptions;
 
 /// Check the Authorization header against the REMEM_API_KEY env var.
 ///
@@ -26,4 +27,16 @@ pub fn check_auth(headers: &HeaderMap) -> Result<(), (StatusCode, Json<ErrorResp
         }
     }
     Ok(())
+}
+
+/// Extract provider options (e.g. API keys) from request headers.
+pub fn extract_provider_options(headers: &HeaderMap) -> Option<ProviderOptions> {
+    if let Some(key) = headers.get("x-llm-api-key") {
+        if let Ok(key_str) = key.to_str() {
+            let mut options = ProviderOptions::default();
+            options.api_key = Some(key_str.to_string());
+            return Some(options);
+        }
+    }
+    None
 }

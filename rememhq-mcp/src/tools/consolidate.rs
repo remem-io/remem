@@ -12,7 +12,8 @@ pub fn schema() -> Value {
             "type": "object",
             "properties": {
                 "session_id": { "type": "string", "description": "Session ID to consolidate" },
-                "model": { "type": "string", "description": "Override reasoning model" }
+                "model": { "type": "string", "description": "Override reasoning model" },
+                "api_key": { "type": "string", "description": "Optional API key for dynamic configuration" }
             },
             "required": ["session_id"]
         }
@@ -31,6 +32,16 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .unwrap_or(&engine.config.reasoning.reasoning_model)
         .to_string();
 
+    let api_key = args
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+        
+    let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
+        api_key: Some(key),
+        ..Default::default()
+    });
+
     let report = rememhq_core::reasoning::consolidation::consolidate_session(
         &*engine.provider,
         &*engine.embeddings,
@@ -38,6 +49,7 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         engine.index.as_ref(),
         session_id,
         &model,
+        options.as_ref(),
     )
     .await?;
 

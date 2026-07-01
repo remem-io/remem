@@ -15,7 +15,8 @@ pub fn schema() -> Value {
                 "limit": { "type": "integer", "description": "Max results (default 8)" },
                 "filter_tags": { "type": "array", "items": { "type": "string" }, "description": "Filter by tags" },
                 "since": { "type": "string", "description": "ISO 8601 date filter" },
-                "memory_type": { "type": "string", "enum": ["fact", "procedure", "preference", "decision"] }
+                "memory_type": { "type": "string", "enum": ["fact", "procedure", "preference", "decision"] },
+                "api_key": { "type": "string", "description": "Optional API key for dynamic configuration" }
             },
             "required": ["query"]
         }
@@ -46,8 +47,18 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .and_then(|v| v.as_str())
         .and_then(|s| s.parse().ok());
 
+    let api_key = args
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+        
+    let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
+        api_key: Some(key),
+        ..Default::default()
+    });
+
     let results = engine
-        .recall(query, limit, &filter_tags, since, memory_type)
+        .recall(query, limit, &filter_tags, since, memory_type, options.as_ref())
         .await?;
 
     let text = serde_json::to_string_pretty(&results)?;

@@ -1,6 +1,6 @@
 //! Importance scoring — LLM-based rating of memory importance (1-10).
 
-use crate::providers::Provider;
+use crate::providers::{Provider, ProviderOptions};
 
 /// Score the importance of a memory using an LLM.
 ///
@@ -10,6 +10,7 @@ pub async fn score_importance(
     provider: &dyn Provider,
     content: &str,
     model: &str,
+    options: Option<&ProviderOptions>,
 ) -> anyhow::Result<f32> {
     let prompt = format!(
         r#"Rate the importance of this piece of information on a scale of 1-10 for an AI agent's long-term memory.
@@ -27,7 +28,7 @@ Information to rate:
 Respond with ONLY a single number between 1 and 10, nothing else."#
     );
 
-    let response = provider.complete(&prompt, model).await?;
+    let (response, _usage) = provider.complete(&prompt, model, options).await?;
 
     // Parse the numeric response
     let score = response
@@ -48,7 +49,7 @@ mod tests {
     async fn test_score_importance_returns_valid_range() {
         let provider = MockProvider;
         // MockProvider returns "Mock response" which is non-numeric, so defaults to 5.0
-        let score = score_importance(&provider, "Alice uses Rust for backend", "mock")
+        let score = score_importance(&provider, "Alice uses Rust for backend", "mock", None)
             .await
             .unwrap();
         assert!(
@@ -68,7 +69,7 @@ mod tests {
         struct HighScoreProvider;
         #[async_trait::async_trait]
         impl Provider for HighScoreProvider {
-            async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
+            async fn complete(&self, _prompt: &str, _model: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<String> {
                 Ok("15".to_string())
             }
             async fn chat(
@@ -76,6 +77,7 @@ mod tests {
                 _messages: &[crate::providers::ChatMessage],
                 _tools: &[crate::providers::Tool],
                 _model: &str,
+                _options: Option<&ProviderOptions>,
             ) -> anyhow::Result<crate::providers::ChatResponse> {
                 Err(anyhow::anyhow!("mock chat not supported"))
             }
@@ -85,7 +87,7 @@ mod tests {
         }
 
         let provider = HighScoreProvider;
-        let score = score_importance(&provider, "Critical secret key", "mock")
+        let score = score_importance(&provider, "Critical secret key", "mock", None)
             .await
             .unwrap();
         assert_eq!(score, 10.0, "Scores above 10 should be clamped to 10.0");
@@ -96,7 +98,7 @@ mod tests {
         struct LowScoreProvider;
         #[async_trait::async_trait]
         impl Provider for LowScoreProvider {
-            async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
+            async fn complete(&self, _prompt: &str, _model: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<String> {
                 Ok("-3".to_string())
             }
             async fn chat(
@@ -104,6 +106,7 @@ mod tests {
                 _messages: &[crate::providers::ChatMessage],
                 _tools: &[crate::providers::Tool],
                 _model: &str,
+                _options: Option<&ProviderOptions>,
             ) -> anyhow::Result<crate::providers::ChatResponse> {
                 Err(anyhow::anyhow!("mock chat not supported"))
             }
@@ -113,7 +116,7 @@ mod tests {
         }
 
         let provider = LowScoreProvider;
-        let score = score_importance(&provider, "trivial info", "mock")
+        let score = score_importance(&provider, "trivial info", "mock", None)
             .await
             .unwrap();
         assert_eq!(score, 1.0, "Scores below 1 should be clamped to 1.0");
@@ -124,7 +127,7 @@ mod tests {
         struct ExactScoreProvider;
         #[async_trait::async_trait]
         impl Provider for ExactScoreProvider {
-            async fn complete(&self, _prompt: &str, _model: &str) -> anyhow::Result<String> {
+            async fn complete(&self, _prompt: &str, _model: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<String> {
                 Ok("  7  \n".to_string()) // whitespace + newline
             }
             async fn chat(
@@ -132,6 +135,7 @@ mod tests {
                 _messages: &[crate::providers::ChatMessage],
                 _tools: &[crate::providers::Tool],
                 _model: &str,
+                _options: Option<&ProviderOptions>,
             ) -> anyhow::Result<crate::providers::ChatResponse> {
                 Err(anyhow::anyhow!("mock chat not supported"))
             }
@@ -141,7 +145,7 @@ mod tests {
         }
 
         let provider = ExactScoreProvider;
-        let score = score_importance(&provider, "important config detail", "mock")
+        let score = score_importance(&provider, "important config detail", "mock", None)
             .await
             .unwrap();
         assert_eq!(score, 7.0, "Should parse '  7  \\n' as 7.0");

@@ -292,7 +292,7 @@ async fn main() -> anyhow::Result<()> {
                 record = record.with_importance(imp);
             }
 
-            let stored = engine.store_memory(record, auto_score).await?;
+            let stored = engine.store_memory(record, auto_score, None).await?;
             println!("✓ Stored memory {}", stored.id);
             println!("  importance: {:.1}", stored.importance);
             println!("  tags: {:?}", stored.tags);
@@ -305,7 +305,7 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Recall { query, limit } => {
             let engine = build_engine(&config).await?;
-            let results = engine.recall(&query, limit, &[], None, None).await?;
+            let results = engine.recall(&query, limit, &[], None, None, None).await?;
 
             if results.is_empty() {
                 println!("No memories found for: \"{}\"", query);
@@ -330,7 +330,7 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Search { query, limit } => {
             let engine = build_engine(&config).await?;
-            let results = engine.search(&query, limit, &[]).await?;
+            let results = engine.search(&query, limit, &[], None).await?;
 
             if results.is_empty() {
                 println!("No memories found for: \"{}\"", query);
@@ -480,7 +480,7 @@ async fn main() -> anyhow::Result<()> {
             SessionAction::Compress { session_id } => {
                 let engine = build_engine(&config).await?;
                 println!("Compressing session '{}' into durable facts...", session_id);
-                let report = engine.compress_session_transcript(&session_id).await?;
+                let report = engine.compress_session_transcript(&session_id, None).await?;
                 println!("✓ Session compressed successfully!");
                 println!("  New facts created: {}", report.new_facts);
                 println!("  Contradictions resolved: {}", report.contradictions.len());
@@ -560,7 +560,7 @@ async fn main() -> anyhow::Result<()> {
                         if let Some(imp) = rec.importance {
                             record = record.with_importance(imp);
                         }
-                        match engine.store_memory(record, auto_score).await {
+                        match engine.store_memory(record, auto_score, None).await {
                             Ok(stored) => {
                                 imported += 1;
                                 println!(
@@ -854,7 +854,7 @@ async fn run_repl(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Resu
                     continue;
                 }
                 match engine
-                    .store_memory(MemoryRecord::new(args, MemoryType::Fact), true)
+                    .store_memory(MemoryRecord::new(args, MemoryType::Fact), true, None)
                     .await
                 {
                     Ok(stored) => {
@@ -871,7 +871,7 @@ async fn run_repl(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Resu
                     eprintln!("Usage: recall <query>");
                     continue;
                 }
-                match engine.recall(args, 8, &[], None, None).await {
+                match engine.recall(args, 8, &[], None, None, None).await {
                     Ok(results) => {
                         if results.is_empty() {
                             println!("No memories found.");
@@ -892,7 +892,7 @@ async fn run_repl(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Resu
                     eprintln!("Usage: search <query>");
                     continue;
                 }
-                match engine.search(args, 10, &[]).await {
+                match engine.search(args, 10, &[], None).await {
                     Ok(results) => {
                         if results.is_empty() {
                             println!("No memories found.");

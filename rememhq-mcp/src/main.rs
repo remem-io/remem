@@ -103,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
         embeddings,
         store,
         index.clone(),
+        vec![],
     ));
 
     tracing::info!(project = %args.project, "remem MCP server starting (stdio)");

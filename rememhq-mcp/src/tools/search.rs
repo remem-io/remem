@@ -13,7 +13,8 @@ pub fn schema() -> Value {
             "properties": {
                 "query": { "type": "string", "description": "Search query" },
                 "limit": { "type": "integer", "description": "Max results (default 20)" },
-                "filter_tags": { "type": "array", "items": { "type": "string" } }
+                "filter_tags": { "type": "array", "items": { "type": "string" } },
+                "api_key": { "type": "string", "description": "Optional API key for dynamic configuration" }
             },
             "required": ["query"]
         }
@@ -33,7 +34,17 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let results = engine.search(query, limit, &filter_tags).await?;
+    let api_key = args
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+        
+    let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
+        api_key: Some(key),
+        ..Default::default()
+    });
+
+    let results = engine.search(query, limit, &filter_tags, options.as_ref()).await?;
 
     let text = serde_json::to_string_pretty(&results)?;
     Ok(serde_json::json!({

@@ -171,7 +171,7 @@ pub unsafe extern "C" fn remem_store(
             if !auto_score {
                 record = record.with_importance(importance);
             }
-            wrapper.engine.store_memory(record, auto_score).await
+            wrapper.engine.store_memory(record, auto_score, None).await
         })
     }));
 
@@ -230,7 +230,7 @@ pub unsafe extern "C" fn remem_recall(
         rt.block_on(async {
             wrapper
                 .engine
-                .recall(&query_str, limit, &tags, None, None)
+                .recall(&query_str, limit, &tags, None, None, None)
                 .await
         })
     }));
@@ -287,7 +287,7 @@ pub unsafe extern "C" fn remem_search(
 
     let rt = get_runtime();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        rt.block_on(async { wrapper.engine.search(&query_str, limit, &tags).await })
+        rt.block_on(async { wrapper.engine.search(&query_str, limit, &tags, None).await })
     }));
 
     match result {
@@ -371,7 +371,7 @@ pub unsafe extern "C" fn remem_update(
         rt.block_on(async {
             wrapper
                 .engine
-                .update_memory(id, content_opt, importance_opt, tags_opt)
+                .update_memory(id, content_opt, importance_opt, tags_opt, None)
                 .await
         })
     }));
@@ -840,6 +840,7 @@ pub unsafe extern "C" fn remem_consolidate(
                 wrapper.engine.index.as_ref(),
                 &id_str,
                 &model_str,
+                None,
             )
             .await
         })

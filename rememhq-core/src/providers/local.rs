@@ -1,4 +1,4 @@
-use crate::providers::{EmbeddingProvider, Provider};
+use crate::providers::{EmbeddingProvider, Provider, ProviderOptions};
 use crate::storage::vector::remem_ffi;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,7 @@ impl Drop for LocalEmbeddings {
 
 #[async_trait]
 impl EmbeddingProvider for LocalEmbeddings {
-    async fn embed(&self, text: &str) -> anyhow::Result<Vec<f32>> {
+    async fn embed(&self, text: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<Vec<f32>> {
         let c_text = std::ffi::CString::new(text)?;
         let mut out_dim = 0;
 
@@ -59,10 +59,10 @@ impl EmbeddingProvider for LocalEmbeddings {
         Ok(vec)
     }
 
-    async fn embed_batch(&self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+    async fn embed_batch(&self, texts: &[String], _options: Option<&ProviderOptions>) -> anyhow::Result<Vec<Vec<f32>>> {
         let mut results = Vec::new();
         for t in texts {
-            results.push(self.embed(t).await?);
+            results.push(self.embed(t, _options).await?);
         }
         Ok(results)
     }
@@ -126,7 +126,7 @@ impl LocalProvider {
 
 #[async_trait]
 impl Provider for LocalProvider {
-    async fn complete(&self, prompt: &str, model: &str) -> anyhow::Result<String> {
+    async fn complete(&self, prompt: &str, model: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
         let request = ChatRequest {
             model: model.to_string(),
             messages: vec![ChatMessage {
@@ -155,7 +155,7 @@ impl Provider for LocalProvider {
             .and_then(|c| c.message.content.clone())
             .unwrap_or_default();
 
-        Ok(text)
+        Ok((text, None))
     }
 
     async fn chat(
@@ -163,6 +163,7 @@ impl Provider for LocalProvider {
         messages: &[crate::providers::ChatMessage],
         tools: &[crate::providers::Tool],
         model: &str,
+        _options: Option<&ProviderOptions>,
     ) -> anyhow::Result<crate::providers::ChatResponse> {
         let mut openai_messages = Vec::new();
 
@@ -275,7 +276,7 @@ impl Provider for LocalProvider {
             tool_call_id: None,
         };
 
-        Ok(crate::providers::ChatResponse { message: msg })
+        Ok(crate::providers::ChatResponse { message: msg, usage: None })
     }
 
     fn name(&self) -> &str {

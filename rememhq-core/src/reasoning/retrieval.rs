@@ -5,7 +5,7 @@
 //! which memories are actually relevant to the query and explains why.
 
 use crate::memory::types::{MemoryResult, MemoryType};
-use crate::providers::{EmbeddingProvider, Provider};
+use crate::providers::{EmbeddingProvider, Provider, ProviderOptions};
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
@@ -24,9 +24,10 @@ pub async fn guided_retrieval(
     since: Option<DateTime<Utc>>,
     memory_type: Option<MemoryType>,
     model: &str,
+    options: Option<&ProviderOptions>,
 ) -> anyhow::Result<Vec<MemoryResult>> {
     // Step 1: Embed the query
-    let query_embedding = embeddings.embed(query).await?;
+    let query_embedding = embeddings.embed(query, options).await?;
 
     // Step 2: Get top-50 candidates from vector index
     let candidate_count = 50.min(index.len());
@@ -67,7 +68,7 @@ pub async fn guided_retrieval(
     }
 
     // Step 4: LLM re-ranking with reasoning
-    let reranked = llm_rerank(provider, query, &candidates, limit, model).await?;
+    let reranked = llm_rerank(provider, query, &candidates, limit, model, options).await?;
 
     Ok(reranked)
 }
@@ -80,6 +81,7 @@ async fn llm_rerank(
     candidates: &[(MemoryResult, f32)],
     limit: usize,
     model: &str,
+    options: Option<&ProviderOptions>,
 ) -> anyhow::Result<Vec<MemoryResult>> {
     // Build the candidate list for the prompt
     let candidate_list: String = candidates
@@ -111,7 +113,7 @@ SELECTED [number] | [brief reasoning why this is relevant]
 Select at most {limit} memories. Only select memories that are genuinely relevant to the query. Output nothing else."#
     );
 
-    let response = provider.complete(&prompt, model).await?;
+    let (response, _usage) = provider.complete(&prompt, model, options).await?;
 
     // Parse the LLM response
     let mut results = Vec::new();

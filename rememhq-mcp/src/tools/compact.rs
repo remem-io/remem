@@ -19,6 +19,10 @@ pub fn schema() -> Value {
                         "type": "string"
                     },
                     "description": "Optional specific topics to ensure are preserved in the compaction."
+                },
+                "api_key": {
+                    "type": "string",
+                    "description": "Optional API key for dynamic configuration"
                 }
             },
             "required": ["conversation_text"]
@@ -41,8 +45,18 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, arguments: &Value) -> anyhow:
                 .collect()
         });
 
+    let api_key = arguments
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+        
+    let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
+        api_key: Some(key),
+        ..Default::default()
+    });
+
     let report = engine
-        .compact_context(conversation_text, focus_areas.as_deref())
+        .compact_context(conversation_text, focus_areas.as_deref(), options.as_ref())
         .await?;
 
     Ok(serde_json::json!({

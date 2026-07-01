@@ -1,5 +1,5 @@
 use crate::memory::types::KnowledgeGraphUpdate;
-use crate::providers::Provider;
+use crate::providers::{Provider, ProviderOptions};
 use crate::storage::MemoryStore;
 use anyhow::Result;
 
@@ -17,6 +17,7 @@ pub struct LlmEntityResolver<'a> {
     provider: &'a dyn Provider,
     model: String,
     store: &'a crate::storage::sqlite::SqliteStore,
+    options: Option<&'a ProviderOptions>,
 }
 
 impl<'a> LlmEntityResolver<'a> {
@@ -24,11 +25,13 @@ impl<'a> LlmEntityResolver<'a> {
         provider: &'a dyn Provider,
         model: String,
         store: &'a crate::storage::sqlite::SqliteStore,
+        options: Option<&'a ProviderOptions>,
     ) -> Self {
         Self {
             provider,
             model,
             store,
+            options,
         }
     }
 
@@ -65,7 +68,7 @@ Do not provide any explanation.",
             candidates.join("\n")
         );
 
-        let resolved = self.provider.complete(&prompt, &self.model).await?;
+        let (resolved, _usage) = self.provider.complete(&prompt, &self.model, self.options).await?;
         let resolved = resolved.trim().trim_matches('"').to_string();
 
         if resolved != entity {
@@ -124,7 +127,7 @@ mod tests {
             .await
             .unwrap();
 
-        let resolver = LlmEntityResolver::new(&provider, "mock".to_string(), &store);
+        let resolver = LlmEntityResolver::new(&provider, "mock".to_string(), &store, None);
 
         // MockProvider should return "PostgreSQL" if prompt contains "Postgres"
         // (Wait, I need to update MockProvider to handle this specific test case)

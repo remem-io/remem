@@ -7,7 +7,7 @@
 //! 4. Update the knowledge graph
 
 use crate::memory::types::{ConsolidationReport, KnowledgeGraphUpdate, MemoryRecord, MemoryType};
-use crate::providers::{EmbeddingProvider, Provider};
+use crate::providers::{EmbeddingProvider, Provider, ProviderOptions};
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
@@ -21,6 +21,7 @@ pub async fn consolidate_session(
     index: &dyn VectorIndex,
     session_id: &str,
     model: &str,
+    options: Option<&ProviderOptions>,
 ) -> anyhow::Result<ConsolidationReport> {
     // Get all memories from this session
     let session_memories = store
@@ -48,10 +49,10 @@ pub async fn consolidate_session(
         .join("\n");
 
     // Step 1: Extract durable facts
-    let mut facts = extract_facts(provider, &session_content, model).await?;
+    let mut facts = extract_facts(provider, &session_content, model, options).await?;
 
     // Step 1b: Resolve entities in Knowledge Graph triples
-    let resolver = super::resolution::LlmEntityResolver::new(provider, model.to_string(), store);
+    let resolver = super::resolution::LlmEntityResolver::new(provider, model.to_string(), store, options);
     use super::resolution::EntityResolver;
 
     // Collect all triples from facts
@@ -76,7 +77,7 @@ pub async fn consolidate_session(
 
     // Step 2: Check for contradictions with existing memories
     let contradictions = super::contradiction::detect_contradictions(
-        provider, embeddings, index, store, &facts, model,
+        provider, embeddings, index, store, &facts, model, options,
     )
     .await?;
 
@@ -108,7 +109,7 @@ pub async fn consolidate_session(
             .with_session(session_id);
 
         // Generate embedding
-        let embedding = embeddings.embed(&record.content).await?;
+        let embedding = embeddings.embed(&record.content, options).await?;
         record.embedding = Some(embedding.clone());
 
         // Check if this fact updates an existing memory
@@ -181,6 +182,7 @@ pub async fn extract_facts(
     provider: &dyn Provider,
     session_content: &str,
     model: &str,
+    options: Option<&ProviderOptions>,
 ) -> anyhow::Result<Vec<ExtractedFact>> {
     let prompt = format!(
         r#"You are a memory consolidation engine. Extract durable, reusable facts from this session log.
@@ -212,7 +214,7 @@ Rules:
 Output the facts now:"#
     );
 
-    let response = provider.complete(&prompt, model).await?;
+    let (response, _usage) = provider.complete(&prompt, model, options).await?;
 
     let mut facts = Vec::new();
     let mut current_triple: Option<KnowledgeGraphUpdate> = None;

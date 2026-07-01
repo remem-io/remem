@@ -49,28 +49,34 @@ impl OpenAIEmbeddings {
     }
 }
 
+use crate::providers::ProviderOptions;
+
 #[async_trait]
 impl EmbeddingProvider for OpenAIEmbeddings {
-    async fn embed(&self, text: &str) -> anyhow::Result<Vec<f32>> {
-        let results = self.embed_batch(&[text.to_string()]).await?;
+    async fn embed(&self, text: &str, options: Option<&ProviderOptions>) -> anyhow::Result<Vec<f32>> {
+        let results = self.embed_batch(&[text.to_string()], options).await?;
         results
             .into_iter()
             .next()
             .ok_or_else(|| anyhow::anyhow!("No embedding returned"))
     }
 
-    async fn embed_batch(&self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+    async fn embed_batch(&self, texts: &[String], options: Option<&ProviderOptions>) -> anyhow::Result<Vec<Vec<f32>>> {
         let request = EmbeddingRequest {
             model: self.model.clone(),
             input: texts.to_vec(),
             dimensions: self.dimension,
         };
 
+        let current_api_key = options
+            .and_then(|o| o.api_key.as_deref())
+            .unwrap_or(&self.api_key);
+
         let response = super::resiliency::execute_with_retry(
             || {
                 self.client
                     .post("https://api.openai.com/v1/embeddings")
-                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .header("Authorization", format!("Bearer {}", current_api_key))
                     .header("Content-Type", "application/json")
                     .json(&request)
                     .send()

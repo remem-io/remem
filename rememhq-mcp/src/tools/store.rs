@@ -16,7 +16,8 @@ pub fn schema() -> Value {
                 "tags": { "type": "array", "items": { "type": "string" }, "description": "Classification tags" },
                 "importance": { "type": "number", "description": "Importance score 1-10 (auto-scored if omitted)" },
                 "ttl_days": { "type": "integer", "description": "Time-to-live in days (null = permanent)" },
-                "type": { "type": "string", "enum": ["fact", "procedure", "preference", "decision"], "description": "Memory type" }
+                "type": { "type": "string", "enum": ["fact", "procedure", "preference", "decision"], "description": "Memory type" },
+                "api_key": { "type": "string", "description": "Optional API key for dynamic configuration" }
             },
             "required": ["content"]
         }
@@ -59,7 +60,17 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         record = record.with_importance(imp);
     }
 
-    let stored = engine.store_memory(record, auto_score).await?;
+    let api_key = args
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+        
+    let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
+        api_key: Some(key),
+        ..Default::default()
+    });
+
+    let stored = engine.store_memory(record, auto_score, options.as_ref()).await?;
 
     Ok(serde_json::json!({
         "content": [{

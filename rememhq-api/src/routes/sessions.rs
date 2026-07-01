@@ -13,7 +13,7 @@ use std::sync::Arc;
 use rememhq_core::memory::types::ConsolidationReport;
 use rememhq_core::reasoning::ReasoningEngine;
 
-use crate::middleware::auth::check_auth;
+use crate::middleware::auth::{check_auth, extract_provider_options};
 use crate::routes::memories::ErrorResponse;
 
 type AppState = Arc<ReasoningEngine>;
@@ -42,6 +42,7 @@ pub async fn consolidate_session(
         engine.index.as_ref(),
         &session_id,
         &model,
+        extract_provider_options(&headers).as_ref(),
     )
     .await
     .map_err(|e| {
