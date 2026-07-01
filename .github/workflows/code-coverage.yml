@@ -35,7 +35,7 @@ jobs:
         run: cargo llvm-cov --workspace --lcov --output-path lcov-rust.info
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: lcov-rust.info
           flags: rust
@@ -64,7 +64,7 @@ jobs:
         run: pytest tests/ --cov=rememhq --cov-report=xml:coverage.xml --tb=short
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: sdk/python/coverage.xml
           flags: python
@@ -99,7 +99,7 @@ jobs:
         run: node --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage.info --test dist/**/*.test.js
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: sdk/typescript/coverage.info
           flags: typescript
