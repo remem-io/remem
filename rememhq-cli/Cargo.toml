@@ -25,5 +25,5 @@ async-trait = { workspace = true }
 owo-colors = "4.3.0"
 crossterm = "0.29.0"
 rustyline = "18.0.1"
-indicatif = "0.17"
+indicatif = "0.18"
 termimad = "0.30"
