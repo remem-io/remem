@@ -36,7 +36,7 @@ use std::sync::Arc;
 pub use rememhq_core::config::RememConfig;
 pub use rememhq_core::memory::types::{
     ConsolidationReport, ForgetMode, KnowledgeGraphUpdate, MemoryRecord, MemoryResult, MemoryType,
-    StoreRequest, SessionResponse,
+    StoreRequest,
 };
 pub use rememhq_core::storage::StoreStats;
 pub use rememhq_core::providers::{EmbeddingProvider, Provider};
@@ -280,7 +280,7 @@ impl Memory {
         self.engine.store_memory(record, auto_score, None).await
     }
 
-    /// Store a typed memory (Fact, Procedure, Preference, Episode).
+    /// Store a typed memory (Fact, Procedure, Preference, Decision).
     pub async fn store_typed(
         &self,
         content: &str,
@@ -374,13 +374,14 @@ impl Memory {
         self.engine.store.get(id).await
     }
 
-    /// List memories with optional limit and offset.
+    /// List memories with optional limit.
     pub async fn list(
         &self,
         limit: Option<usize>,
-        offset: Option<usize>,
     ) -> anyhow::Result<Vec<MemoryRecord>> {
-        self.engine.list_memories(limit, offset).await
+        self.engine
+            .list_memories(&[], None, None, limit.unwrap_or(100))
+            .await
     }
 
     /// Delete expired memories based on their TTL.
@@ -402,13 +403,15 @@ impl Memory {
     pub async fn list_sessions(
         &self,
         limit: Option<usize>,
-        offset: Option<usize>,
-    ) -> anyhow::Result<Vec<SessionResponse>> {
-        self.engine.list_sessions(limit, offset).await
+    ) -> anyhow::Result<Vec<rememhq_core::storage::sqlite::SessionRecord>> {
+        self.engine.list_sessions(limit.unwrap_or(100)).await
     }
 
     /// Get a specific session.
-    pub async fn get_session(&self, session_id: &str) -> anyhow::Result<Option<SessionResponse>> {
+    pub async fn get_session(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<rememhq_core::storage::sqlite::SessionRecord>> {
         self.engine.get_session(session_id).await
     }
 
