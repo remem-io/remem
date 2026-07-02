@@ -13,7 +13,8 @@ pub fn schema() -> Value {
                     "type": "number",
                     "description": "Max number of facts to retrieve (default: 20)"
                 }
-            }
+            },
+            "required": []
         }
     })
 }
