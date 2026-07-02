@@ -1,3 +1,4 @@
+use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use rememhq_core::config::RememConfig;
 use rememhq_core::providers::{ChatMessage, ChatRole, Tool};
@@ -5,7 +6,6 @@ use rememhq_core::reasoning::{ReasoningEngine, ReasoningEvent};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use serde_json::json;
-use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
 
 pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Result<()> {
@@ -73,52 +73,58 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
         "Tip: Type 'quit' or 'exit' to end the session.\n".bold()
     );
 
-    let tools = vec![Tool {
-        name: "execute_command".to_string(),
-        description:
-            "Execute a terminal command (e.g. ls, git, cargo). Returns the command output."
-                .to_string(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The command line string to execute in the shell"
-                }
-            },
-            "required": ["command"]
-        }),
-    }, Tool {
-        name: "read_file".to_string(),
-        description: "Read the contents of a file at the specified path.".to_string(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "The absolute or relative path to the file to read"
-                }
-            },
-            "required": ["path"]
-        }),
-    }, Tool {
-        name: "write_file".to_string(),
-        description: "Write content to a file at the specified path. Overwrites the file if it exists.".to_string(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "The absolute or relative path to the file to write"
+    let tools = vec![
+        Tool {
+            name: "execute_command".to_string(),
+            description:
+                "Execute a terminal command (e.g. ls, git, cargo). Returns the command output."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command line string to execute in the shell"
+                    }
                 },
-                "content": {
-                    "type": "string",
-                    "description": "The text content to write to the file"
-                }
-            },
-            "required": ["path", "content"]
-        }),
-    }];
+                "required": ["command"]
+            }),
+        },
+        Tool {
+            name: "read_file".to_string(),
+            description: "Read the contents of a file at the specified path.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The absolute or relative path to the file to read"
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
+        Tool {
+            name: "write_file".to_string(),
+            description:
+                "Write content to a file at the specified path. Overwrites the file if it exists."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The absolute or relative path to the file to write"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The text content to write to the file"
+                    }
+                },
+                "required": ["path", "content"]
+            }),
+        },
+    ];
 
     let mut messages: Vec<ChatMessage> = vec![];
 
@@ -135,19 +141,44 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
         while let Ok(event) = rx.recv().await {
             match event {
                 ReasoningEvent::ConsolidationStarted { session_id } => {
-                    println!("{}", format!("  [Memory] Consolidation started for {}...", session_id).dimmed());
+                    println!(
+                        "{}",
+                        format!("  [Memory] Consolidation started for {}...", session_id).dimmed()
+                    );
                 }
                 ReasoningEvent::FactExtracted { content } => {
                     println!("{}", format!("  [Fact] {}", content).dimmed());
                 }
-                ReasoningEvent::ContradictionDetected { existing_id, new_content } => {
-                    println!("{}", format!("  [Contradiction] {} -> {}", existing_id, new_content).yellow().dimmed());
+                ReasoningEvent::ContradictionDetected {
+                    existing_id,
+                    new_content,
+                } => {
+                    println!(
+                        "{}",
+                        format!("  [Contradiction] {} -> {}", existing_id, new_content)
+                            .yellow()
+                            .dimmed()
+                    );
                 }
-                ReasoningEvent::KnowledgeTripleFound { subject, predicate, object } => {
-                    println!("{}", format!("  [Graph] {} - {} - {}", subject, predicate, object).dimmed());
+                ReasoningEvent::KnowledgeTripleFound {
+                    subject,
+                    predicate,
+                    object,
+                } => {
+                    println!(
+                        "{}",
+                        format!("  [Graph] {} - {} - {}", subject, predicate, object).dimmed()
+                    );
                 }
                 ReasoningEvent::ConsolidationCompleted { new_facts, .. } => {
-                    println!("{}", format!("  [Memory] Consolidation complete ({} new facts).", new_facts).dimmed());
+                    println!(
+                        "{}",
+                        format!(
+                            "  [Memory] Consolidation complete ({} new facts).",
+                            new_facts
+                        )
+                        .dimmed()
+                    );
                 }
             }
         }
@@ -229,9 +260,9 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
                 .provider
                 .chat(&messages, &tools, &config.reasoning.reasoning_model, None)
                 .await;
-                
+
             spinner.finish_and_clear();
-            
+
             let response = response?;
             let mut assistant_msg = response.message.clone();
 
@@ -250,9 +281,12 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
                 println!();
                 termimad::print_text(&display_content);
                 println!();
-                
+
                 if let Some(usage) = &response.usage {
-                    let usage_str = format!("  [Tokens: {} prompt, {} completion, {} total]", usage.prompt_tokens, usage.completion_tokens, usage.total_tokens);
+                    let usage_str = format!(
+                        "  [Tokens: {} prompt, {} completion, {} total]",
+                        usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+                    );
                     println!("{}", usage_str.dimmed());
                 }
             }
@@ -318,12 +352,12 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
                         if let Some(path_str) = tc.arguments.get("path").and_then(|v| v.as_str()) {
                             let exec_text = format!("> Reading file: {}", path_str);
                             println!("{}", exec_text.blue().bold());
-                            
+
                             let result_content = match std::fs::read_to_string(path_str) {
                                 Ok(content) => content,
                                 Err(e) => format!("Failed to read file: {}", e),
                             };
-                            
+
                             messages.push(ChatMessage {
                                 role: ChatRole::Tool,
                                 content: result_content,
@@ -334,16 +368,16 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
                     } else if tc.name == "write_file" {
                         if let (Some(path_str), Some(content_str)) = (
                             tc.arguments.get("path").and_then(|v| v.as_str()),
-                            tc.arguments.get("content").and_then(|v| v.as_str())
+                            tc.arguments.get("content").and_then(|v| v.as_str()),
                         ) {
                             let exec_text = format!("> Writing file: {}", path_str);
                             println!("{}", exec_text.blue().bold());
-                            
+
                             let result_content = match std::fs::write(path_str, content_str) {
                                 Ok(_) => format!("Successfully wrote to {}", path_str),
                                 Err(e) => format!("Failed to write file: {}", e),
                             };
-                            
+
                             messages.push(ChatMessage {
                                 role: ChatRole::Tool,
                                 content: result_content,

@@ -51,10 +51,10 @@ async fn test_mock_provider_complete() {
     use rememhq_core::providers::Provider;
     let provider = MockProvider;
     let result = provider
-        .complete("test prompt", "test-model")
+        .complete("test prompt", "test-model", None)
         .await
         .unwrap();
-    assert!(!result.is_empty());
+    assert!(!result.0.is_empty());
 }
 
 #[tokio::test]
@@ -62,11 +62,11 @@ async fn test_mock_embeddings() {
     use rememhq_core::providers::EmbeddingProvider;
     let embeddings = MockEmbeddings::new(768);
 
-    let vec = embeddings.embed("hello world").await.unwrap();
+    let vec = embeddings.embed("hello world", None).await.unwrap();
     assert_eq!(vec.len(), 768);
 
     // Same input should produce same output (deterministic)
-    let vec2 = embeddings.embed("hello world").await.unwrap();
+    let vec2 = embeddings.embed("hello world", None).await.unwrap();
     assert_eq!(vec, vec2);
 }
 
@@ -80,7 +80,7 @@ async fn test_mock_embeddings_batch() {
         "second".to_string(),
         "third".to_string(),
     ];
-    let results = embeddings.embed_batch(&texts).await.unwrap();
+    let results = embeddings.embed_batch(&texts, None).await.unwrap();
     assert_eq!(results.len(), 3);
     assert!(results.iter().all(|v| v.len() == 768));
 }

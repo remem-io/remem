@@ -36,8 +36,9 @@ use std::sync::Arc;
 pub use rememhq_core::config::RememConfig;
 pub use rememhq_core::memory::types::{
     ConsolidationReport, ForgetMode, KnowledgeGraphUpdate, MemoryRecord, MemoryResult, MemoryType,
-    StoreRequest,
+    StoreRequest, SessionResponse,
 };
+pub use rememhq_core::storage::StoreStats;
 pub use rememhq_core::providers::{EmbeddingProvider, Provider};
 pub use rememhq_core::reasoning::ReasoningEngine;
 pub use rememhq_core::storage::vector::VectorIndex;
@@ -237,7 +238,8 @@ impl MemoryBuilder {
             ))
         };
 
-        let engine = ReasoningEngine::new(config.clone(), provider, embeddings, store, index, vec![]);
+        let engine =
+            ReasoningEngine::new(config.clone(), provider, embeddings, store, index, vec![]);
 
         Ok(Memory {
             engine: Arc::new(engine),
@@ -297,7 +299,9 @@ impl Memory {
 
     /// Recall memories using LLM-guided retrieval (semantic + re-ranking).
     pub async fn recall(&self, query: &str, limit: usize) -> anyhow::Result<Vec<MemoryResult>> {
-        self.engine.recall(query, limit, &[], None, None, None).await
+        self.engine
+            .recall(query, limit, &[], None, None, None)
+            .await
     }
 
     /// Recall with tag filtering.
@@ -307,7 +311,9 @@ impl Memory {
         limit: usize,
         tags: &[String],
     ) -> anyhow::Result<Vec<MemoryResult>> {
-        self.engine.recall(query, limit, tags, None, None, None).await
+        self.engine
+            .recall(query, limit, tags, None, None, None)
+            .await
     }
 
     /// Simple vector + FTS search without LLM re-ranking.
@@ -361,6 +367,54 @@ impl Memory {
     /// Save the vector index to disk.
     pub async fn save_index(&self) -> anyhow::Result<()> {
         self.engine.index.save(&self.config.index_path()).await
+    }
+
+    /// Get a memory by ID.
+    pub async fn get(&self, id: uuid::Uuid) -> anyhow::Result<Option<MemoryRecord>> {
+        self.engine.store.get(id).await
+    }
+
+    /// List memories with optional limit and offset.
+    pub async fn list(
+        &self,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> anyhow::Result<Vec<MemoryRecord>> {
+        self.engine.list_memories(limit, offset).await
+    }
+
+    /// Delete expired memories based on their TTL.
+    pub async fn expire(&self) -> anyhow::Result<usize> {
+        self.engine.expire_ttl().await
+    }
+
+    /// Create a new working session.
+    pub async fn create_session(&self, session_id: &str) -> anyhow::Result<()> {
+        self.engine.create_session(session_id).await
+    }
+
+    /// End a working session.
+    pub async fn end_session(&self, session_id: &str) -> anyhow::Result<bool> {
+        self.engine.end_session(session_id).await
+    }
+
+    /// List recent sessions.
+    pub async fn list_sessions(
+        &self,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> anyhow::Result<Vec<SessionResponse>> {
+        self.engine.list_sessions(limit, offset).await
+    }
+
+    /// Get a specific session.
+    pub async fn get_session(&self, session_id: &str) -> anyhow::Result<Option<SessionResponse>> {
+        self.engine.get_session(session_id).await
+    }
+
+    /// Get database statistics.
+    pub async fn stats(&self) -> anyhow::Result<StoreStats> {
+        self.engine.store.stats().await
     }
 
     /// Get direct access to the underlying `ReasoningEngine`.

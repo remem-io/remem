@@ -44,7 +44,12 @@ impl GoogleProvider {
 
 #[async_trait::async_trait]
 impl Provider for GoogleProvider {
-    async fn complete(&self, prompt: &str, model: &str, options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+    async fn complete(
+        &self,
+        prompt: &str,
+        model: &str,
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
         let model_name = if model.is_empty() {
             DEFAULT_REASONING_MODEL
         } else {
@@ -85,11 +90,13 @@ impl Provider for GoogleProvider {
             .as_str()
             .ok_or_else(|| anyhow!("Unexpected Google response format: {:?}", json))?;
 
-        let usage = json.get("usageMetadata").map(|u| crate::providers::TokenUsage {
-            prompt_tokens: u["promptTokenCount"].as_u64().unwrap_or(0) as usize,
-            completion_tokens: u["candidatesTokenCount"].as_u64().unwrap_or(0) as usize,
-            total_tokens: u["totalTokenCount"].as_u64().unwrap_or(0) as usize,
-        });
+        let usage = json
+            .get("usageMetadata")
+            .map(|u| crate::providers::TokenUsage {
+                prompt_tokens: u["promptTokenCount"].as_u64().unwrap_or(0) as usize,
+                completion_tokens: u["candidatesTokenCount"].as_u64().unwrap_or(0) as usize,
+                total_tokens: u["totalTokenCount"].as_u64().unwrap_or(0) as usize,
+            });
 
         Ok((text.to_string(), usage))
     }
@@ -231,7 +238,10 @@ impl Provider for GoogleProvider {
             total_tokens: u["total_tokens"].as_u64().unwrap_or(0) as usize,
         });
 
-        Ok(crate::providers::ChatResponse { message: msg, usage })
+        Ok(crate::providers::ChatResponse {
+            message: msg,
+            usage,
+        })
     }
 
     fn name(&self) -> &str {
@@ -266,7 +276,11 @@ impl GoogleEmbeddings {
 
 #[async_trait::async_trait]
 impl EmbeddingProvider for GoogleEmbeddings {
-    async fn embed(&self, text: &str, options: Option<&ProviderOptions>) -> anyhow::Result<Vec<f32>> {
+    async fn embed(
+        &self,
+        text: &str,
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<f32>> {
         let active_api_key = options
             .and_then(|o| o.api_key.as_deref())
             .unwrap_or(&self.api_key);
@@ -300,7 +314,11 @@ impl EmbeddingProvider for GoogleEmbeddings {
         parse_embedding(&json["embedding"]["values"])
     }
 
-    async fn embed_batch(&self, texts: &[String], options: Option<&ProviderOptions>) -> anyhow::Result<Vec<Vec<f32>>> {
+    async fn embed_batch(
+        &self,
+        texts: &[String],
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<Vec<f32>>> {
         let active_api_key = options
             .and_then(|o| o.api_key.as_deref())
             .unwrap_or(&self.api_key);

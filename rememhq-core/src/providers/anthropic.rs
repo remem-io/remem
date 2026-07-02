@@ -31,7 +31,12 @@ impl AnthropicProvider {
 
 #[async_trait]
 impl Provider for AnthropicProvider {
-    async fn complete(&self, prompt: &str, model: &str, options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+    async fn complete(
+        &self,
+        prompt: &str,
+        model: &str,
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
         let messages = vec![ChatMessage {
             role: ChatRole::User,
             content: prompt.to_string(),
@@ -214,7 +219,10 @@ impl Provider for AnthropicProvider {
             }
         });
 
-        Ok(ChatResponse { message: msg, usage })
+        Ok(ChatResponse {
+            message: msg,
+            usage,
+        })
     }
 
     fn name(&self) -> &str {

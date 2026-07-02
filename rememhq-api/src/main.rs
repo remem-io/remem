@@ -207,15 +207,18 @@ async fn store_memory(
     }
 
     let options = crate::middleware::auth::extract_provider_options(&headers);
-    let stored = engine.store_memory(record, auto_score, options.as_ref()).await.map_err(|e| {
-        tracing::error!("store_memory failed: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-    })?;
+    let stored = engine
+        .store_memory(record, auto_score, options.as_ref())
+        .await
+        .map_err(|e| {
+            tracing::error!("store_memory failed: {:?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
 
     Ok((
         StatusCode::CREATED,
@@ -274,7 +277,14 @@ async fn recall_memories(
 
     let options = crate::middleware::auth::extract_provider_options(&headers);
     let results = engine
-        .recall(&q.q, fetch_limit, &filter_tags, since, memory_type, options.as_ref())
+        .recall(
+            &q.q,
+            fetch_limit,
+            &filter_tags,
+            since,
+            memory_type,
+            options.as_ref(),
+        )
         .await
         .map_err(|e| {
             (
@@ -386,7 +396,13 @@ async fn update_memory(
 
     let options = crate::middleware::auth::extract_provider_options(&headers);
     let updated = engine
-        .update_memory(id, body.content, body.importance, body.tags, options.as_ref())
+        .update_memory(
+            id,
+            body.content,
+            body.importance,
+            body.tags,
+            options.as_ref(),
+        )
         .await
         .map_err(|e| {
             (

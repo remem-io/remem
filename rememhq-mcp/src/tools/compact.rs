@@ -49,7 +49,7 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, arguments: &Value) -> anyhow:
         .get("api_key")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
-        
+
     let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
         api_key: Some(key),
         ..Default::default()

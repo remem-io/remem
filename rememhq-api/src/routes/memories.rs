@@ -98,14 +98,17 @@ pub async fn store_memory(
     }
 
     let options = extract_provider_options(&headers);
-    let stored = engine.store_memory(record, auto_score, options.as_ref()).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-    })?;
+    let stored = engine
+        .store_memory(record, auto_score, options.as_ref())
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
 
     Ok((
         StatusCode::CREATED,
@@ -143,7 +146,14 @@ pub async fn recall_memories(
 
     let options = extract_provider_options(&headers);
     let results = engine
-        .recall(&q.q, fetch_limit, &filter_tags, since, memory_type, options.as_ref())
+        .recall(
+            &q.q,
+            fetch_limit,
+            &filter_tags,
+            since,
+            memory_type,
+            options.as_ref(),
+        )
         .await
         .map_err(|e| {
             (
@@ -218,7 +228,13 @@ pub async fn update_memory(
 
     let options = extract_provider_options(&headers);
     let updated = engine
-        .update_memory(id, body.content, body.importance, body.tags, options.as_ref())
+        .update_memory(
+            id,
+            body.content,
+            body.importance,
+            body.tags,
+            options.as_ref(),
+        )
         .await
         .map_err(|e| {
             (
@@ -487,7 +503,7 @@ mod tests {
         // Insert 5 test memories
         for i in 0..5 {
             let record = MemoryRecord::new(format!("Alice test memory {}", i), MemoryType::Fact);
-            let embedding = embeddings.embed(&record.content).await.unwrap();
+            let embedding = embeddings.embed(&record.content, None).await.unwrap();
 
             let mut record_with_emb = record.clone();
             record_with_emb.embedding = Some(embedding.clone());
@@ -502,6 +518,7 @@ mod tests {
             embeddings,
             Arc::new(store),
             Arc::new(index),
+            vec![],
         ));
 
         let app = Router::new()

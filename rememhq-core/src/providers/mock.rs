@@ -5,7 +5,12 @@ pub struct MockProvider;
 
 #[async_trait]
 impl Provider for MockProvider {
-    async fn complete(&self, prompt: &str, _model: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+    async fn complete(
+        &self,
+        prompt: &str,
+        _model: &str,
+        _options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
         if prompt.contains("contradiction detector") {
             if prompt.contains("New York") && prompt.contains("London") {
                 return Ok(("CONTRADICTION | [CANDIDATE-1] | Alice moved to New York, so London is outdated.".to_string(), None));
@@ -14,15 +19,24 @@ impl Provider for MockProvider {
         }
         if prompt.contains("FACT_EXTRACTION") || prompt.contains("Output the facts now") {
             if prompt.contains("To bake a cake") {
-                return Ok((r#"FACT | procedure | 7 | baking | First, preheat the oven
+                return Ok((
+                    r#"FACT | procedure | 7 | baking | First, preheat the oven
 TRIPLE | First, preheat the oven | next_step | Then, mix the batter
 FACT | procedure | 7 | baking | Then, mix the batter"#
-                    .to_string(), None));
+                        .to_string(),
+                    None,
+                ));
             }
             if prompt.contains("New York") {
-                return Ok(("FACT | fact | 9 | relocation | Alice moved to New York".to_string(), None));
+                return Ok((
+                    "FACT | fact | 9 | relocation | Alice moved to New York".to_string(),
+                    None,
+                ));
             }
-            return Ok((r#"FACT | fact | 8 | rust | Alice likes Rust"#.to_string(), None));
+            return Ok((
+                r#"FACT | fact | 8 | rust | Alice likes Rust"#.to_string(),
+                None,
+            ));
         }
         if prompt.contains("entity resolution engine") {
             if prompt.contains("Postgres") && prompt.contains("PostgreSQL") {
@@ -62,7 +76,11 @@ impl MockEmbeddings {
 
 #[async_trait]
 impl EmbeddingProvider for MockEmbeddings {
-    async fn embed(&self, text: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<Vec<f32>> {
+    async fn embed(
+        &self,
+        text: &str,
+        _options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<f32>> {
         let mut vec = vec![0.0; self.dim];
         if !text.is_empty() {
             if text.contains("Alice") {
@@ -77,7 +95,11 @@ impl EmbeddingProvider for MockEmbeddings {
         Ok(vec)
     }
 
-    async fn embed_batch(&self, texts: &[String], _options: Option<&ProviderOptions>) -> anyhow::Result<Vec<Vec<f32>>> {
+    async fn embed_batch(
+        &self,
+        texts: &[String],
+        _options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<Vec<f32>>> {
         let mut results = Vec::new();
         for t in texts {
             results.push(self.embed(t, _options).await?);

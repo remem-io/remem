@@ -69,8 +69,13 @@ mod tests {
         struct HighScoreProvider;
         #[async_trait::async_trait]
         impl Provider for HighScoreProvider {
-            async fn complete(&self, _prompt: &str, _model: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<String> {
-                Ok("15".to_string())
+            async fn complete(
+                &self,
+                _prompt: &str,
+                _model: &str,
+                _options: Option<&ProviderOptions>,
+            ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+                Ok(("15".to_string(), None))
             }
             async fn chat(
                 &self,
@@ -98,8 +103,13 @@ mod tests {
         struct LowScoreProvider;
         #[async_trait::async_trait]
         impl Provider for LowScoreProvider {
-            async fn complete(&self, _prompt: &str, _model: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<String> {
-                Ok("-3".to_string())
+            async fn complete(
+                &self,
+                _prompt: &str,
+                _model: &str,
+                _options: Option<&ProviderOptions>,
+            ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+                Ok(("-3".to_string(), None))
             }
             async fn chat(
                 &self,
@@ -127,8 +137,13 @@ mod tests {
         struct ExactScoreProvider;
         #[async_trait::async_trait]
         impl Provider for ExactScoreProvider {
-            async fn complete(&self, _prompt: &str, _model: &str, _options: Option<&ProviderOptions>) -> anyhow::Result<String> {
-                Ok("  7  \n".to_string()) // whitespace + newline
+            async fn complete(
+                &self,
+                _prompt: &str,
+                _model: &str,
+                _options: Option<&ProviderOptions>,
+            ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+                Ok(("  7  \n".to_string(), None)) // whitespace + newline
             }
             async fn chat(
                 &self,

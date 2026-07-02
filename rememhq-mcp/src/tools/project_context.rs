@@ -18,6 +18,21 @@ pub fn schema() -> Value {
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_schema_validity() {
+        let s = schema();
+        assert_eq!(s["name"], "mem_get_project_context");
+        assert!(s["description"].is_string());
+        assert_eq!(s["inputSchema"]["type"], "object");
+        assert!(s["inputSchema"]["properties"].is_object());
+        assert!(s["inputSchema"]["required"].is_array());
+    }
+}
+
 pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Result<Value> {
     let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
 
@@ -27,17 +42,17 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
     let mut context_summary = String::new();
     context_summary.push_str("Here is the relevant project context and memories:\n\n");
 
-    for (i, mem) in memories.iter().enumerate() {
-        context_summary.push_str(&format!(
-            "{}. [{}] {}\n",
-            i + 1,
-            mem.memory_type,
-            mem.content
-        ));
-    }
-
     if memories.is_empty() {
         context_summary.push_str("No memories found for this project yet.");
+    } else {
+        for (i, mem) in memories.into_iter().enumerate() {
+            context_summary.push_str(&format!(
+                "{}. [{}] {}\n",
+                i + 1,
+                mem.memory_type,
+                mem.content
+            ));
+        }
     }
 
     Ok(serde_json::json!({

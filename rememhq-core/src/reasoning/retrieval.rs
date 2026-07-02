@@ -155,3 +155,126 @@ Select at most {limit} memories. Only select memories that are genuinely relevan
     results.truncate(limit);
     Ok(results)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::types::MemoryType;
+    use async_trait::async_trait;
+    use uuid::Uuid;
+
+    struct MockProviderObj {
+        response: String,
+    }
+
+    #[async_trait]
+    impl Provider for MockProviderObj {
+        async fn complete(
+            &self,
+            _prompt: &str,
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+            Ok((
+                self.response.clone(),
+                Some(crate::providers::TokenUsage {
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    total_tokens: 0,
+                }),
+            ))
+        }
+        async fn chat(
+            &self,
+            _messages: &[crate::providers::ChatMessage],
+            _tools: &[crate::providers::Tool],
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<crate::providers::ChatResponse> {
+            unimplemented!()
+        }
+        fn name(&self) -> &str {
+            "mock"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_llm_rerank_parsing() {
+        let provider = MockProviderObj {
+            response: "SELECTED 2 | Because it matches exactly\nSELECTED 1 | Good context"
+                .to_string(),
+        };
+
+        let mem1 = MemoryResult {
+            id: Uuid::new_v4(),
+            content: "First memory".to_string(),
+            tags: vec![],
+            importance: 0.5,
+            memory_type: MemoryType::Fact,
+            created_at: Utc::now(),
+            source_session: None,
+            similarity: 0.8,
+            decay_score: 1.0,
+            reasoning: None,
+        };
+
+        let mem2 = MemoryResult {
+            id: Uuid::new_v4(),
+            content: "Second memory".to_string(),
+            tags: vec![],
+            importance: 0.9,
+            memory_type: MemoryType::Fact,
+            created_at: Utc::now(),
+            source_session: None,
+            similarity: 0.9,
+            decay_score: 1.0,
+            reasoning: None,
+        };
+
+        let candidates = vec![(mem1.clone(), 0.8), (mem2.clone(), 0.9)];
+
+        let results = llm_rerank(&provider, "query", &candidates, 2, "mock", None)
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 2);
+
+        // The LLM selected 2 then 1
+        assert_eq!(results[0].id, mem2.id);
+        assert_eq!(
+            results[0].reasoning.as_deref(),
+            Some("Because it matches exactly")
+        );
+        assert_eq!(results[1].id, mem1.id);
+        assert_eq!(results[1].reasoning.as_deref(), Some("Good context"));
+    }
+
+    #[tokio::test]
+    async fn test_llm_rerank_fallback() {
+        // If LLM returns garbage, it should fallback to similarity ordering
+        let provider = MockProviderObj {
+            response: "No matches found".to_string(),
+        };
+
+        let mem1 = MemoryResult {
+            id: Uuid::new_v4(),
+            content: "First".to_string(),
+            tags: vec![],
+            importance: 0.5,
+            memory_type: MemoryType::Fact,
+            created_at: Utc::now(),
+            source_session: None,
+            similarity: 0.8,
+            decay_score: 1.0,
+            reasoning: None,
+        };
+
+        let candidates = vec![(mem1.clone(), 0.8)];
+
+        let results = llm_rerank(&provider, "query", &candidates, 1, "mock", None)
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, mem1.id);
+        assert_eq!(results[0].reasoning, None);
+    }
+}

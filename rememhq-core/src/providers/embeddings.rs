@@ -53,7 +53,11 @@ use crate::providers::ProviderOptions;
 
 #[async_trait]
 impl EmbeddingProvider for OpenAIEmbeddings {
-    async fn embed(&self, text: &str, options: Option<&ProviderOptions>) -> anyhow::Result<Vec<f32>> {
+    async fn embed(
+        &self,
+        text: &str,
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<f32>> {
         let results = self.embed_batch(&[text.to_string()], options).await?;
         results
             .into_iter()
@@ -61,7 +65,11 @@ impl EmbeddingProvider for OpenAIEmbeddings {
             .ok_or_else(|| anyhow::anyhow!("No embedding returned"))
     }
 
-    async fn embed_batch(&self, texts: &[String], options: Option<&ProviderOptions>) -> anyhow::Result<Vec<Vec<f32>>> {
+    async fn embed_batch(
+        &self,
+        texts: &[String],
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<Vec<f32>>> {
         let request = EmbeddingRequest {
             model: self.model.clone(),
             input: texts.to_vec(),

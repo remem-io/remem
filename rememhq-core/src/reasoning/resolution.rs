@@ -68,7 +68,10 @@ Do not provide any explanation.",
             candidates.join("\n")
         );
 
-        let (resolved, _usage) = self.provider.complete(&prompt, &self.model, self.options).await?;
+        let (resolved, _usage) = self
+            .provider
+            .complete(&prompt, &self.model, self.options)
+            .await?;
         let resolved = resolved.trim().trim_matches('"').to_string();
 
         if resolved != entity {

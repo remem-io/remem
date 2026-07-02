@@ -14,6 +14,18 @@ use crate::storage::MemoryStore;
 use serde::{Deserialize, Serialize};
 
 /// Run a consolidation pass over a session's memories.
+///
+/// At the end of an interaction session, the consolidation engine extracts long-term
+/// value from the raw memory trace. It performs a sequence of AI-driven reasoning steps:
+///
+/// 1. **Fact Extraction**: The LLM parses the session transcript to identify durable facts
+///    and procedures, scoring their initial importance.
+/// 2. **Entity Resolution (Knowledge Graph)**: It extracts semantic triples (`subject -> predicate -> object`)
+///    and resolves entities (e.g. standardizing "Anthropic Provider" to "Anthropic") by
+///    checking the existing knowledge graph.
+/// 3. **Contradiction Detection**: Facts are compared against the existing memory store using
+///    a vector index to discover contradictions, resolving them in favor of newer information.
+/// 4. **Storage**: The consolidated facts are indexed and written to the persistent store.
 pub async fn consolidate_session(
     provider: &dyn Provider,
     embeddings: &dyn EmbeddingProvider,
@@ -49,10 +61,14 @@ pub async fn consolidate_session(
         .join("\n");
 
     // Step 1: Extract durable facts
+    // Use the LLM to identify durable knowledge and discard conversational noise.
     let mut facts = extract_facts(provider, &session_content, model, options).await?;
 
     // Step 1b: Resolve entities in Knowledge Graph triples
-    let resolver = super::resolution::LlmEntityResolver::new(provider, model.to_string(), store, options);
+    // Use the LLM to perform semantic entity resolution, ensuring that entities like
+    // "Remem" and "remem-io" are mapped to the canonical entity name in the store.
+    let resolver =
+        super::resolution::LlmEntityResolver::new(provider, model.to_string(), store, options);
     use super::resolution::EntityResolver;
 
     // Collect all triples from facts
@@ -267,4 +283,86 @@ Output the facts now:"#
     }
 
     Ok(facts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+
+    struct MockProviderObj {
+        response: String,
+    }
+
+    #[async_trait]
+    impl Provider for MockProviderObj {
+        async fn complete(
+            &self,
+            _prompt: &str,
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+            Ok((
+                self.response.clone(),
+                Some(crate::providers::TokenUsage {
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    total_tokens: 0,
+                }),
+            ))
+        }
+        async fn chat(
+            &self,
+            _messages: &[crate::providers::ChatMessage],
+            _tools: &[crate::providers::Tool],
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<crate::providers::ChatResponse> {
+            unimplemented!()
+        }
+        fn name(&self) -> &str {
+            "mock"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_extract_facts_parsing() {
+        let provider = MockProviderObj {
+            response: "FACT | fact | 8 | rust, test | This is a test fact\nTRIPLE | subject | pred | obj\nFACT | procedure | 9 | dev | This is a procedure".to_string(),
+        };
+
+        let facts = extract_facts(&provider, "session logs", "mock", None)
+            .await
+            .unwrap();
+
+        assert_eq!(facts.len(), 2);
+
+        assert_eq!(facts[0].content, "This is a test fact");
+        assert_eq!(facts[0].importance, 8.0);
+        assert_eq!(facts[0].memory_type, MemoryType::Fact);
+        assert_eq!(facts[0].tags, vec!["rust", "test"]);
+        assert!(facts[0].knowledge_triple.is_none());
+
+        assert_eq!(facts[1].content, "This is a procedure");
+        assert_eq!(facts[1].importance, 9.0);
+        assert_eq!(facts[1].memory_type, MemoryType::Procedure);
+        assert_eq!(facts[1].tags, vec!["dev"]);
+
+        let triple = facts[1].knowledge_triple.as_ref().unwrap();
+        assert_eq!(triple.subject, "subject");
+        assert_eq!(triple.predicate, "pred");
+        assert_eq!(triple.object, "obj");
+    }
+
+    #[tokio::test]
+    async fn test_extract_facts_empty() {
+        let provider = MockProviderObj {
+            response: "Some conversational text without FACT lines".to_string(),
+        };
+
+        let facts = extract_facts(&provider, "session logs", "mock", None)
+            .await
+            .unwrap();
+        assert!(facts.is_empty());
+    }
 }

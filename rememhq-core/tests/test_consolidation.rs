@@ -22,6 +22,7 @@ async fn test_consolidate_empty_session() {
         &index,
         "session-empty",
         "mock-model",
+        None,
     )
     .await
     .unwrap();
@@ -43,7 +44,7 @@ async fn test_consolidate_normal_session() {
     // Insert a raw memory from the session
     let record = MemoryRecord::new("User said they love coding in Rust", MemoryType::Fact)
         .with_session("session-normal");
-    let _embedding = embeddings.embed(&record.content).await.unwrap();
+    let _embedding = embeddings.embed(&record.content, None).await.unwrap();
     store.insert(&record).await.unwrap();
 
     let report = consolidate_session(
@@ -53,6 +54,7 @@ async fn test_consolidate_normal_session() {
         &index,
         "session-normal",
         "mock-model",
+        None,
     )
     .await
     .unwrap();
@@ -96,6 +98,7 @@ async fn test_consolidate_procedure_session() {
         &index,
         "session-cake",
         "mock-model",
+        None,
     )
     .await
     .unwrap();
@@ -131,7 +134,7 @@ async fn test_consolidate_with_contradiction_autoresolve() {
 
     // 1. Insert existing memory "Alice lives in London"
     let mut existing_record = MemoryRecord::new("Alice lives in London", MemoryType::Fact);
-    let embedding = embeddings.embed(&existing_record.content).await.unwrap();
+    let embedding = embeddings.embed(&existing_record.content, None).await.unwrap();
     existing_record.embedding = Some(embedding.clone());
     store.insert(&existing_record).await.unwrap();
     index.add(existing_record.id, &embedding).await.unwrap();
@@ -152,6 +155,7 @@ async fn test_consolidate_with_contradiction_autoresolve() {
         &index,
         "session-contradiction",
         "mock-model",
+        None,
     )
     .await
     .unwrap();

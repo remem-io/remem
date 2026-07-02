@@ -268,7 +268,7 @@ mod tests {
     fn test_scoring_model_for_google() {
         let _guard = ENV_TEST_LOCK.lock().unwrap();
         clear_env();
-        assert_eq!(scoring_model_for("google"), "gemini-2.0-flash");
+        assert_eq!(scoring_model_for("google"), "gemini-2.5-flash");
     }
 
     #[test]

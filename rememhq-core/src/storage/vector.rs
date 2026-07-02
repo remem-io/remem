@@ -20,8 +20,8 @@ pub mod remem_ffi {
             id: *const c_char,
             data: *const c_float,
             len: usize,
-        );
-        pub fn remem_index_remove(index: *mut std::ffi::c_void, id: *const c_char);
+        ) -> c_int;
+        pub fn remem_index_remove(index: *mut std::ffi::c_void, id: *const c_char) -> c_int;
         pub fn remem_index_size(index: *mut std::ffi::c_void) -> usize;
         pub fn remem_index_search(
             index: *mut std::ffi::c_void,
@@ -30,8 +30,8 @@ pub mod remem_ffi {
             out_count: *mut usize,
         ) -> *mut RememSearchResult;
         pub fn remem_free_results(results: *mut RememSearchResult);
-        pub fn remem_index_save(index: *mut std::ffi::c_void, path: *const c_char);
-        pub fn remem_index_load(index: *mut std::ffi::c_void, path: *const c_char);
+        pub fn remem_index_save(index: *mut std::ffi::c_void, path: *const c_char) -> c_int;
+        pub fn remem_index_load(index: *mut std::ffi::c_void, path: *const c_char) -> c_int;
 
         // Embedding Engine
         pub fn remem_embedder_new(
@@ -117,12 +117,15 @@ impl VectorIndex for HNSWVectorIndex {
     async fn add(&self, id: Uuid, embedding: &[f32]) -> anyhow::Result<()> {
         let id_str = CString::new(id.to_string())?;
         unsafe {
-            remem_ffi::remem_index_add(
+            let res = remem_ffi::remem_index_add(
                 self.handle,
                 id_str.as_ptr(),
                 embedding.as_ptr(),
                 embedding.len(),
             );
+            if res != 0 {
+                anyhow::bail!("Failed to add embedding to vector index");
+            }
         }
         Ok(())
     }
@@ -130,7 +133,10 @@ impl VectorIndex for HNSWVectorIndex {
     async fn remove(&self, id: Uuid) -> anyhow::Result<()> {
         let id_str = CString::new(id.to_string())?;
         unsafe {
-            remem_ffi::remem_index_remove(self.handle, id_str.as_ptr());
+            let res = remem_ffi::remem_index_remove(self.handle, id_str.as_ptr());
+            if res != 0 {
+                anyhow::bail!("Failed to remove embedding from vector index");
+            }
         }
         Ok(())
     }
@@ -174,7 +180,10 @@ impl VectorIndex for HNSWVectorIndex {
     async fn save(&self, path: &Path) -> anyhow::Result<()> {
         let path_str = CString::new(path.to_string_lossy().to_string())?;
         unsafe {
-            remem_ffi::remem_index_save(self.handle, path_str.as_ptr());
+            let res = remem_ffi::remem_index_save(self.handle, path_str.as_ptr());
+            if res != 0 {
+                anyhow::bail!("Failed to save vector index");
+            }
         }
         Ok(())
     }
@@ -182,7 +191,10 @@ impl VectorIndex for HNSWVectorIndex {
     async fn load(&self, path: &Path) -> anyhow::Result<()> {
         let path_str = CString::new(path.to_string_lossy().to_string())?;
         unsafe {
-            remem_ffi::remem_index_load(self.handle, path_str.as_ptr());
+            let res = remem_ffi::remem_index_load(self.handle, path_str.as_ptr());
+            if res != 0 {
+                anyhow::bail!("Failed to load vector index");
+            }
         }
         Ok(())
     }

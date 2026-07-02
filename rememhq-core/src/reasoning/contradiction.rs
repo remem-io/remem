@@ -20,7 +20,7 @@ pub(crate) async fn detect_contradictions(
 
     let mut contradictions = Vec::new();
 
-    for fact in new_facts.iter() {
+    for fact in new_facts {
         // Find top-5 potential conflicts using vector similarity
         let embedding = embeddings.embed(&fact.content, options).await?;
         let results = index.search(&embedding, 5).await?;
@@ -96,4 +96,104 @@ If no contradiction exists, output: NONE"#,
     }
 
     Ok(contradictions)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::sqlite::SqliteStore;
+    use crate::storage::vector::VectorResult;
+    use async_trait::async_trait;
+    use std::path::Path;
+    use uuid::Uuid;
+
+    struct MockEmbeddings;
+    #[async_trait]
+    impl EmbeddingProvider for MockEmbeddings {
+        async fn embed(
+            &self,
+            _text: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<Vec<f32>> {
+            Ok(vec![0.0; 768])
+        }
+        async fn embed_batch(
+            &self,
+            _texts: &[String],
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<Vec<Vec<f32>>> {
+            Ok(vec![])
+        }
+        fn dimension(&self) -> usize {
+            768
+        }
+    }
+
+    struct MockIndex;
+    #[async_trait]
+    impl VectorIndex for MockIndex {
+        async fn add(&self, _id: Uuid, _embedding: &[f32]) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn remove(&self, _id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn search(&self, _query: &[f32], _k: usize) -> anyhow::Result<Vec<VectorResult>> {
+            Ok(vec![])
+        }
+        fn len(&self) -> usize {
+            0
+        }
+        async fn save(&self, _path: &Path) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn load(&self, _path: &Path) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct MockProviderObj;
+    #[async_trait]
+    impl Provider for MockProviderObj {
+        async fn complete(
+            &self,
+            _prompt: &str,
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+            Ok((
+                "NONE".to_string(),
+                Some(crate::providers::TokenUsage {
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    total_tokens: 0,
+                }),
+            ))
+        }
+        async fn chat(
+            &self,
+            _messages: &[crate::providers::ChatMessage],
+            _tools: &[crate::providers::Tool],
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<crate::providers::ChatResponse> {
+            unimplemented!()
+        }
+        fn name(&self) -> &str {
+            "mock"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_empty_facts() {
+        let provider = MockProviderObj;
+        let embeddings = MockEmbeddings;
+        let index = MockIndex;
+        let store = SqliteStore::open_in_memory().unwrap();
+        let result =
+            detect_contradictions(&provider, &embeddings, &index, &store, &[], "mock", None)
+                .await
+                .unwrap();
+        assert!(result.is_empty());
+    }
 }

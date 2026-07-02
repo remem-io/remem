@@ -175,14 +175,17 @@ pub async fn create_store_memory(
     record.path = Some(req.path);
 
     let options = crate::middleware::auth::extract_provider_options(&headers);
-    let stored = engine.store_memory(record, false, options.as_ref()).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-    })?;
+    let stored = engine
+        .store_memory(record, false, options.as_ref())
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
 
     Ok((StatusCode::CREATED, Json(stored)))
 }

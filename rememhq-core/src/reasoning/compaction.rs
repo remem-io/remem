@@ -15,6 +15,14 @@ pub struct CompactionReport {
 }
 
 /// Compact a conversation trace to save context window tokens.
+///
+/// This operation processes a raw conversation trace that is nearing the agent's context
+/// window limit, and condenses it into a high-fidelity summary. It focuses on preserving
+/// critical architectural decisions, unresolved bugs, implementation details, and project
+/// states, while stripping out redundant tool outputs and ephemeral conversation filler.
+///
+/// An optional list of `focus_areas` can be provided to guarantee that certain topics
+/// (e.g. specific open issues or tasks) are prioritized in the summary output.
 pub async fn compact_context(
     provider: &dyn Provider,
     model: &str,
@@ -58,4 +66,55 @@ Output the compressed context now:"#
         original_length: conversation_text.len(),
         compressed_length: compressed_context.len(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+
+    struct MockProviderObj;
+    #[async_trait]
+    impl Provider for MockProviderObj {
+        async fn complete(
+            &self,
+            _prompt: &str,
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+            Ok((
+                "Compressed summary".to_string(),
+                Some(crate::providers::TokenUsage {
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    total_tokens: 0,
+                }),
+            ))
+        }
+        async fn chat(
+            &self,
+            _messages: &[crate::providers::ChatMessage],
+            _tools: &[crate::providers::Tool],
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<crate::providers::ChatResponse> {
+            unimplemented!()
+        }
+        fn name(&self) -> &str {
+            "mock"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_compact_context() {
+        let provider = MockProviderObj;
+        let trace = "This is a very long conversation trace that needs to be compacted.";
+        let report = compact_context(&provider, "mock", trace, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(report.compressed_context, "Compressed summary");
+        assert_eq!(report.original_length, trace.len());
+        assert_eq!(report.compressed_length, 18); // "Compressed summary".len()
+    }
 }

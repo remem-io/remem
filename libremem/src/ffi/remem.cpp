@@ -42,19 +42,24 @@ void remem_index_free(remem_index_t* index) {
     } catch (...) {}
 }
 
-void remem_index_add(remem_index_t* index, const char* id, const float* data, size_t len) {
+int remem_index_add(remem_index_t* index, const char* id, const float* data, size_t len) {
     try {
         std::vector<float> embedding(data, data + len);
         index->impl->add(id, embedding);
+        return 0;
     } catch (const std::exception& e) {
         std::cerr << "[libremem] Error in remem_index_add: " << e.what() << std::endl;
+        return -1;
     }
 }
 
-void remem_index_remove(remem_index_t* index, const char* id) {
+int remem_index_remove(remem_index_t* index, const char* id) {
     try {
         index->impl->remove(id);
-    } catch (...) {}
+        return 0;
+    } catch (...) {
+        return -1;
+    }
 }
 
 size_t remem_index_size(remem_index_t* index) {
@@ -92,19 +97,23 @@ void remem_free_results(remem_search_result_t* results) {
     if (results) free(results);
 }
 
-void remem_index_save(remem_index_t* index, const char* path) {
+int remem_index_save(remem_index_t* index, const char* path) {
     try {
         index->impl->save(path);
+        return 0;
     } catch (const std::exception& e) {
         std::cerr << "[libremem] Error in remem_index_save: " << e.what() << std::endl;
+        return -1;
     }
 }
 
-void remem_index_load(remem_index_t* index, const char* path) {
+int remem_index_load(remem_index_t* index, const char* path) {
     try {
         index->impl->load(path);
+        return 0;
     } catch (const std::exception& e) {
         std::cerr << "[libremem] Error in remem_index_load: " << e.what() << std::endl;
+        return -1;
     }
 }
 

@@ -311,7 +311,7 @@ async fn main() -> anyhow::Result<()> {
                 println!("No memories found for: \"{}\"", query);
             } else {
                 println!("Found {} memories:\n", results.len());
-                for (i, r) in results.iter().enumerate() {
+                for (i, r) in results.into_iter().enumerate() {
                     println!(
                         "  {}. [imp: {:.1}, decay: {:.2}] {}",
                         i + 1,
@@ -336,7 +336,7 @@ async fn main() -> anyhow::Result<()> {
                 println!("No memories found for: \"{}\"", query);
             } else {
                 println!("Found {} memories:\n", results.len());
-                for (i, r) in results.iter().enumerate() {
+                for (i, r) in results.into_iter().enumerate() {
                     println!(
                         "  {}. [sim: {:.3}, imp: {:.1}, decay: {:.2}] {}",
                         i + 1,
@@ -480,7 +480,9 @@ async fn main() -> anyhow::Result<()> {
             SessionAction::Compress { session_id } => {
                 let engine = build_engine(&config).await?;
                 println!("Compressing session '{}' into durable facts...", session_id);
-                let report = engine.compress_session_transcript(&session_id, None).await?;
+                let report = engine
+                    .compress_session_transcript(&session_id, None)
+                    .await?;
                 println!("✓ Session compressed successfully!");
                 println!("  New facts created: {}", report.new_facts);
                 println!("  Contradictions resolved: {}", report.contradictions.len());
@@ -497,7 +499,7 @@ async fn main() -> anyhow::Result<()> {
                 println!("No context available for project '{}'.", cli.project);
             } else {
                 println!("Project Context (Top {} memories):\n", limit);
-                for (i, m) in memories.iter().enumerate() {
+                for (i, m) in memories.into_iter().enumerate() {
                     println!("{}. [{}] {}", i + 1, m.memory_type, m.content);
                 }
             }

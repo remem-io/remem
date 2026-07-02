@@ -31,7 +31,12 @@ impl OpenAIProvider {
 
 #[async_trait]
 impl Provider for OpenAIProvider {
-    async fn complete(&self, prompt: &str, model: &str, options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+    async fn complete(
+        &self,
+        prompt: &str,
+        model: &str,
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
         let messages = vec![ChatMessage {
             role: ChatRole::User,
             content: prompt.to_string(),
@@ -172,7 +177,10 @@ impl Provider for OpenAIProvider {
             total_tokens: u["total_tokens"].as_u64().unwrap_or(0) as usize,
         });
 
-        Ok(ChatResponse { message: msg, usage })
+        Ok(ChatResponse {
+            message: msg,
+            usage,
+        })
     }
 
     fn name(&self) -> &str {

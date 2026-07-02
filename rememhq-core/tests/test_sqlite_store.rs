@@ -165,7 +165,6 @@ async fn test_apply_decay() {
 #[tokio::test]
 async fn test_session_branching() {
     use rememhq_core::memory::types::SessionObservation;
-    use uuid::Uuid;
 
     let store = make_store();
     let session_id = "test-session-branching".to_string();

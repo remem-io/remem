@@ -68,7 +68,12 @@ pub struct ProviderOptions {
 #[async_trait]
 pub trait Provider: Send + Sync {
     /// Generate a completion from the LLM.
-    async fn complete(&self, prompt: &str, model: &str, options: Option<&ProviderOptions>) -> anyhow::Result<(String, Option<TokenUsage>)>;
+    async fn complete(
+        &self,
+        prompt: &str,
+        model: &str,
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<(String, Option<TokenUsage>)>;
 
     /// Generate a multi-turn chat response, optionally with tool calling.
     async fn chat(
@@ -87,10 +92,18 @@ pub trait Provider: Send + Sync {
 #[async_trait]
 pub trait EmbeddingProvider: Send + Sync {
     /// Generate an embedding vector for the given text.
-    async fn embed(&self, text: &str, options: Option<&ProviderOptions>) -> anyhow::Result<Vec<f32>>;
+    async fn embed(
+        &self,
+        text: &str,
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<f32>>;
 
     /// Generate embeddings for multiple texts (batch).
-    async fn embed_batch(&self, texts: &[String], options: Option<&ProviderOptions>) -> anyhow::Result<Vec<Vec<f32>>>;
+    async fn embed_batch(
+        &self,
+        texts: &[String],
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<Vec<f32>>>;
 
     /// Embedding dimension.
     fn dimension(&self) -> usize;

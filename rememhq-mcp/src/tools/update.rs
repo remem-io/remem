@@ -45,13 +45,15 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .get("api_key")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
-        
+
     let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
         api_key: Some(key),
         ..Default::default()
     });
 
-    let updated = engine.update_memory(id, content, importance, tags, options.as_ref()).await?;
+    let updated = engine
+        .update_memory(id, content, importance, tags, options.as_ref())
+        .await?;
 
     let text = serde_json::to_string_pretty(&serde_json::json!({
         "id": updated.id,

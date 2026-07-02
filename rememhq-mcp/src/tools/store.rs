@@ -64,13 +64,15 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .get("api_key")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
-        
+
     let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
         api_key: Some(key),
         ..Default::default()
     });
 
-    let stored = engine.store_memory(record, auto_score, options.as_ref()).await?;
+    let stored = engine
+        .store_memory(record, auto_score, options.as_ref())
+        .await?;
 
     Ok(serde_json::json!({
         "content": [{
