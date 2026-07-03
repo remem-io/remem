@@ -28,7 +28,7 @@ utoipa = { workspace = true }
 # needed by models::pull_model for streaming response body to disk
 futures-util = "0.3"
 sha2 = "0.11.0"
-libremem-sys = { path = "../libremem", version = "0.1.7" }
+libremem-sys = { path = "../libremem", version = "0.1.8" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
