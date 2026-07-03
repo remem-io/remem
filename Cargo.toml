@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "libremem",
     "rememhq-core",
     "rememhq-mcp",
     "rememhq-api",

@@ -1,0 +1,12 @@
+[package]
+name = "libremem-sys"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "C++ core backend for rememhq"
+links = "remem"
+
+[build-dependencies]
+cc = { workspace = true }

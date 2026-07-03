@@ -70,7 +70,7 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Publish Rust crates to crates.io
-  # Order: rememhq-core → rememhq-mcp → rememhq-api → rememhq-cli
+  # Order: libremem-sys -> rememhq-core → rememhq-mcp → rememhq-api → rememhq-cli
   # (respects dependency graph)
   # ──────────────────────────────────────────────
   rust:
@@ -79,6 +79,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish libremem-sys
+        if: ${{ !inputs.dry_run }}
+        run: cargo publish -p libremem-sys --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index (libremem-sys)
+        run: sleep 30
 
       - name: Publish rememhq-core
         if: ${{ !inputs.dry_run }}
