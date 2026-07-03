@@ -1,5 +1,7 @@
 //! rememhq-core — reasoning memory layer for AI agents.
 
+extern crate libremem_sys;
+
 pub mod config;
 pub mod ffi;
 pub mod memory;
