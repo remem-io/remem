@@ -205,6 +205,7 @@ class Memory:
     async def __aexit__(self, *args) -> None:
         await self.close()
 
+
 class StoreMemoriesClient:
     def __init__(self, client: httpx.AsyncClient):
         self._client = client
@@ -214,29 +215,39 @@ class StoreMemoriesClient:
         resp.raise_for_status()
         return [MemoryResult.model_validate(r) for r in resp.json()]
 
-    async def create(self, store_id: str | UUID, path: str, content: str) -> MemoryResult:
+    async def create(
+        self, store_id: str | UUID, path: str, content: str
+    ) -> MemoryResult:
         resp = await self._client.post(
             f"/v1/memory_stores/{store_id}/memories",
-            json={"path": path, "content": content}
+            json={"path": path, "content": content},
         )
         resp.raise_for_status()
         return MemoryResult.model_validate(resp.json())
 
     async def get(self, store_id: str | UUID, path_or_id: str | UUID) -> MemoryResult:
-        resp = await self._client.get(f"/v1/memory_stores/{store_id}/memories/{path_or_id}")
-        resp.raise_for_status()
-        return MemoryResult.model_validate(resp.json())
-
-    async def update(self, store_id: str | UUID, path_or_id: str | UUID, content: str) -> MemoryResult:
-        resp = await self._client.post(
-            f"/v1/memory_stores/{store_id}/memories/{path_or_id}",
-            json={"content": content}
+        resp = await self._client.get(
+            f"/v1/memory_stores/{store_id}/memories/{path_or_id}"
         )
         resp.raise_for_status()
         return MemoryResult.model_validate(resp.json())
-        
-    async def list_versions(self, store_id: str | UUID, path_or_id: str | UUID) -> list[MemoryVersionRecord]:
-        resp = await self._client.get(f"/v1/memory_stores/{store_id}/memories/{path_or_id}/versions")
+
+    async def update(
+        self, store_id: str | UUID, path_or_id: str | UUID, content: str
+    ) -> MemoryResult:
+        resp = await self._client.post(
+            f"/v1/memory_stores/{store_id}/memories/{path_or_id}",
+            json={"content": content},
+        )
+        resp.raise_for_status()
+        return MemoryResult.model_validate(resp.json())
+
+    async def list_versions(
+        self, store_id: str | UUID, path_or_id: str | UUID
+    ) -> list[MemoryVersionRecord]:
+        resp = await self._client.get(
+            f"/v1/memory_stores/{store_id}/memories/{path_or_id}/versions"
+        )
         resp.raise_for_status()
         return [MemoryVersionRecord.model_validate(r) for r in resp.json()]
 
@@ -246,7 +257,9 @@ class MemoryStoresClient:
         self._client = client
         self.memories = StoreMemoriesClient(client)
 
-    async def create(self, name: str, description: str | None = None) -> MemoryStoreRecord:
+    async def create(
+        self, name: str, description: str | None = None
+    ) -> MemoryStoreRecord:
         payload = {"name": name}
         if description:
             payload["description"] = description

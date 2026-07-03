@@ -73,12 +73,14 @@ class KnowledgeGraphUpdate(BaseModel):
 # Fix forward references
 ConsolidationReport.model_rebuild()
 
+
 class MemoryStoreRecord(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
     created_at: datetime
     archived_at: Optional[datetime] = None
+
 
 class MemoryVersionRecord(BaseModel):
     id: str
