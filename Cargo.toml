@@ -76,7 +76,7 @@ ndarray = "0.17"
 cc = "1.2"
 
 # Internal crates
-rememhq-core = { path = "rememhq-core" }
+rememhq-core = { path = "rememhq-core", version = "0.1.7" }
 
 # NOTE: rememhq-mcp implements its own stdio JSON-RPC loop and does NOT use
 # the rmcp crate. If a future version migrates to the rmcp SDK, add it back

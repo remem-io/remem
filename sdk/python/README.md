@@ -1,8 +1,23 @@
 # remem Python SDK
 
-This is the Python SDK for remem, providing a typed interface over the REST API.
+[![PyPI version](https://badge.fury.io/py/rememhq.svg)](https://badge.fury.io/py/rememhq)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+The official Python SDK for **remem** — the reasoning memory layer for AI agents.
+
+Remem provides a persistent, queryable memory system that uses LLM-powered reasoning for importance scoring, contradiction detection, knowledge graph construction, and session consolidation. This SDK offers a strongly-typed, fully asynchronous interface over the remem REST API using `httpx` and `pydantic`.
+
+## Key Features
+
+- **Fully Asynchronous**: Built natively on `asyncio` and `httpx`.
+- **Type-Safe Models**: Robust validation and autocompletion powered by Pydantic.
+- **LLM-Powered Reasoning**: Effortlessly invoke semantic recall, importance scoring, and consolidation.
+- **Knowledge Graph**: Native support for storing and querying relationship triples.
 
 ## Installation
+
+Install the package via pip or your preferred package manager (e.g., uv, poetry):
 
 ```bash
 pip install rememhq
@@ -10,160 +25,100 @@ pip install rememhq
 
 ## Quick Start
 
-```python
-from rememhq import Memory
+### 1. Start the remem API Server
 
-memory = Memory(base_url="http://localhost:7474")
-
-# Store a memory
-await memory.store("User prefers Python", tags=["language"])
-
-# Recall memories
-results = await memory.recall("what language does the user prefer?")
-for result in results:
-    print(f"Content: {result.content}")
-    print(f"Reasoning: {result.reasoning}")
-```
-
-## Development
-
-### Prerequisites
-
-- **Python** 3.11+
-- **pip** or **uv**
-
-### Setup
-
-```bash
-cd sdk/python
-
-# Install in development mode with dev dependencies
-pip install -e ".[dev]"
-```
-
-### Testing
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# Run with coverage
-pytest tests/ --cov=rememhq
-
-# Run specific test
-pytest tests/test_memory.py -v
-```
-
-### Code Quality
-
-```bash
-# Format code
-black rememhq/ tests/
-
-# Lint
-ruff check rememhq/ tests/
-
-# Type checking
-mypy rememhq/
-```
-
-### Building
-
-```bash
-# Build distribution
-python -m build
-
-# Install locally from build
-pip install dist/rememhq-*.whl
-```
-
-## Running the API Server
-
-Before using the SDK, start the remem API server from the repository root:
+Before using the SDK, start the `rememhq-api` server from the remem repository root:
 
 ```bash
 cargo run -p rememhq-api -- --project default
 ```
 
-The API will be available at `http://localhost:7474` by default.
+By default, the server listens on `http://localhost:7474`.
 
-## API Reference
-
-### Memory
-
-#### `store(content: str, tags: Optional[List[str]] = None, importance: Optional[float] = None) -> StoreResponse`
-
-Store a memory with optional tags and importance score.
+### 2. Initialize the Client
 
 ```python
-response = await memory.store(
-    "Production database is PostgreSQL 15",
-    tags=["infra", "database"],
-    importance=0.95
-)
-```
-
-#### `recall(query: str, limit: int = 8) -> List[RecallResult]`
-
-Retrieve memories most relevant to the query, with reasoning traces.
-
-```python
-results = await memory.recall("what database are we using?", limit=8)
-for result in results:
-    print(f"Content: {result.content}")
-    print(f"Score: {result.score}")
-    print(f"Reasoning: {result.reasoning}")
-```
-
-#### `search(query: str, limit: int = 10) -> List[SearchResult]`
-
-Full-text search over all memories.
-
-```python
-results = await memory.search("deployment", limit=10)
-```
-
-#### `update(memory_id: str, content: str) -> UpdateResponse`
-
-Update an existing memory's content.
-
-#### `forget(memory_id: str) -> ForgetResponse`
-
-Delete a memory.
-
-#### `consolidate(session_id: str) -> ConsolidateResponse`
-
-Consolidate session logs into durable facts.
-
-## Configuration
-
-Configure the SDK via constructor parameters or environment variables:
-
-```python
+import asyncio
 from rememhq import Memory
 
+async def main():
+    # Initialize the memory client
+    memory = Memory(
+        base_url="http://localhost:7474",
+        project="my-agent",
+        reasoning_model="claude-sonnet-4-6"  # Configure the underlying reasoning engine
+    )
+
+    # Store a memory
+    store_resp = await memory.store(
+        content="The user prefers Python for ML tasks.",
+        tags=["preferences", "ml"]
+    )
+    print(f"Stored memory ID: {store_resp.id}")
+
+    # Recall memories using semantic reasoning
+    results = await memory.recall(query="What language does the user prefer for machine learning?", limit=5)
+    
+    for result in results:
+        print(f"Content: {result.content}")
+        print(f"Reasoning trace: {result.reasoning}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Configuration Options
+
+You can configure the SDK using constructor parameters or environment variables:
+
+```python
 memory = Memory(
     base_url="http://localhost:7474",
     project="my-agent",
-    reasoning_model="claude-sonnet-4-6",
+    reasoning_model="gpt-4o",
     timeout=30.0
 )
 ```
 
-**Environment variables:**
+**Environment Variables:**
 - `REMEM_API_URL` — API server URL (default: `http://localhost:7474`)
-- `REMEM_PROJECT` — Project name (default: `default`)
+- `REMEM_PROJECT` — Target project namespace (default: `default`)
 - `REMEM_REASONING_MODEL` — Reasoning model (default: `claude-sonnet-4-6`)
 - `REMEM_TIMEOUT` — Request timeout in seconds (default: `30`)
 
-## Examples
+## API Reference
 
-Check the `examples/` directory for complete working scripts.
+### `Memory` Methods
+
+- `store(content: str, tags: list[str] = None, importance: float = None) -> StoreResponse`: Store a new memory.
+- `recall(query: str, limit: int = 8) -> list[RecallResult]`: Retrieve contextually relevant memories utilizing LLM evaluation.
+- `search(query: str, limit: int = 10) -> list[SearchResult]`: Execute rapid full-text/vector search.
+- `update(memory_id: str, content: str) -> UpdateResponse`: Modify existing memory content.
+- `forget(memory_id: str) -> ForgetResponse`: Delete a specific memory item.
+- `consolidate(session_id: str) -> ConsolidateResponse`: Transform short-term session logs into long-term durable facts.
+
+## Development
+
+To develop the SDK locally:
+
+```bash
+cd sdk/python
+
+# Install dependencies (requires Python 3.11+)
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/ -v
+
+# Format and Lint
+black rememhq/ tests/
+ruff check rememhq/ tests/
+```
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines on contributing to the Python SDK.
+We welcome contributions! Please review our [Contributing Guide](../../CONTRIBUTING.md) for details on submitting pull requests, reporting issues, and suggesting enhancements.
 
 ## License
 
-Apache License 2.0 — See [LICENSE](../../LICENSE) for details.
+This project is licensed under the Apache License 2.0. See the [LICENSE](../../LICENSE) file for more details.

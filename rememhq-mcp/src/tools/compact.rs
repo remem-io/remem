@@ -50,9 +50,8 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, arguments: &Value) -> anyhow:
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
-        api_key: Some(key),
-    });
+    let options =
+        api_key.map(|key| rememhq_core::providers::ProviderOptions { api_key: Some(key) });
 
     let report = engine
         .compact_context(conversation_text, focus_areas.as_deref(), options.as_ref())

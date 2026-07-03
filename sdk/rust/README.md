@@ -1,8 +1,23 @@
-# remem Rust SDK
+# rememhq
 
-Thin, high-level async wrapper around `rememhq-core` for direct Rust integration.
+[![Crates.io](https://img.shields.io/crates/v/rememhq.svg)](https://crates.io/crates/rememhq)
+[![Documentation](https://docs.rs/rememhq/badge.svg)](https://docs.rs/rememhq)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+The official high-level Rust SDK for **remem** — the reasoning memory layer for AI agents.
+
+Remem provides a persistent, queryable memory system that uses LLM-powered reasoning for importance scoring, contradiction detection, knowledge graph construction, and session consolidation. This SDK is a thin, ergonomic, asynchronous wrapper around the `rememhq-core` engine, allowing direct embedding into Rust applications.
+
+## Key Features
+
+- **Direct Embedding**: No HTTP overhead. Runs the core SQLite/Vector Index engine directly in your process.
+- **Provider Auto-Detection**: Seamlessly falls back between Anthropic, OpenAI, and Google depending on available API keys.
+- **LLM Reasoning**: Advanced semantic recall, context condensation, and automated importance scoring natively orchestrated in Rust.
+- **High Performance**: Leverages robust async I/O via `tokio` and C++ FFI for rapid vector searches (HNSW).
 
 ## Installation
+
+Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -17,86 +32,74 @@ use rememhq::{Memory, ReasoningModel, MemoryType, ForgetMode};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // 1. Initialize the memory engine
     let mem = Memory::builder()
         .project("my-agent")
         .reasoning_model(ReasoningModel::ClaudeSonnet)
         .build()
         .await?;
 
-    // Store a memory (auto-scored by LLM)
+    // 2. Store a memory (auto-scored for importance by the LLM)
     let record = mem.store(
-        "rate limiting uses a token bucket at 1000 req/min",
-        &["api", "limits"],
+        "User prefers using Rust for performance-critical systems",
+        &["preferences", "languages"],
         None,
     ).await?;
-    println!("Stored: {} (importance: {:.1})", record.id, record.importance);
+    
+    println!("Stored memory ID: {} (importance: {:.1})", record.id, record.importance);
 
-    // Store a typed memory
-    let _proc = mem.store_typed(
-        "To deploy: run `make deploy` then verify on /health",
-        MemoryType::Procedure,
-        &["devops"],
-        Some(9.0),
-    ).await?;
-
-    // LLM-guided recall (semantic search + re-ranking)
-    let results = mem.recall("api rate limits", 5).await?;
+    // 3. LLM-guided recall (Semantic Search + LLM Re-ranking)
+    let results = mem.recall("What is the user's preferred systems language?", 5).await?;
     for r in &results {
-        println!("{} (importance: {:.1})", r.content, r.importance);
+        println!("Content: {} (Score: {:.1})", r.content, r.importance);
     }
 
-    // Simple vector search (no LLM)
-    let search_results = mem.search("deploy", 10).await?;
-    
-    // Knowledge graph query
-    let triples = mem.query_knowledge(Some("Bob"), None, None).await?;
-
-    // Forget a memory
-    mem.forget(record.id, ForgetMode::Delete).await?;
-
-    // Save index before exiting
+    // 4. Save the underlying vector index to disk before exiting
     mem.save_index().await?;
 
     Ok(())
 }
 ```
 
-## Model Presets
+## Model Presets & Providers
 
-| Preset | Provider | Model ID |
+The SDK supports several top-tier foundation models out of the box:
+
+| Preset | Provider | Default Model ID |
 |---|---|---|
 | `ClaudeSonnet` | Anthropic | `claude-sonnet-4-5` |
 | `ClaudeHaiku` | Anthropic | `claude-haiku-4-5` |
 | `Gpt4o` | OpenAI | `gpt-4o` |
 | `Gpt4oMini` | OpenAI | `gpt-4o-mini` |
 | `Gemini2Flash` | Google | `gemini-2.0-flash` |
-| `Custom(name)` | Anthropic | User-provided |
+| `Custom(name)` | Auto | User-provided |
 
-## Provider Auto-Detection
+### Auto-Detection
 
-If no API key is available for the configured provider, the SDK
-automatically falls back through the chain:
+If no API key is directly provided, the SDK will automatically fallback through the available environment variables in this order:
+1. `ANTHROPIC_API_KEY`
+2. `OPENAI_API_KEY`
+3. `GOOGLE_API_KEY`
 
-1. **Configured provider** (from env or builder)
-2. **Anthropic** → **OpenAI** → **Google** (whichever key is set)
-3. **MockProvider** (returns placeholder responses for offline development)
-
-Set your keys in the environment:
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-export OPENAI_API_KEY=sk-...
-export GOOGLE_API_KEY=...
-```
+It also features a `MockProvider` for offline development and test environments when no keys are detected.
 
 ## Advanced Usage
 
+For deep customizations, you can access the underlying `ReasoningEngine` and `MemoryStore` components directly:
+
 ```rust
-// Access the underlying ReasoningEngine directly
+// Access the internal reasoning engine
 let engine = mem.engine();
+
+// Directly query SQLite statistics
 let stats = engine.store.stats().await?;
-println!("Total memories: {}", stats.total_memories);
+println!("Total memories tracking: {}", stats.total_memories);
 ```
 
-## Status
+## Contributing
 
-✅ **v0.1.0** — Full builder API with auto-detection, cascading fallback, and all memory operations.
+We welcome contributions! Please refer to the [Contributing Guide](../../CONTRIBUTING.md) in the repository root for guidelines on development, testing, and PR submission.
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](../../LICENSE) file for more details.

@@ -46,9 +46,8 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
-        api_key: Some(key),
-    });
+    let options =
+        api_key.map(|key| rememhq_core::providers::ProviderOptions { api_key: Some(key) });
 
     let updated = engine
         .update_memory(id, content, importance, tags, options.as_ref())

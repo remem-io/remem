@@ -1,205 +1,119 @@
 # @rememhq/sdk
 
-TypeScript SDK for remem — reasoning memory layer for AI agents.
+[![npm version](https://badge.fury.io/js/@rememhq%2Fsdk.svg)](https://badge.fury.io/js/@rememhq%2Fsdk)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+
+The official TypeScript SDK for **remem** — the reasoning memory layer for AI agents.
+
+Remem provides a persistent, queryable memory system that uses LLM-powered reasoning for importance scoring, contradiction detection, knowledge graph construction, and session consolidation. This SDK allows seamless integration of remem into your TypeScript and Node.js applications.
+
+## Key Features
+
+- **Semantic Memory**: Store and recall memories using natural language.
+- **LLM-Powered Reasoning**: Automatically scores memory importance and detects contradictions.
+- **Knowledge Graph**: Extracts and queries relationships between entities.
+- **TypeScript Native**: Fully typed API with extensive TSDoc comments.
+- **Universal**: Runs in modern browsers and Node.js 18+ via native `fetch()`.
 
 ## Installation
 
+Install the package via npm, yarn, or pnpm:
+
 ```bash
 npm install @rememhq/sdk
+# or
+yarn add @rememhq/sdk
+# or
+pnpm add @rememhq/sdk
 ```
 
 ## Quick Start
 
-```typescript
-import { Memory } from "@rememhq/sdk";
+### 1. Start the remem API Server
 
-const m = new Memory({
-  baseUrl: "http://localhost:7474",
-  project: "my-agent",
-  reasoningModel: "gpt-4"
-});
-
-// Store a memory
-await m.store("User prefers TypeScript", { tags: ["language"] });
-
-// Recall memories with reasoning
-const results = await m.recall("what language does the user prefer?");
-for (const result of results) {
-  console.log(`Content: ${result.content}`);
-  console.log(`Reasoning: ${result.reasoning}`);
-}
-```
-
-## Development
-
-### Prerequisites
-
-- **Node.js** 20+ (or 18+)
-- **npm** 10+ (or use **pnpm**, **yarn**)
-- **TypeScript** 5+
-
-### Setup
-
-```bash
-cd sdk/typescript
-
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Watch mode (auto-rebuild on changes)
-npm run watch
-```
-
-### Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run in watch mode
-npm run test:watch
-
-# Run with coverage
-npm run test:coverage
-
-# Run specific test file
-npm test -- memory.test.ts
-```
-
-### Code Quality
-
-```bash
-# Format code (Prettier)
-npm run format
-
-# Check formatting
-npm run format:check
-
-# Lint (ESLint)
-npm run lint
-
-# Type check
-npm run type-check
-```
-
-### Building
-
-```bash
-# Build for distribution
-npm run build
-
-# Generate declaration files
-npm run build:types
-
-# Bundle for browser/Node
-npm run bundle
-```
-
-### Publishing
-
-```bash
-# Prepare for publish (lint, test, build)
-npm run prepublishOnly
-
-# Publish to npm (requires npm auth)
-npm publish
-```
-
-## Running the API Server
-
-Before using the SDK, start the remem API server from the repository root:
+Before using the SDK, start the `rememhq-api` server from the remem repository root:
 
 ```bash
 cargo run -p rememhq-api -- --project default
 ```
 
-The API will be available at `http://localhost:7474` by default.
+By default, the server listens on `http://localhost:7474`.
 
-## API Reference
-
-### Memory
-
-#### `store(content: string, options?: StoreOptions): Promise<StoreResponse>`
-
-Store a memory with optional tags and importance score.
+### 2. Initialize the Client
 
 ```typescript
-const response = await m.store("Production DB is PostgreSQL 15", {
-  tags: ["infra", "database"],
-  importance: 0.95
-});
-```
+import { Memory } from "@rememhq/sdk";
 
-#### `recall(query: string, limit?: number): Promise<RecallResult[]>`
-
-Retrieve memories most relevant to the query with reasoning traces.
-
-```typescript
-const results = await m.recall("what database do we use?", 8);
-results.forEach(r => {
-  console.log(`Content: ${r.content}`);
-  console.log(`Score: ${r.score}`);
-  console.log(`Reasoning: ${r.reasoning}`);
-});
-```
-
-#### `search(query: string, limit?: number): Promise<SearchResult[]>`
-
-Full-text search over all memories.
-
-```typescript
-const results = await m.search("deployment", 10);
-```
-
-#### `update(memoryId: string, content: string): Promise<UpdateResponse>`
-
-Update an existing memory's content.
-
-#### `forget(memoryId: string): Promise<ForgetResponse>`
-
-Delete a memory.
-
-#### `consolidate(sessionId: string): Promise<ConsolidateResponse>`
-
-Consolidate session logs into durable facts.
-
-## Configuration
-
-Configure the SDK via constructor options or environment variables:
-
-```typescript
-const m = new Memory({
+// Initialize the memory client
+const memory = new Memory({
   baseUrl: "http://localhost:7474",
   project: "my-agent",
-  reasoningModel: "gpt-4",
-  timeout: 30000,
+  reasoningModel: "gpt-4o", // Configure reasoning model (e.g., claude-sonnet-4-6, gpt-4o)
   headers: {
-    "Authorization": `Bearer ${process.env.API_KEY}`
+    // Optional: Include API keys if authentication is configured on the server
+    "Authorization": `Bearer ${process.env.REMEM_API_KEY}`
   }
 });
 ```
 
-**Environment variables:**
-- `REMEM_API_URL` — API server URL (default: `http://localhost:7474`)
-- `REMEM_PROJECT` — Project name (default: `default`)
-- `REMEM_REASONING_MODEL` — Reasoning model (default: `gpt-4`)
-- `REMEM_TIMEOUT` — Request timeout in milliseconds (default: `30000`)
+### 3. Store and Recall Memories
 
-## Examples
+```typescript
+// Store a new memory
+const storeResponse = await memory.store("The user prefers using TypeScript over JavaScript for large codebases.", {
+  tags: ["preferences", "languages"],
+  importance: 0.8 // Optional: Overrides LLM auto-scoring
+});
 
-See `examples/` directory for complete working examples.
+console.log(`Stored memory ID: ${storeResponse.id}`);
 
-## Browser Support
+// Recall relevant memories based on context
+const results = await memory.recall("What is the user's preferred language for big projects?", 5);
 
-The SDK uses native `fetch()` and works in modern browsers and Node.js 18+.
+for (const result of results) {
+  console.log(`Content: ${result.content}`);
+  console.log(`Relevance Score: ${result.score}`);
+  console.log(`Reasoning: ${result.reasoning}`);
+}
+```
+
+## API Reference
+
+### Configuration Options (`MemoryOptions`)
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `baseUrl` | `string` | `"http://localhost:7474"` | URL of the remem API server |
+| `project` | `string` | `"default"` | Logical namespace for your agent's memory |
+| `reasoningModel` | `string` | `"gpt-4o"` | LLM used for reasoning and scoring |
+| `timeout` | `number` | `30000` | Request timeout in milliseconds |
+| `headers` | `Record<string, string>` | `{}` | Additional HTTP headers |
+
+### Core Methods
+
+- `store(content: string, options?: StoreOptions): Promise<StoreResponse>`: Saves a new memory.
+- `recall(query: string, limit?: number): Promise<RecallResult[]>`: Retrieves contextually relevant memories with LLM reasoning.
+- `search(query: string, limit?: number): Promise<SearchResult[]>`: Performs a fast vector/full-text search.
+- `update(memoryId: string, content: string): Promise<UpdateResponse>`: Modifies an existing memory.
+- `forget(memoryId: string): Promise<ForgetResponse>`: Deletes a memory from the store.
+- `consolidate(sessionId: string): Promise<ConsolidateResponse>`: Consolidates temporary session logs into long-term facts.
+
+## Development
+
+To build the SDK locally:
+
+```bash
+cd sdk/typescript
+npm install
+npm run build
+npm run test
+```
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines on contributing to the TypeScript SDK.
+We welcome contributions! Please review our [Contributing Guide](../../CONTRIBUTING.md) for details on submitting pull requests, reporting issues, and suggesting enhancements.
 
 ## License
 
-Apache License 2.0 — See [LICENSE](../../LICENSE) for details.
+This project is licensed under the Apache License 2.0. See the [LICENSE](../../LICENSE) file for more details.
