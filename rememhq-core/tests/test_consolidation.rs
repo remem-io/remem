@@ -134,7 +134,10 @@ async fn test_consolidate_with_contradiction_autoresolve() {
 
     // 1. Insert existing memory "Alice lives in London"
     let mut existing_record = MemoryRecord::new("Alice lives in London", MemoryType::Fact);
-    let embedding = embeddings.embed(&existing_record.content, None).await.unwrap();
+    let embedding = embeddings
+        .embed(&existing_record.content, None)
+        .await
+        .unwrap();
     existing_record.embedding = Some(embedding.clone());
     store.insert(&existing_record).await.unwrap();
     index.add(existing_record.id, &embedding).await.unwrap();

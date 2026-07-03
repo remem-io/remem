@@ -19,21 +19,6 @@ pub fn schema() -> Value {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_schema_validity() {
-        let s = schema();
-        assert_eq!(s["name"], "mem_get_project_context");
-        assert!(s["description"].is_string());
-        assert_eq!(s["inputSchema"]["type"], "object");
-        assert!(s["inputSchema"]["properties"].is_object());
-        assert!(s["inputSchema"]["required"].is_array());
-    }
-}
-
 pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Result<Value> {
     let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
 
@@ -60,4 +45,19 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         "status": "success",
         "project_context": context_summary
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_schema_validity() {
+        let s = schema();
+        assert_eq!(s["name"], "mem_get_project_context");
+        assert!(s["description"].is_string());
+        assert_eq!(s["inputSchema"]["type"], "object");
+        assert!(s["inputSchema"]["properties"].is_object());
+        assert!(s["inputSchema"]["required"].is_array());
+    }
 }

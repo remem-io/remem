@@ -38,11 +38,11 @@ pub use rememhq_core::memory::types::{
     ConsolidationReport, ForgetMode, KnowledgeGraphUpdate, MemoryRecord, MemoryResult, MemoryType,
     StoreRequest,
 };
-pub use rememhq_core::storage::StoreStats;
 pub use rememhq_core::providers::{EmbeddingProvider, Provider};
 pub use rememhq_core::reasoning::ReasoningEngine;
 pub use rememhq_core::storage::vector::VectorIndex;
 pub use rememhq_core::storage::MemoryStore;
+pub use rememhq_core::storage::StoreStats;
 
 /// Available reasoning model presets.
 #[derive(Debug, Clone)]
@@ -375,10 +375,7 @@ impl Memory {
     }
 
     /// List memories with optional limit.
-    pub async fn list(
-        &self,
-        limit: Option<usize>,
-    ) -> anyhow::Result<Vec<MemoryRecord>> {
+    pub async fn list(&self, limit: Option<usize>) -> anyhow::Result<Vec<MemoryRecord>> {
         self.engine
             .list_memories(&[], None, None, limit.unwrap_or(100))
             .await

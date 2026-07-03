@@ -67,7 +67,6 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
 
     let options = api_key.map(|key| rememhq_core::providers::ProviderOptions {
         api_key: Some(key),
-        ..Default::default()
     });
 
     let stored = engine
