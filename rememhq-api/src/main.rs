@@ -27,11 +27,54 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
+use base64::{engine::general_purpose, Engine as _};
+use validator::Validate;
+
+fn decode_cursor(cursor: Option<String>) -> usize {
+    cursor
+        .and_then(|c| {
+            general_purpose::STANDARD
+                .decode(c)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .and_then(|s| s.parse::<usize>().ok())
+        })
+        .unwrap_or(0)
+}
+
+fn encode_cursor(offset: usize) -> String {
+    general_purpose::STANDARD.encode(offset.to_string())
+}
+
+#[derive(Serialize, ToSchema)]
+struct PaginatedResponse<T> {
+    data: Vec<T>,
+    next_cursor: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema, Validate)]
+struct ApiStoreRequest {
+    #[validate(length(min = 1, message = "Content cannot be empty"))]
+    pub content: String,
+
+    #[validate(range(
+        min = 1.0,
+        max = 10.0,
+        message = "Importance must be between 1.0 and 10.0"
+    ))]
+    pub importance: Option<f32>,
+
+    pub tags: Option<Vec<String>>,
+    pub memory_type: Option<String>,
+    pub ttl_days: Option<u32>,
+}
+
 use rememhq_core::config::RememConfig;
 use rememhq_core::memory::types::*;
 use rememhq_core::reasoning::ReasoningEngine;
 use rememhq_core::storage::sqlite::SqliteStore;
 use rememhq_core::storage::vector::{HNSWVectorIndex, VectorIndex};
+use rememhq_core::storage::MemoryStore;
 
 type AppState = Arc<ReasoningEngine>;
 
@@ -58,29 +101,31 @@ struct ErrorResponse {
     error: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 struct RecallQuery {
+    #[validate(length(min = 1))]
     q: String,
     #[serde(default = "default_8")]
     limit: usize,
-    offset: Option<usize>,
+    cursor: Option<String>,
     #[serde(default)]
     filter_tags: Option<String>,
     since: Option<String>,
     memory_type: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 struct SearchQuery {
+    #[validate(length(min = 1))]
     q: String,
     #[serde(default = "default_20")]
     limit: usize,
-    offset: Option<usize>,
+    cursor: Option<String>,
     #[serde(default)]
     filter_tags: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Validate)]
 struct UpdateBody {
     content: Option<String>,
     importance: Option<f32>,
@@ -113,10 +158,11 @@ struct CompactResponse {
     compressed_length: usize,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 struct ListQuery {
     #[serde(default = "default_20")]
     limit: usize,
+    cursor: Option<String>,
     #[serde(default)]
     filter_tags: Option<String>,
     since: Option<String>,
@@ -179,7 +225,7 @@ fn check_auth(headers: &HeaderMap) -> Result<(), (StatusCode, Json<ErrorResponse
 #[utoipa::path(
     post,
     path = "/v1/memories",
-    request_body = StoreRequest,
+    request_body = ApiStoreRequest,
     responses(
         (status = 201, description = "Memory stored successfully", body = StoreResponse),
         (status = 401, description = "Unauthorized"),
@@ -192,12 +238,25 @@ fn check_auth(headers: &HeaderMap) -> Result<(), (StatusCode, Json<ErrorResponse
 async fn store_memory(
     State(engine): State<AppState>,
     headers: HeaderMap,
-    Json(req): Json<StoreRequest>,
+    Json(req): Json<ApiStoreRequest>,
 ) -> Result<(StatusCode, Json<StoreResponse>), (StatusCode, Json<ErrorResponse>)> {
     check_auth(&headers)?;
+    if let Err(e) = req.validate() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        ));
+    }
 
     let auto_score = req.importance.is_none();
-    let mut record = MemoryRecord::new(&req.content, req.memory_type).with_tags(req.tags);
+    let memory_type = req
+        .memory_type
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(MemoryType::Fact);
+    let mut record =
+        MemoryRecord::new(&req.content, memory_type).with_tags(req.tags.unwrap_or_default());
 
     if let Some(imp) = req.importance {
         record = record.with_importance(imp);
@@ -238,13 +297,13 @@ async fn store_memory(
     params(
         ("q" = String, Query, description = "Query string"),
         ("limit" = Option<usize>, Query, description = "Max results to return"),
-        ("offset" = Option<usize>, Query, description = "Results offset"),
+        ("cursor" = Option<String>, Query, description = "Results offset"),
         ("filter_tags" = Option<String>, Query, description = "Comma-separated list of tags to filter by"),
         ("since" = Option<String>, Query, description = "ISO8601/RFC3339 timestamp filter"),
         ("memory_type" = Option<String>, Query, description = "Memory type filter (fact, procedure, preference, decision)")
     ),
     responses(
-        (status = 200, description = "Recall results", body = Vec<MemoryResult>),
+        (status = 200, description = "Recall results", body = PaginatedResponse<MemoryResult>),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error", body = ErrorResponse)
     ),
@@ -256,8 +315,16 @@ async fn recall_memories(
     State(engine): State<AppState>,
     headers: HeaderMap,
     Query(q): Query<RecallQuery>,
-) -> Result<Json<Vec<MemoryResult>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<PaginatedResponse<MemoryResult>>, (StatusCode, Json<ErrorResponse>)> {
     check_auth(&headers)?;
+    if let Err(e) = q.validate() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        ));
+    }
 
     let filter_tags: Vec<String> = q
         .filter_tags
@@ -271,7 +338,7 @@ async fn recall_memories(
 
     let memory_type = q.memory_type.and_then(|s| s.parse().ok());
 
-    let offset = q.offset.unwrap_or(0);
+    let offset = decode_cursor(q.cursor);
     let limit = q.limit;
     let fetch_limit = offset + limit;
 
@@ -300,7 +367,15 @@ async fn recall_memories(
         .skip(offset)
         .take(limit)
         .collect::<Vec<_>>();
-    Ok(Json(paginated))
+    let next_cursor = if paginated.len() == limit {
+        Some(encode_cursor(offset + limit))
+    } else {
+        None
+    };
+    Ok(Json(PaginatedResponse {
+        data: paginated,
+        next_cursor,
+    }))
 }
 
 /// Search memories using simple vector similarity.
@@ -310,11 +385,11 @@ async fn recall_memories(
     params(
         ("q" = String, Query, description = "Search query string"),
         ("limit" = Option<usize>, Query, description = "Max results to return"),
-        ("offset" = Option<usize>, Query, description = "Results offset"),
+        ("cursor" = Option<String>, Query, description = "Results offset"),
         ("filter_tags" = Option<String>, Query, description = "Comma-separated list of tags to filter by")
     ),
     responses(
-        (status = 200, description = "Search results", body = Vec<MemoryResult>),
+        (status = 200, description = "Search results", body = PaginatedResponse<MemoryResult>),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error", body = ErrorResponse)
     ),
@@ -326,15 +401,23 @@ async fn search_memories(
     State(engine): State<AppState>,
     headers: HeaderMap,
     Query(q): Query<SearchQuery>,
-) -> Result<Json<Vec<MemoryResult>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<PaginatedResponse<MemoryResult>>, (StatusCode, Json<ErrorResponse>)> {
     check_auth(&headers)?;
+    if let Err(e) = q.validate() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        ));
+    }
 
     let filter_tags: Vec<String> = q
         .filter_tags
         .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
         .unwrap_or_default();
 
-    let offset = q.offset.unwrap_or(0);
+    let offset = decode_cursor(q.cursor);
     let limit = q.limit;
     let fetch_limit = offset + limit;
 
@@ -356,7 +439,15 @@ async fn search_memories(
         .skip(offset)
         .take(limit)
         .collect::<Vec<_>>();
-    Ok(Json(paginated))
+    let next_cursor = if paginated.len() == limit {
+        Some(encode_cursor(offset + limit))
+    } else {
+        None
+    };
+    Ok(Json(PaginatedResponse {
+        data: paginated,
+        next_cursor,
+    }))
 }
 
 /// Update an existing memory's content, importance, or tags.
@@ -384,6 +475,14 @@ async fn update_memory(
     Json(body): Json<UpdateBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
     check_auth(&headers)?;
+    if let Err(e) = body.validate() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        ));
+    }
 
     let id = uuid::Uuid::parse_str(&id).map_err(|_| {
         (
@@ -616,13 +715,22 @@ async fn compact_context(
         ("memory_type" = Option<String>, Query, description = "Memory type"),
     ),
     responses(
-        (status = 200, description = "List of memories", body = Vec<MemoryRecord>)
+        (status = 200, description = "List of memories", body = PaginatedResponse<MemoryRecord>)
     )
 )]
 async fn list_memories(
     State(engine): State<AppState>,
     Query(q): Query<ListQuery>,
-) -> Result<Json<Vec<MemoryRecord>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<PaginatedResponse<MemoryRecord>>, (StatusCode, Json<ErrorResponse>)> {
+    if let Err(e) = q.validate() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        ));
+    }
+    let offset = decode_cursor(q.cursor);
     let filter_tags: Vec<String> = q
         .filter_tags
         .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
@@ -639,7 +747,22 @@ async fn list_memories(
         .list_memories(&filter_tags, memory_type, since, q.limit)
         .await
     {
-        Ok(memories) => Ok(Json(memories)),
+        Ok(memories) => {
+            let paginated = memories
+                .into_iter()
+                .skip(offset)
+                .take(q.limit)
+                .collect::<Vec<_>>();
+            let next_cursor = if paginated.len() == q.limit {
+                Some(encode_cursor(offset + q.limit))
+            } else {
+                None
+            };
+            Ok(Json(PaginatedResponse {
+                data: paginated,
+                next_cursor,
+            }))
+        }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -752,17 +875,28 @@ async fn end_session(
         ("limit" = Option<usize>, Query, description = "Max results")
     ),
     responses(
-        (status = 200, description = "List of sessions", body = Vec<SessionResponse>)
+        (status = 200, description = "List of sessions", body = PaginatedResponse<SessionResponse>)
     )
 )]
 async fn list_sessions(
     State(engine): State<AppState>,
     Query(q): Query<ListQuery>,
-) -> Result<Json<Vec<SessionResponse>>, (StatusCode, Json<ErrorResponse>)> {
-    match engine.list_sessions(q.limit).await {
+) -> Result<Json<PaginatedResponse<SessionResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    if let Err(e) = q.validate() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        ));
+    }
+    let offset = decode_cursor(q.cursor);
+    match engine.list_sessions(offset + q.limit).await {
         Ok(sessions) => {
-            let res = sessions
+            let paginated = sessions
                 .into_iter()
+                .skip(offset)
+                .take(q.limit)
                 .map(|r| SessionResponse {
                     id: r.id,
                     project: r.project,
@@ -771,8 +905,16 @@ async fn list_sessions(
                     consolidated: r.consolidated,
                     memory_count: r.memory_count,
                 })
-                .collect();
-            Ok(Json(res))
+                .collect::<Vec<_>>();
+            let next_cursor = if paginated.len() == q.limit {
+                Some(encode_cursor(offset + q.limit))
+            } else {
+                None
+            };
+            Ok(Json(PaginatedResponse {
+                data: paginated,
+                next_cursor,
+            }))
         }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -783,8 +925,26 @@ async fn list_sessions(
     }
 }
 
-async fn health() -> &'static str {
-    "ok"
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses(
+        (status = 200, description = "Service is healthy", body = serde_json::Value),
+        (status = 503, description = "Service unavailable", body = serde_json::Value)
+    )
+)]
+async fn health(
+    State(engine): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match engine.store.stats().await {
+        Ok(_) => Ok(Json(
+            serde_json::json!({ "status": "ok", "db": "connected" }),
+        )),
+        Err(_) => Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({ "status": "error", "db": "disconnected" })),
+        )),
+    }
 }
 
 const SWAGGER_HTML: &str = r#"<!DOCTYPE html>
@@ -836,6 +996,7 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
 #[derive(utoipa::OpenApi)]
 #[openapi(
     paths(
+        health,
         store_memory,
         list_memories,
         recall_memories,
@@ -856,7 +1017,10 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
     ),
     components(
         schemas(
-            StoreRequest,
+            ApiStoreRequest,
+            PaginatedResponse<MemoryResult>,
+            PaginatedResponse<MemoryRecord>,
+            PaginatedResponse<SessionResponse>,
             StoreResponse,
             ErrorResponse,
             MemoryRecord,

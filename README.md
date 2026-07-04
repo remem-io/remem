@@ -81,6 +81,8 @@ Traditional vector stores suffer from "confident recall of irrelevant context." 
 
 ### Model Context Protocol (MCP) — Claude Code / Codex / Cursor / Copilot / Antigravity CLI / OpenCode
 
+See our [Quickstart Guide](docs/QUICKSTART.md) for more details, or explore our examples like `examples/multi_agent.py` and `examples/rag_example.py`.
+
 remem works seamlessly with any MCP-compliant AI assistant. Add the following to your tool's MCP configuration:
 
 ```json
