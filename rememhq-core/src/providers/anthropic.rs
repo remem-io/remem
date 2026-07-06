@@ -136,17 +136,30 @@ impl Provider for AnthropicProvider {
         });
 
         if !system_prompt.is_empty() {
-            request["system"] = json!(system_prompt);
+            request["system"] = json!([{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": { "type": "ephemeral" }
+            }]);
         }
 
         if !tools.is_empty() {
             let mut anthropic_tools = Vec::new();
-            for t in tools {
-                anthropic_tools.push(json!({
+            for (i, t) in tools.iter().enumerate() {
+                let mut tool_json = json!({
                     "name": t.name,
                     "description": t.description,
                     "input_schema": t.input_schema
-                }));
+                });
+                
+                // Add cache control to the last tool
+                if i == tools.len() - 1 {
+                    if let Some(obj) = tool_json.as_object_mut() {
+                        obj.insert("cache_control".to_string(), json!({ "type": "ephemeral" }));
+                    }
+                }
+                
+                anthropic_tools.push(tool_json);
             }
             request["tools"] = json!(anthropic_tools);
         }
@@ -162,6 +175,7 @@ impl Provider for AnthropicProvider {
                     .post(format!("{}/v1/messages", self.base_url))
                     .header("x-api-key", &active_api_key)
                     .header("anthropic-version", "2023-06-01")
+                    .header("anthropic-beta", "prompt-caching-2024-09-02")
                     .header("content-type", "application/json")
                     .json(&request)
                     .send()

@@ -24,9 +24,16 @@ void HNSWIndex::add(const std::string& id, const std::vector<float>& embedding) 
     if (id_to_label_.count(id)) {
         label = id_to_label_[id];
     } else {
-        label = label_to_id_.size();
-        id_to_label_[id] = label;
-        label_to_id_.push_back(id);
+        if (!free_labels_.empty()) {
+            label = free_labels_.back();
+            free_labels_.pop_back();
+            id_to_label_[id] = label;
+            label_to_id_[label] = id;
+        } else {
+            label = label_to_id_.size();
+            id_to_label_[id] = label;
+            label_to_id_.push_back(id);
+        }
     }
 
     index_->addPoint(embedding.data(), label);
@@ -36,6 +43,9 @@ void HNSWIndex::remove(const std::string& id) {
     if (id_to_label_.count(id)) {
         size_t label = id_to_label_[id];
         index_->markDelete(label);
+        id_to_label_.erase(id);
+        label_to_id_[label] = "";
+        free_labels_.push_back(label);
     }
 }
 
@@ -72,6 +82,11 @@ void HNSWIndex::save(const std::string& path) {
     for (const auto& id : label_to_id_) {
         meta << id << "\n";
     }
+
+    std::ofstream free_meta(path + ".free");
+    for (auto label : free_labels_) {
+        free_meta << label << "\n";
+    }
 }
 
 void HNSWIndex::load(const std::string& path) {
@@ -85,7 +100,16 @@ void HNSWIndex::load(const std::string& path) {
     while (std::getline(meta, id)) {
         if (!id.empty()) {
             id_to_label_[id] = label_to_id_.size();
-            label_to_id_.push_back(id);
+        }
+        label_to_id_.push_back(id);
+    }
+
+    std::ifstream free_meta(path + ".free");
+    free_labels_.clear();
+    std::string line;
+    while (std::getline(free_meta, line)) {
+        if (!line.empty()) {
+            free_labels_.push_back(std::stoull(line));
         }
     }
 }

@@ -35,6 +35,7 @@ private:
     std::unique_ptr<hnswlib::HierarchicalNSW<float>> index_;
     std::unordered_map<std::string, size_t> id_to_label_;
     std::vector<std::string> label_to_id_;
+    std::vector<size_t> free_labels_;
 };
 
 } // namespace vector_store

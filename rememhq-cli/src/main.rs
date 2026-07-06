@@ -121,6 +121,11 @@ enum Commands {
         #[command(subcommand)]
         action: SessionAction,
     },
+    /// Run an agent loop
+    Loop {
+        #[command(subcommand)]
+        action: LoopAction,
+    },
     /// Get project context
     Context {
         #[arg(long, default_value = "20")]
@@ -134,6 +139,22 @@ enum Commands {
 enum SessionAction {
     /// Compress a session transcript into durable facts
     Compress { session_id: String },
+}
+
+#[derive(Subcommand)]
+enum LoopAction {
+    /// Run a ReAct loop
+    React {
+        task: String,
+        #[arg(long, default_value = "5")]
+        max_iterations: usize,
+    },
+    /// Run a Generate-Evaluate-Refine loop
+    Eval {
+        task: String,
+        #[arg(long, default_value = "5")]
+        max_iterations: usize,
+    },
 }
 
 /// Supported AI agent consumers for `remem init`.
@@ -505,6 +526,43 @@ async fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
+
+        Commands::Loop { action } => match action {
+            LoopAction::React { task, max_iterations } => {
+                let engine = build_engine(&config).await?;
+                let engine = Arc::new(engine);
+                let harness = rememhq_core::harness::AgentHarness::new(engine.provider.clone());
+                let mut react_loop = rememhq_core::loops::react::ReActLoop::new(harness, engine, task);
+                react_loop.max_iterations = max_iterations;
+                
+                use rememhq_core::loops::AgentLoop;
+                println!("Running ReAct loop...");
+                match react_loop.run().await {
+                    Ok(result) => println!("Final Result:\n{}", result),
+                    Err(e) => eprintln!("Loop failed: {}", e),
+                }
+                Ok(())
+            }
+            LoopAction::Eval { task, max_iterations } => {
+                let engine = build_engine(&config).await?;
+                let harness = rememhq_core::harness::AgentHarness::new(engine.provider.clone());
+                let mut eval_loop = rememhq_core::loops::eval::GenerateEvaluateRefineLoop::new(
+                    harness,
+                    task,
+                    config.reasoning.reasoning_model.clone(),
+                    config.reasoning.reasoning_model.clone(),
+                );
+                eval_loop.max_iterations = max_iterations;
+
+                use rememhq_core::loops::AgentLoop;
+                println!("Running Generate-Evaluate-Refine loop...");
+                match eval_loop.run().await {
+                    Ok(result) => println!("Final Result:\n{}", result),
+                    Err(e) => eprintln!("Loop failed: {}", e),
+                }
+                Ok(())
+            }
+        },
 
         Commands::Forget { id } => {
             let engine = build_engine(&config).await?;
