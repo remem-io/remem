@@ -13,6 +13,9 @@ mod list_memories;
 mod list_sessions;
 mod log_action;
 mod project_context;
+mod build_context;
+mod smart_read;
+mod set_mode;
 mod stats;
 
 use rememhq_core::reasoning::ReasoningEngine;
@@ -38,6 +41,9 @@ pub fn list_tools() -> Vec<Value> {
         list_sessions::schema(),
         stats::schema(),
         create_store::schema(),
+        build_context::schema(),
+        smart_read::schema(),
+        set_mode::schema(),
     ]
 }
 
@@ -66,6 +72,9 @@ pub async fn call_tool(engine: &Arc<ReasoningEngine>, params: &Value) -> anyhow:
         "mem_get_entity_context" => knowledge::handle_entity(engine, &arguments).await,
         "mem_log_action" => log_action::handle(engine, &arguments).await,
         "mem_get_project_context" => project_context::handle(engine, &arguments).await,
+        "mem_build_context" => build_context::handle(engine, &arguments).await,
+        "mem_smart_read" => smart_read::handle(engine, &arguments).await,
+        "mem_set_mode" => set_mode::handle(engine, &arguments).await,
         "mem_list_memories" => list_memories::handle(engine, &arguments).await,
         "mem_list_sessions" => list_sessions::handle(engine, &arguments).await,
         "mem_stats" => stats::handle(engine, &arguments).await,

@@ -21,15 +21,14 @@ pub fn schema() -> Value {
 
 pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Result<Value> {
     let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
-
-    use rememhq_core::storage::MemoryStore;
+    use rememhq_core::storage::MemoryStore;
     let memories = engine.store.list(&[], None, None, limit).await?;
 
     let mut context_summary = String::new();
     context_summary.push_str("Here is the relevant project context and memories:\n\n");
 
     if memories.is_empty() {
-        context_summary.push_str("No memories found for this project yet.");
+        context_summary.push_str("No memories found for this project yet.\n\n");
     } else {
         for (i, mem) in memories.into_iter().enumerate() {
             context_summary.push_str(&format!(
@@ -37,6 +36,25 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
                 i + 1,
                 mem.memory_type,
                 mem.content
+            ));
+        }
+        context_summary.push_str("\n");
+    }
+
+    // Fetch and append recent session summaries
+    let recent_sessions = engine
+        .store
+        .get_recent_session_summaries(&engine.config.project, 5)
+        .await
+        .unwrap_or_default();
+
+    if !recent_sessions.is_empty() {
+        context_summary.push_str("### Recent Sessions Timeline\n\n");
+        for session in recent_sessions {
+            context_summary.push_str(&format!(
+                "- [{}]: {}\n",
+                session.timestamp.format("%Y-%m-%d %H:%M"),
+                session.summary
             ));
         }
     }

@@ -285,6 +285,75 @@ Output the facts now:"#
     Ok(facts)
 }
 
+/// Use the LLM to generate a structured summary of a session.
+pub async fn generate_session_summary(
+    provider: &dyn Provider,
+    session_id: &str,
+    project: &str,
+    session_content: &str,
+    model: &str,
+    options: Option<&ProviderOptions>,
+) -> anyhow::Result<crate::memory::types::SessionSummaryRecord> {
+    let prompt = format!(
+        r#"You are a memory consolidation engine. Your task is to generate a concise summary of the following session log.
+
+Please provide your output in the following JSON format ONLY, with no additional text:
+{{
+  "summary": "A one-paragraph summary of what was accomplished in this session.",
+  "files_touched": ["file1.rs", "file2.ts"],
+  "key_decisions": ["Decided to use SQLite instead of Postgres", "Added a new observation type"]
+}}
+
+Session log:
+{session_content}
+"#
+    );
+
+    let (response, _usage) = provider.complete(&prompt, model, options).await?;
+
+    // Extract JSON block if surrounded by backticks
+    let json_text = if let Some(start) = response.find("```json") {
+        if let Some(end) = response[start + 7..].find("```") {
+            &response[start + 7..start + 7 + end]
+        } else {
+            &response[start + 7..]
+        }
+    } else if let Some(start) = response.find("```") {
+        if let Some(end) = response[start + 3..].find("```") {
+            &response[start + 3..start + 3 + end]
+        } else {
+            &response[start + 3..]
+        }
+    } else {
+        &response
+    };
+
+    #[derive(serde::Deserialize)]
+    struct SummaryOutput {
+        summary: String,
+        #[serde(default)]
+        files_touched: Vec<String>,
+        #[serde(default)]
+        key_decisions: Vec<String>,
+    }
+
+    let parsed: SummaryOutput = serde_json::from_str(json_text.trim())
+        .unwrap_or_else(|_| SummaryOutput {
+            summary: "Failed to parse session summary.".to_string(),
+            files_touched: vec![],
+            key_decisions: vec![],
+        });
+
+    Ok(crate::memory::types::SessionSummaryRecord {
+        session_id: session_id.to_string(),
+        project: project.to_string(),
+        summary: parsed.summary,
+        files_touched: parsed.files_touched,
+        key_decisions: parsed.key_decisions,
+        timestamp: chrono::Utc::now(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

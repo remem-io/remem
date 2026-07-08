@@ -73,7 +73,8 @@ impl SqliteStore {
                 ttl_days        INTEGER,
                 archived        INTEGER NOT NULL DEFAULT 0,
                 store_id        TEXT,
-                path            TEXT
+                path            TEXT,
+                observation_kind TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
@@ -130,6 +131,16 @@ impl SqliteStore {
                 consolidated    INTEGER NOT NULL DEFAULT 0,
                 memory_count    INTEGER NOT NULL DEFAULT 0
             );
+
+            -- Session Summaries
+            CREATE TABLE IF NOT EXISTS session_summaries (
+                session_id      TEXT PRIMARY KEY,
+                project         TEXT NOT NULL,
+                summary         TEXT NOT NULL,
+                files_touched   TEXT NOT NULL DEFAULT '[]',
+                key_decisions   TEXT NOT NULL DEFAULT '[]',
+                timestamp       TEXT NOT NULL
+            );
             
             -- Session Logs
             CREATE TABLE IF NOT EXISTS session_logs (
@@ -167,6 +178,7 @@ impl SqliteStore {
         // Apply schema migrations for existing databases
         let _ = conn.execute("ALTER TABLE memories ADD COLUMN store_id TEXT", []);
         let _ = conn.execute("ALTER TABLE memories ADD COLUMN path TEXT", []);
+        let _ = conn.execute("ALTER TABLE memories ADD COLUMN observation_kind TEXT", []);
 
         Ok(())
     }
@@ -204,6 +216,11 @@ impl SqliteStore {
         } else {
             None
         };
+        let observation_kind_str: Option<String> = if row.as_ref().column_count() > 13 {
+            row.get(13).unwrap_or(None)
+        } else {
+            None
+        };
 
         Ok(MemoryRecord {
             id: Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()),
@@ -212,6 +229,7 @@ impl SqliteStore {
             importance: importance as f32,
             tags: SqliteStore::deserialize_tags(&tags_raw),
             memory_type: type_str.parse().unwrap_or(MemoryType::Fact),
+            observation_kind: observation_kind_str.and_then(|s| s.parse().ok()),
             created_at: DateTime::parse_from_rfc3339(&created_str)
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(|_| Utc::now()),
@@ -254,8 +272,8 @@ impl SqliteStore {
 
     fn insert_inner(conn: &Connection, record: &MemoryRecord) -> anyhow::Result<()> {
         conn.execute(
-            "INSERT INTO memories (id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days, store_id, path)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT INTO memories (id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days, store_id, path, observation_kind)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 record.id.to_string(),
                 record.content,
@@ -269,6 +287,7 @@ impl SqliteStore {
                 record.ttl_days,
                 record.store_id,
                 record.path,
+                record.observation_kind.as_ref().map(|k| k.to_string()),
             ],
         )?;
 
@@ -281,8 +300,8 @@ impl SqliteStore {
 
     fn update_inner(conn: &Connection, record: &MemoryRecord) -> anyhow::Result<()> {
         conn.execute(
-            "UPDATE memories SET content = ?1, importance = ?2, tags = ?3, memory_type = ?4, updated_at = ?5, decay_score = ?6, store_id = ?7, path = ?8
-             WHERE id = ?9",
+            "UPDATE memories SET content = ?1, importance = ?2, tags = ?3, memory_type = ?4, updated_at = ?5, decay_score = ?6, store_id = ?7, path = ?8, observation_kind = ?9
+             WHERE id = ?10",
             params![
                 record.content,
                 record.importance as f64,
@@ -292,6 +311,7 @@ impl SqliteStore {
                 record.decay_score as f64,
                 record.store_id,
                 record.path,
+                record.observation_kind.as_ref().map(|k| k.to_string()),
                 record.id.to_string(),
             ],
         )?;
@@ -841,6 +861,68 @@ impl MemoryStore for SqliteStore {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(observations)
+    }
+
+    async fn insert_session_summary(
+        &self,
+        summary: &crate::memory::types::SessionSummaryRecord,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "INSERT INTO session_summaries (session_id, project, summary, files_touched, key_decisions, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(session_id) DO UPDATE SET
+                summary = excluded.summary,
+                files_touched = excluded.files_touched,
+                key_decisions = excluded.key_decisions,
+                timestamp = excluded.timestamp",
+            params![
+                summary.session_id,
+                summary.project,
+                summary.summary,
+                serde_json::to_string(&summary.files_touched).unwrap_or_else(|_| "[]".to_string()),
+                serde_json::to_string(&summary.key_decisions).unwrap_or_else(|_| "[]".to_string()),
+                summary.timestamp.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    async fn get_recent_session_summaries(
+        &self,
+        project: &str,
+        limit: usize,
+    ) -> anyhow::Result<Vec<crate::memory::types::SessionSummaryRecord>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT session_id, project, summary, files_touched, key_decisions, timestamp
+             FROM session_summaries
+             WHERE project = ?1
+             ORDER BY timestamp DESC
+             LIMIT ?2",
+        )?;
+
+        let summaries = stmt
+            .query_map(params![project, limit as i64], |row| {
+                let files_touched_raw: String = row.get(3)?;
+                let key_decisions_raw: String = row.get(4)?;
+                let ts_str: String = row.get(5)?;
+
+                Ok(crate::memory::types::SessionSummaryRecord {
+                    session_id: row.get(0)?,
+                    project: row.get(1)?,
+                    summary: row.get(2)?,
+                    files_touched: serde_json::from_str(&files_touched_raw).unwrap_or_default(),
+                    key_decisions: serde_json::from_str(&key_decisions_raw).unwrap_or_default(),
+                    timestamp: chrono::DateTime::parse_from_rfc3339(&ts_str)
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                        .unwrap_or_else(|_| chrono::Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(summaries)
     }
 }
 

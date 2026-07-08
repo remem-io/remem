@@ -166,6 +166,10 @@ enum AgentConsumer {
     Copilot,
     AntigravityCli,
     OpenCode,
+    Aider,
+    Windsurf,
+    RooCode,
+    Cline,
     All,
 }
 
@@ -179,9 +183,13 @@ impl std::str::FromStr for AgentConsumer {
             "copilot" | "github-copilot" => Ok(Self::Copilot),
             "antigravity-cli" | "gemini" => Ok(Self::AntigravityCli),
             "opencode" => Ok(Self::OpenCode),
+            "aider" => Ok(Self::Aider),
+            "windsurf" => Ok(Self::Windsurf),
+            "roocode" | "roo-code" => Ok(Self::RooCode),
+            "cline" => Ok(Self::Cline),
             "all" => Ok(Self::All),
             _ => Err(format!(
-                "Unknown consumer '{}'. Valid options: claude-code, codex, cursor, copilot, antigravity-cli, opencode, all",
+                "Unknown consumer '{}'. Valid options: claude-code, codex, cursor, copilot, antigravity-cli, opencode, aider, windsurf, roocode, cline, all",
                 s
             )),
         }
@@ -197,6 +205,10 @@ impl std::fmt::Display for AgentConsumer {
             Self::Copilot => write!(f, "copilot"),
             Self::AntigravityCli => write!(f, "antigravity-cli"),
             Self::OpenCode => write!(f, "opencode"),
+            Self::Aider => write!(f, "aider"),
+            Self::Windsurf => write!(f, "windsurf"),
+            Self::RooCode => write!(f, "roocode"),
+            Self::Cline => write!(f, "cline"),
             Self::All => write!(f, "all"),
         }
     }
@@ -278,6 +290,10 @@ async fn main() -> anyhow::Result<()> {
                     AgentConsumer::Copilot,
                     AgentConsumer::AntigravityCli,
                     AgentConsumer::OpenCode,
+                    AgentConsumer::Aider,
+                    AgentConsumer::Windsurf,
+                    AgentConsumer::RooCode,
+                    AgentConsumer::Cline,
                 ],
                 other => vec![other],
             };

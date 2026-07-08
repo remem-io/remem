@@ -25,6 +25,7 @@ toml = { workspace = true }
 dirs = { workspace = true }
 ndarray = { workspace = true }
 utoipa = { workspace = true }
+notify = "6.1.1"
 # needed by models::pull_model for streaming response body to disk
 futures-util = "0.3"
 sha2 = "0.11.0"

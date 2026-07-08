@@ -116,6 +116,19 @@ pub trait MemoryStore: Send + Sync {
         &self,
         session_id: &str,
     ) -> anyhow::Result<Vec<crate::memory::types::SessionObservation>>;
+
+    /// Insert a new session summary.
+    async fn insert_session_summary(
+        &self,
+        summary: &crate::memory::types::SessionSummaryRecord,
+    ) -> anyhow::Result<()>;
+
+    /// Get recent session summaries for a project.
+    async fn get_recent_session_summaries(
+        &self,
+        project: &str,
+        limit: usize,
+    ) -> anyhow::Result<Vec<crate::memory::types::SessionSummaryRecord>>;
 }
 
 /// Database statistics.

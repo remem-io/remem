@@ -3,6 +3,7 @@
 extern crate libremem_sys;
 
 pub mod config;
+pub mod context;
 pub mod ffi;
 pub mod harness;
 pub mod loops;
@@ -10,6 +11,7 @@ pub mod memory;
 pub mod models;
 pub mod providers;
 pub mod reasoning;
+pub mod session;
 pub mod storage;
 
 pub use config::RememConfig;

@@ -17,6 +17,7 @@ use rememhq_core::config::RememConfig;
 use rememhq_core::reasoning::ReasoningEngine;
 use rememhq_core::storage::sqlite::SqliteStore;
 use rememhq_core::storage::vector::{HNSWVectorIndex, VectorIndex};
+use rememhq_core::MemoryStore;
 
 #[derive(Parser)]
 #[command(name = "rememhq-mcp")]
@@ -107,6 +108,42 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     tracing::info!(project = %args.project, "remem MCP server starting (stdio)");
+
+    if let Some(ref watch_dir) = config.memory.transcript_watch_dir {
+        let watcher = rememhq_core::session::watcher::TranscriptWatcher::new(watch_dir);
+        let mut rx = watcher.watch();
+        let engine_clone = engine.clone();
+        
+        tokio::spawn(async move {
+            while let Some(path) = rx.recv().await {
+                // Determine session ID from filename (e.g. session_1234.jsonl)
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    let session_id = stem.to_string();
+                    
+                    tracing::info!("Extracting observations from {}", path.display());
+                    match rememhq_core::session::extractors::TranscriptExtractor::extract_from_file(&path, &session_id) {
+                        Ok(observations) => {
+                            let mut count = 0;
+                            for obs in observations {
+                                if let Err(e) = engine_clone.store.log_session_observation(&obs).await {
+                                    tracing::warn!("Failed to log observation: {}", e);
+                                } else {
+                                    count += 1;
+                                }
+                            }
+                            tracing::info!("Imported {} observations for session {}", count, session_id);
+                            
+                            // Trigger consolidation
+                            if let Err(e) = engine_clone.compress_session_transcript(&session_id, None).await {
+                                tracing::error!("Failed to compress session transcript: {}", e);
+                            }
+                        }
+                        Err(e) => tracing::error!("Failed to extract from transcript {}: {}", path.display(), e),
+                    }
+                }
+            }
+        });
+    }
 
     // Run the stdio JSON-RPC loop
     let stdin = tokio::io::stdin();

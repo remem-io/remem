@@ -70,6 +70,7 @@ pub struct ReasoningEngine {
     pub write_counter: AtomicUsize,
     pub event_bus: tokio::sync::broadcast::Sender<ReasoningEvent>,
     pub hooks: Vec<Arc<dyn MemoryHook>>,
+    pub mode: tokio::sync::RwLock<crate::config::Mode>,
 }
 
 impl ReasoningEngine {
@@ -92,6 +93,7 @@ impl ReasoningEngine {
             write_counter: AtomicUsize::new(0),
             event_bus,
             hooks,
+            mode: tokio::sync::RwLock::new(config.memory.mode),
         }
     }
 
@@ -148,12 +150,15 @@ impl ReasoningEngine {
     pub async fn recall(
         &self,
         query: &str,
-        limit: usize,
+        mut limit: usize,
         filter_tags: &[String],
         since: Option<chrono::DateTime<chrono::Utc>>,
         memory_type: Option<crate::memory::types::MemoryType>,
         options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<Vec<MemoryResult>> {
+        let current_mode = *self.mode.read().await;
+        limit = current_mode.adjust_recall_limit(limit);
+
         let mut query_str = query.to_string();
         for hook in &self.hooks {
             hook.before_recall(&mut query_str).await?;
@@ -383,12 +388,34 @@ impl ReasoningEngine {
             new_count += 1;
         }
 
+        // Generate and save a session summary
+        if let Ok(Some(session)) = self.store.get_session(session_id).await {
+            match consolidation::generate_session_summary(
+                &*self.provider,
+                session_id,
+                &session.project,
+                &session_content,
+                &self.config.reasoning.reasoning_model,
+                options,
+            )
+            .await
+            {
+                Ok(summary) => {
+                    let _ = self.store.insert_session_summary(&summary).await;
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to generate session summary: {}", e);
+                }
+            }
+        }
+
         let _ = self.event_bus.send(ReasoningEvent::ConsolidationCompleted {
             session_id: session_id.to_string(),
             new_facts: new_count,
         });
 
         self.check_auto_save().await?;
+
 
         Ok(crate::memory::types::ConsolidationReport {
             session_id: session_id.to_string(),

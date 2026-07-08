@@ -17,6 +17,52 @@ pub enum MemoryType {
     Preference,
     /// Decisions made and their rationale.
     Decision,
+    /// An observation from a session trace.
+    Observation,
+}
+
+/// Detailed classification of an observation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ObservationKind {
+    CodePattern,
+    FileOperation,
+    ErrorResolution,
+    EnvironmentConfig,
+    DependencyInfo,
+    UserPreference,
+    General,
+}
+
+impl std::fmt::Display for ObservationKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObservationKind::CodePattern => write!(f, "code_pattern"),
+            ObservationKind::FileOperation => write!(f, "file_operation"),
+            ObservationKind::ErrorResolution => write!(f, "error_resolution"),
+            ObservationKind::EnvironmentConfig => write!(f, "environment_config"),
+            ObservationKind::DependencyInfo => write!(f, "dependency_info"),
+            ObservationKind::UserPreference => write!(f, "user_preference"),
+            ObservationKind::General => write!(f, "general"),
+        }
+    }
+}
+
+impl std::str::FromStr for ObservationKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "code_pattern" => Ok(ObservationKind::CodePattern),
+            "file_operation" => Ok(ObservationKind::FileOperation),
+            "error_resolution" => Ok(ObservationKind::ErrorResolution),
+            "environment_config" => Ok(ObservationKind::EnvironmentConfig),
+            "dependency_info" => Ok(ObservationKind::DependencyInfo),
+            "user_preference" => Ok(ObservationKind::UserPreference),
+            "general" => Ok(ObservationKind::General),
+            _ => Err(anyhow::anyhow!("Unknown observation kind: {}", s)),
+        }
+    }
 }
 
 /// An observation made during an agent session.
@@ -62,6 +108,7 @@ impl std::fmt::Display for MemoryType {
             MemoryType::Procedure => write!(f, "procedure"),
             MemoryType::Preference => write!(f, "preference"),
             MemoryType::Decision => write!(f, "decision"),
+            MemoryType::Observation => write!(f, "observation"),
         }
     }
 }
@@ -75,6 +122,7 @@ impl std::str::FromStr for MemoryType {
             "procedure" => Ok(MemoryType::Procedure),
             "preference" => Ok(MemoryType::Preference),
             "decision" => Ok(MemoryType::Decision),
+            "observation" => Ok(MemoryType::Observation),
             _ => Err(anyhow::anyhow!("Unknown memory type: {}", s)),
         }
     }
@@ -96,6 +144,9 @@ pub struct MemoryRecord {
     pub tags: Vec<String>,
     /// Type of memory.
     pub memory_type: MemoryType,
+    /// The fine-grained observation kind, if this is an observation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observation_kind: Option<ObservationKind>,
     /// When this memory was created.
     pub created_at: DateTime<Utc>,
     /// When this memory was last updated.
@@ -125,6 +176,7 @@ impl MemoryRecord {
             importance: 5.0,
             tags: Vec::new(),
             memory_type,
+            observation_kind: None,
             created_at: now,
             updated_at: now,
             decay_score: 1.0,
@@ -162,6 +214,12 @@ impl MemoryRecord {
     /// Builder-style: set embedding.
     pub fn with_embedding(mut self, embedding: Vec<f32>) -> Self {
         self.embedding = Some(embedding);
+        self
+    }
+
+    /// Builder-style: set observation kind.
+    pub fn with_observation_kind(mut self, kind: ObservationKind) -> Self {
+        self.observation_kind = Some(kind);
         self
     }
 }
@@ -222,6 +280,17 @@ pub struct MemoryVersionRecord {
     pub content: String,
     pub content_sha256: String,
     pub created_at: DateTime<Utc>,
+}
+
+/// A summary of a session.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SessionSummaryRecord {
+    pub session_id: String,
+    pub project: String,
+    pub summary: String,
+    pub files_touched: Vec<String>,
+    pub key_decisions: Vec<String>,
+    pub timestamp: DateTime<Utc>,
 }
 
 /// Parameters for storing a new memory.

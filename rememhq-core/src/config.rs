@@ -6,6 +6,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+pub mod modes;
+pub use modes::Mode;
+
 /// Top-level configuration for a remem instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RememConfig {
@@ -46,6 +49,11 @@ pub struct MemoryConfig {
     /// Whether to keep raw session logs after consolidation
     #[serde(default)]
     pub keep_raw_sessions: bool,
+    /// Directory to watch for transcript files
+    pub transcript_watch_dir: Option<PathBuf>,
+    /// The current memory mode
+    #[serde(default)]
+    pub mode: Mode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,6 +191,41 @@ impl Default for RememConfig {
                 port: default_port(),
                 transport: default_transport(),
             },
+        }
+    }
+}
+
+/// Agent memory mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    Standard,
+    Debugging,
+    Refactoring,
+    Exploration,
+    Writing,
+}
+
+impl Default for Mode {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+impl Mode {
+    pub fn adjust_recall_limit(&self, limit: usize) -> usize {
+        match self {
+            Self::Debugging => limit * 2,
+            Self::Writing => std::cmp::max(1, limit / 2),
+            _ => limit,
+        }
+    }
+
+    pub fn adjust_token_budget(&self, budget: usize) -> usize {
+        match self {
+            Self::Exploration => budget + 2000,
+            Self::Refactoring => budget + 4000,
+            _ => budget,
         }
     }
 }

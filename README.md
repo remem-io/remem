@@ -14,7 +14,7 @@
 
 remem provides agents with **persistent, reasoned memory** that spans across sessions. It enhances AI assistants and agents with an **intelligent memory layer** that enables truly personalized AI interactions — it **remembers user preferences**, **adapts to individual needs**, and **continuously learns over time**, turning stateless AI tools into persistent, context-aware partners.
 
-Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems. Whether you're using Claude Code, Codex CLI, Cursor, Copilot, Antigravity CLI, or OpenCode, remem gives your AI a durable, cross-session memory that grows smarter with every interaction.
+Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems. Whether you're using Claude Code, Codex, Cursor, Copilot, Antigravity CLI, or OpenCode, remem gives your AI a durable, cross-session memory that grows smarter with every interaction.
 
 ## Architecture
 
@@ -56,6 +56,10 @@ remem integrates with the leading AI coding assistants and agent frameworks. Eac
 | **[GitHub Copilot](https://github.com/features/copilot)** | MCP (stdio) | MCP server integration provides durable project context alongside Copilot suggestions |
 | **[Antigravity CLI](https://github.com/google-antigravity/antigravity-cli)** | MCP (stdio) | Configure remem as an MCP tool server for Antigravity CLI agents |
 | **[OpenCode](https://github.com/nichochar/opencode)** | MCP (stdio) | MCP-compatible — works out of the box with remem's stdio transport |
+| **[Aider](https://aider.chat)** | MCP (stdio) | Auto-configured via `remem init aider` for cross-session architecture reasoning |
+| **[Windsurf](https://codeium.com/windsurf)** | MCP (stdio) | Native MCP support for Windsurf workspaces |
+| **[Roo Code](https://github.com/RooVetGit/Roo-Cline)** | MCP (stdio) | Fully integrated into Roo Code environments via `remem init roocode` |
+| **[Cline](https://github.com/cline/cline)** | MCP (stdio) | Auto-injects memory limits and reasoning tools for Cline agents |
 | **Python agents** | REST API / Python SDK | `pip install rememhq` — use `Memory.store()` and `Memory.recall()` in any async Python agent |
 | **TypeScript agents** | REST API / TypeScript SDK | `npm install @rememhq/sdk` — typed client for Node.js and Deno agents |
 | **Any MCP client** | MCP (stdio) | Any tool implementing the [Model Context Protocol](https://modelcontextprotocol.io) works with remem |
@@ -198,6 +202,12 @@ remem import data.jsonl
 
 # Export all memories to a JSONL file
 remem export backup.jsonl
+
+# Initialize MCP configurations for all supported agents in your workspace
+remem init all --project my-project
+
+# Initialize MCP config for a specific agent (e.g. claude-code, windsurf, roocode)
+remem init claude-code --project my-project
 ```
 
 ### Running Services from Source
