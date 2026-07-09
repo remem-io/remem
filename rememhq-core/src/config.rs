@@ -6,9 +6,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-pub mod modes;
-pub use modes::Mode;
-
 /// Top-level configuration for a remem instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RememConfig {
@@ -180,6 +177,8 @@ impl Default for RememConfig {
                 working_memory_tokens: default_working_memory_tokens(),
                 importance_decay_interval_hours: default_decay_interval(),
                 keep_raw_sessions: false,
+                transcript_watch_dir: None,
+                mode: Mode::Standard,
             },
             storage: StorageConfig {
                 data_dir: default_data_dir(),

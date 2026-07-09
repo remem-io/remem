@@ -84,6 +84,7 @@ impl ReasoningEngine {
         hooks: Vec<Arc<dyn MemoryHook>>,
     ) -> Self {
         let (event_bus, _) = tokio::sync::broadcast::channel(1024);
+        let mode = config.memory.mode;
         Self {
             config,
             provider,
@@ -93,7 +94,7 @@ impl ReasoningEngine {
             write_counter: AtomicUsize::new(0),
             event_bus,
             hooks,
-            mode: tokio::sync::RwLock::new(config.memory.mode),
+            mode: tokio::sync::RwLock::new(mode),
         }
     }
 

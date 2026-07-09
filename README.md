@@ -58,7 +58,6 @@ remem integrates with the leading AI coding assistants and agent frameworks. Eac
 | **[OpenCode](https://github.com/nichochar/opencode)** | MCP (stdio) | MCP-compatible — works out of the box with remem's stdio transport |
 | **[Aider](https://aider.chat)** | MCP (stdio) | Auto-configured via `remem init aider` for cross-session architecture reasoning |
 | **[Windsurf](https://codeium.com/windsurf)** | MCP (stdio) | Native MCP support for Windsurf workspaces |
-| **[Roo Code](https://github.com/RooVetGit/Roo-Cline)** | MCP (stdio) | Fully integrated into Roo Code environments via `remem init roocode` |
 | **[Cline](https://github.com/cline/cline)** | MCP (stdio) | Auto-injects memory limits and reasoning tools for Cline agents |
 | **Python agents** | REST API / Python SDK | `pip install rememhq` — use `Memory.store()` and `Memory.recall()` in any async Python agent |
 | **TypeScript agents** | REST API / TypeScript SDK | `npm install @rememhq/sdk` — typed client for Node.js and Deno agents |
@@ -109,7 +108,7 @@ pip install rememhq
 ```python
 from rememhq import Memory
 
-m = Memory(project="my-agent", reasoning_model="claude-sonnet-4-6")
+m = Memory(project="my-agent", reasoning_model="claude-sonnet-4-8")
 
 # Store a durable preference
 await m.store("The production database is PostgreSQL 15 on RDS", tags=["infra"])
@@ -130,7 +129,7 @@ npm install @rememhq/sdk
 ```typescript
 import { Memory } from "@rememhq/sdk";
 
-const m = new Memory({ project: "my-agent", reasoningModel: "gpt-5.3" });
+const m = new Memory({ project: "my-agent", reasoningModel: "gpt-5.5" });
 await m.store("This repository uses trunk-based development", { tags: ["workflow"] });
 
 const results = await m.recall("how do we manage branches?");
