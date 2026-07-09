@@ -21,7 +21,7 @@ pub fn schema() -> Value {
 
 pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Result<Value> {
     let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
-    use rememhq_core::storage::MemoryStore;
+    use rememhq_core::storage::MemoryStore;
     let memories = engine.store.list(&[], None, None, limit).await?;
 
     let mut context_summary = String::new();
@@ -38,7 +38,7 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
                 mem.content
             ));
         }
-        context_summary.push_str("\n");
+        context_summary.push('\n');
     }
 
     // Fetch and append recent session summaries

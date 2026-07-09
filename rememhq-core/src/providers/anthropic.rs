@@ -151,14 +151,14 @@ impl Provider for AnthropicProvider {
                     "description": t.description,
                     "input_schema": t.input_schema
                 });
-                
+
                 // Add cache control to the last tool
                 if i == tools.len() - 1 {
                     if let Some(obj) = tool_json.as_object_mut() {
                         obj.insert("cache_control".to_string(), json!({ "type": "ephemeral" }));
                     }
                 }
-                
+
                 anthropic_tools.push(tool_json);
             }
             request["tools"] = json!(anthropic_tools);

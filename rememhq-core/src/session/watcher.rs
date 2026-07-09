@@ -1,9 +1,9 @@
-use notify::{RecommendedWatcher, RecursiveMode, Watcher, Config};
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 pub struct TranscriptWatcher {
     directory: PathBuf,
@@ -24,7 +24,7 @@ impl TranscriptWatcher {
 
         tokio::spawn(async move {
             let (std_tx, std_rx) = channel();
-            
+
             let mut watcher = match RecommendedWatcher::new(std_tx, Config::default()) {
                 Ok(w) => w,
                 Err(e) => {
@@ -60,7 +60,7 @@ impl TranscriptWatcher {
                         }
                     }
                 }
-                
+
                 // Yield to async runtime
                 tokio::task::yield_now().await;
             }

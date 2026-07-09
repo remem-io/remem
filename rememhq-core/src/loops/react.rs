@@ -43,7 +43,16 @@ impl AgentLoop for ReActLoop {
         });
 
         for _ in 0..self.max_iterations {
-            let response = self.harness.provider.chat(&self.messages, &self.harness.tools, &self.engine.config.reasoning.reasoning_model, None).await?;
+            let response = self
+                .harness
+                .provider
+                .chat(
+                    &self.messages,
+                    &self.harness.tools,
+                    &self.engine.config.reasoning.reasoning_model,
+                    None,
+                )
+                .await?;
             self.messages.push(response.message.clone());
 
             if let Some(tool_calls) = response.message.tool_calls {
@@ -80,6 +89,8 @@ impl AgentLoop for ReActLoop {
             }
         }
 
-        Err(anyhow::anyhow!("Max iterations reached without completion in ReAct Loop"))
+        Err(anyhow::anyhow!(
+            "Max iterations reached without completion in ReAct Loop"
+        ))
     }
 }

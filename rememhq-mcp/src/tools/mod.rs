@@ -8,14 +8,14 @@ mod search;
 mod store;
 mod update;
 
+mod build_context;
 mod create_store;
 mod list_memories;
 mod list_sessions;
 mod log_action;
 mod project_context;
-mod build_context;
-mod smart_read;
 mod set_mode;
+mod smart_read;
 mod stats;
 
 use rememhq_core::reasoning::ReasoningEngine;

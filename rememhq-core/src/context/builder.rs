@@ -66,7 +66,9 @@ impl<'a> ContextBuilder<'a> {
             let age_b = (now - b.updated_at).num_days() as f32;
             let score_a = a.importance / (1.0 + age_a * 0.1);
             let score_b = b.importance / (1.0 + age_b * 0.1);
-            score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+            score_b
+                .partial_cmp(&score_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // 3. Gather knowledge graph context (just top 20 triples for now)
@@ -80,7 +82,7 @@ impl<'a> ContextBuilder<'a> {
 
         // Build the document parts, checking budget
         let header = format!("# Context for Project: {}\n", self.project);
-        
+
         let mut timeline = String::from("## Recent Sessions\n");
         for session in recent_sessions {
             let entry = format!(
@@ -88,7 +90,9 @@ impl<'a> ContextBuilder<'a> {
                 session.timestamp.format("%Y-%m-%d %H:%M"),
                 session.summary
             );
-            if Self::estimate_tokens(&timeline) + Self::estimate_tokens(&entry) > self.token_budget / 4 {
+            if Self::estimate_tokens(&timeline) + Self::estimate_tokens(&entry)
+                > self.token_budget / 4
+            {
                 break;
             }
             timeline.push_str(&entry);
@@ -97,7 +101,8 @@ impl<'a> ContextBuilder<'a> {
         let mut facts = String::from("## Key Facts & Observations\n");
         for mem in all_memories {
             let entry = format!("- [{}] {}\n", mem.memory_type, mem.content);
-            if Self::estimate_tokens(&facts) + Self::estimate_tokens(&entry) > self.token_budget / 2 {
+            if Self::estimate_tokens(&facts) + Self::estimate_tokens(&entry) > self.token_budget / 2
+            {
                 break;
             }
             facts.push_str(&entry);

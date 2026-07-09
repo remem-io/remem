@@ -417,7 +417,6 @@ impl ReasoningEngine {
 
         self.check_auto_save().await?;
 
-
         Ok(crate::memory::types::ConsolidationReport {
             session_id: session_id.to_string(),
             new_facts: new_count,

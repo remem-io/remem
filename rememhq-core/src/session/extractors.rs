@@ -36,10 +36,7 @@ impl TranscriptExtractor {
                     .unwrap_or_else(|| value.to_string());
 
                 let obs = SessionObservation::new(
-                    session_id,
-                    obs_type,
-                    content,
-                    None, // parent_id
+                    session_id, obs_type, content, None, // parent_id
                 );
                 observations.push(obs);
             }

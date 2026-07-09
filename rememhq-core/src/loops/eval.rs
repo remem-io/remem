@@ -12,7 +12,12 @@ pub struct GenerateEvaluateRefineLoop {
 }
 
 impl GenerateEvaluateRefineLoop {
-    pub fn new(harness: AgentHarness, task: String, maker_model: String, checker_model: String) -> Self {
+    pub fn new(
+        harness: AgentHarness,
+        task: String,
+        maker_model: String,
+        checker_model: String,
+    ) -> Self {
         Self {
             harness,
             task,
@@ -38,13 +43,17 @@ impl AgentLoop for GenerateEvaluateRefineLoop {
                 content: self.task.clone(),
                 tool_calls: None,
                 tool_call_id: None,
-            }
+            },
         ];
 
         let mut current_solution = String::new();
 
         for _ in 0..self.max_iterations {
-            let response = self.harness.provider.chat(&messages, &self.harness.tools, &self.maker_model, None).await?;
+            let response = self
+                .harness
+                .provider
+                .chat(&messages, &self.harness.tools, &self.maker_model, None)
+                .await?;
             current_solution = response.message.content.clone();
             messages.push(response.message);
 
@@ -64,13 +73,20 @@ impl AgentLoop for GenerateEvaluateRefineLoop {
                 }
             ];
 
-            let eval_response = self.harness.provider.chat(&eval_messages, &[], &self.checker_model, None).await?;
+            let eval_response = self
+                .harness
+                .provider
+                .chat(&eval_messages, &[], &self.checker_model, None)
+                .await?;
             if eval_response.message.content.trim() == "PASS" {
                 return Ok(current_solution);
             } else {
                 messages.push(ChatMessage {
                     role: ChatRole::User,
-                    content: format!("Your solution failed evaluation: {}. Please refine it.", eval_response.message.content),
+                    content: format!(
+                        "Your solution failed evaluation: {}. Please refine it.",
+                        eval_response.message.content
+                    ),
                     tool_calls: None,
                     tool_call_id: None,
                 });

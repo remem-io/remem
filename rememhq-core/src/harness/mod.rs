@@ -1,6 +1,6 @@
 pub mod validator;
 
-use crate::providers::{ChatMessage, ChatResponse, Provider, Tool, ToolCall, ChatRole};
+use crate::providers::{ChatMessage, ChatResponse, ChatRole, Provider, Tool, ToolCall};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -62,13 +62,17 @@ impl AgentHarness {
                 return Ok(response);
             }
 
-            let raw_json: Result<serde_json::Value, _> = serde_json::from_str(&response.message.content);
+            let raw_json: Result<serde_json::Value, _> =
+                serde_json::from_str(&response.message.content);
             match raw_json {
                 Ok(val) => match validator.validate(&val) {
                     Ok(_) => return Ok(response),
                     Err(e) => {
                         if retries >= self.max_retries {
-                            return Err(anyhow::anyhow!("Max retries reached. Last validation error: {}", e));
+                            return Err(anyhow::anyhow!(
+                                "Max retries reached. Last validation error: {}",
+                                e
+                            ));
                         }
                         messages.push(response.message.clone());
                         messages.push(ChatMessage {
@@ -81,12 +85,18 @@ impl AgentHarness {
                 },
                 Err(e) => {
                     if retries >= self.max_retries {
-                        return Err(anyhow::anyhow!("Max retries reached. Failed to parse JSON: {}", e));
+                        return Err(anyhow::anyhow!(
+                            "Max retries reached. Failed to parse JSON: {}",
+                            e
+                        ));
                     }
                     messages.push(response.message.clone());
                     messages.push(ChatMessage {
                         role: ChatRole::User,
-                        content: format!("Failed to parse JSON: {}. Ensure you return valid JSON.", e),
+                        content: format!(
+                            "Failed to parse JSON: {}. Ensure you return valid JSON.",
+                            e
+                        ),
                         tool_calls: None,
                         tool_call_id: None,
                     });

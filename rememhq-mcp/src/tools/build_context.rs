@@ -1,5 +1,5 @@
-use rememhq_core::reasoning::ReasoningEngine;
 use rememhq_core::context::builder::ContextBuilder;
+use rememhq_core::reasoning::ReasoningEngine;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -21,7 +21,10 @@ pub fn schema() -> Value {
 }
 
 pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Result<Value> {
-    let mut token_budget = args.get("token_budget").and_then(|v| v.as_u64()).unwrap_or(4000) as usize;
+    let mut token_budget = args
+        .get("token_budget")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(4000) as usize;
 
     let current_mode = *engine.mode.read().await;
     token_budget = current_mode.adjust_token_budget(token_budget);

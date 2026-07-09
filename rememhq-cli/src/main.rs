@@ -544,13 +544,17 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Loop { action } => match action {
-            LoopAction::React { task, max_iterations } => {
+            LoopAction::React {
+                task,
+                max_iterations,
+            } => {
                 let engine = build_engine(&config).await?;
                 let engine = Arc::new(engine);
                 let harness = rememhq_core::harness::AgentHarness::new(engine.provider.clone());
-                let mut react_loop = rememhq_core::loops::react::ReActLoop::new(harness, engine, task);
+                let mut react_loop =
+                    rememhq_core::loops::react::ReActLoop::new(harness, engine, task);
                 react_loop.max_iterations = max_iterations;
-                
+
                 use rememhq_core::loops::AgentLoop;
                 println!("Running ReAct loop...");
                 match react_loop.run().await {
@@ -559,7 +563,10 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Ok(())
             }
-            LoopAction::Eval { task, max_iterations } => {
+            LoopAction::Eval {
+                task,
+                max_iterations,
+            } => {
                 let engine = build_engine(&config).await?;
                 let harness = rememhq_core::harness::AgentHarness::new(engine.provider.clone());
                 let mut eval_loop = rememhq_core::loops::eval::GenerateEvaluateRefineLoop::new(

@@ -1,6 +1,6 @@
-use std::path::Path;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::path::Path;
 
 pub struct SmartReader;
 
@@ -11,7 +11,7 @@ impl SmartReader {
     pub fn read_and_fold(path: &Path, _query: Option<&str>) -> anyhow::Result<String> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        
+
         let mut result = String::new();
         // A real implementation would parse the AST and collapse function bodies.
         // For this minimal implementation, we just return the raw text, truncated if too long.
@@ -21,14 +21,14 @@ impl SmartReader {
             result.push_str(&line);
             result.push('\n');
             lines_count += 1;
-            
+
             // Artificial truncation for MVP
             if lines_count > 1000 {
                 result.push_str("... [Content folded due to length]\n");
                 break;
             }
         }
-        
+
         Ok(result)
     }
 }

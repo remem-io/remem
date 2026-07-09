@@ -337,8 +337,8 @@ Session log:
         key_decisions: Vec<String>,
     }
 
-    let parsed: SummaryOutput = serde_json::from_str(json_text.trim())
-        .unwrap_or_else(|_| SummaryOutput {
+    let parsed: SummaryOutput =
+        serde_json::from_str(json_text.trim()).unwrap_or_else(|_| SummaryOutput {
             summary: "Failed to parse session summary.".to_string(),
             files_touched: vec![],
             key_decisions: vec![],
