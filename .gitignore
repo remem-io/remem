@@ -145,3 +145,5 @@ bindings/react-native/example/node_modules/
 bindings/react-native/example/ios/
 bindings/react-native/example/android/
 bindings/react-native/example/.expo/
+
+out.txt
