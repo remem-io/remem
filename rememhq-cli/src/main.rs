@@ -819,6 +819,78 @@ fn generate_consumer_config(
                 }
             }),
         ),
+        AgentConsumer::Aider => (
+            ".aider",
+            "mcp.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::Windsurf => (
+            ".windsurf",
+            "mcp_config.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::RooCode => (
+            ".roocode",
+            "mcp.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::Cline => (
+            ".cline",
+            "mcp.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
         AgentConsumer::All => unreachable!("All is expanded before calling this function"),
     };
 

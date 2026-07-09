@@ -197,18 +197,14 @@ impl Default for RememConfig {
 /// Agent memory mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Mode {
+    #[default]
     Standard,
     Debugging,
     Refactoring,
     Exploration,
     Writing,
-}
-
-impl Default for Mode {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 impl Mode {
@@ -297,6 +293,27 @@ mod tests {
         let _guard = ENV_TEST_LOCK.lock().unwrap();
         clear_env();
         assert_eq!(reasoning_model_for("openai"), "gpt-4o");
+    }
+
+    #[test]
+    fn test_mode_adjust_recall_limit() {
+        let limit = 10;
+        assert_eq!(Mode::Standard.adjust_recall_limit(limit), 10);
+        assert_eq!(Mode::Debugging.adjust_recall_limit(limit), 20);
+        assert_eq!(Mode::Writing.adjust_recall_limit(limit), 5);
+        assert_eq!(Mode::Writing.adjust_recall_limit(1), 1); // Ensure it doesn't go below 1
+        assert_eq!(Mode::Exploration.adjust_recall_limit(limit), 10);
+        assert_eq!(Mode::Refactoring.adjust_recall_limit(limit), 10);
+    }
+
+    #[test]
+    fn test_mode_adjust_token_budget() {
+        let budget = 4000;
+        assert_eq!(Mode::Standard.adjust_token_budget(budget), 4000);
+        assert_eq!(Mode::Exploration.adjust_token_budget(budget), 6000);
+        assert_eq!(Mode::Refactoring.adjust_token_budget(budget), 8000);
+        assert_eq!(Mode::Debugging.adjust_token_budget(budget), 4000);
+        assert_eq!(Mode::Writing.adjust_token_budget(budget), 4000);
     }
 
     #[test]

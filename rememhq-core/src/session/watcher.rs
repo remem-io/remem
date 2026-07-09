@@ -1,5 +1,5 @@
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher, Config};
-use std::path::{Path, PathBuf};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher, Config};
+use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::Duration;
 use tokio::sync::mpsc;
