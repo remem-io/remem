@@ -9,7 +9,7 @@
   <p>
     <a href="https://badge.fury.io/py/rememhq"><img src="https://badge.fury.io/py/rememhq.svg" alt="PyPI version" /></a>
     <a href="https://badge.fury.io/js/@rememhq%2Fsdk"><img src="https://badge.fury.io/js/@rememhq%2Fsdk.svg" alt="npm version" /></a>
-    <a href="https://crates.io/crates/rememhq"><img src="https://img.shields.io/crates/v/rememhq.svg" alt="Crates.io" /></a>
+    <a href="https://crates.io/crates/rememhq-core"><img src="https://img.shields.io/crates/v/rememhq-core.svg" alt="Crates.io" /></a>
   </p>
 </div>
 

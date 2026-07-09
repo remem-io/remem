@@ -1,6 +1,6 @@
 # rememhq
 
-[![Crates.io](https://img.shields.io/crates/v/rememhq.svg)](https://crates.io/crates/rememhq)
+[![Crates.io](https://img.shields.io/crates/v/rememhq-core.svg)](https://crates.io/crates/rememhq-core)
 [![Documentation](https://docs.rs/rememhq/badge.svg)](https://docs.rs/rememhq)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
