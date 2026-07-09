@@ -5,8 +5,6 @@
     <a href="https://github.com/remem-io/remem/actions"><img src="https://github.com/remem-io/remem/workflows/CI/badge.svg" alt="CI Status" /></a>
     <a href="https://github.com/remem-io/remem/releases"><img src="https://img.shields.io/github/v/release/remem-io/remem" alt="Release" /></a>
     <a href="https://apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
-  </p>
-  <p>
     <a href="https://badge.fury.io/py/rememhq"><img src="https://badge.fury.io/py/rememhq.svg" alt="PyPI version" /></a>
     <a href="https://badge.fury.io/js/@rememhq%2Fsdk"><img src="https://badge.fury.io/js/@rememhq%2Fsdk.svg" alt="npm version" /></a>
     <a href="https://crates.io/crates/rememhq-core"><img src="https://img.shields.io/crates/v/rememhq-core.svg" alt="Crates.io" /></a>
