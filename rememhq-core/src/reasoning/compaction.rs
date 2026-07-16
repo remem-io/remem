@@ -60,11 +60,12 @@ Output the compressed context now:"#
     );
 
     let (compressed_context, _usage) = provider.complete(&prompt, model, options).await?;
+    let compressed_context = compressed_context.trim().to_string();
 
     Ok(CompactionReport {
-        compressed_context: compressed_context.trim().to_string(),
-        original_length: conversation_text.len(),
         compressed_length: compressed_context.len(),
+        compressed_context,
+        original_length: conversation_text.len(),
     })
 }
 
@@ -116,5 +117,52 @@ mod tests {
         assert_eq!(report.compressed_context, "Compressed summary");
         assert_eq!(report.original_length, trace.len());
         assert_eq!(report.compressed_length, 18); // "Compressed summary".len()
+    }
+
+    struct PaddedProviderObj;
+    #[async_trait]
+    impl Provider for PaddedProviderObj {
+        async fn complete(
+            &self,
+            _prompt: &str,
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<(String, Option<crate::providers::TokenUsage>)> {
+            // LLM responses commonly come back with surrounding whitespace/newlines.
+            Ok(("\n  Compressed summary  \n".to_string(), None))
+        }
+        async fn chat(
+            &self,
+            _messages: &[crate::providers::ChatMessage],
+            _tools: &[crate::providers::Tool],
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<crate::providers::ChatResponse> {
+            unimplemented!()
+        }
+        fn name(&self) -> &str {
+            "padded_mock"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_compressed_length_matches_trimmed_compressed_context() {
+        // Regression test: compressed_length used to be measured on the raw,
+        // untrimmed provider response, while compressed_context stored the
+        // trimmed version — so whenever the LLM padded its output with
+        // whitespace (common), the two fields disagreed. Both fields are
+        // surfaced to end users (REST API response, MCP tool text), so this
+        // caused a visibly wrong character count next to the actual text.
+        let provider = PaddedProviderObj;
+        let report = compact_context(&provider, "mock", "trace", None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(report.compressed_context, "Compressed summary");
+        assert_eq!(
+            report.compressed_length,
+            report.compressed_context.len(),
+            "compressed_length must match the length of the returned compressed_context"
+        );
     }
 }
