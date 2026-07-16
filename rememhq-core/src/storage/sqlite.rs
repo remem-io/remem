@@ -637,9 +637,24 @@ impl MemoryStore for SqliteStore {
 
     async fn apply_decay(&self, decay_factor: f32) -> anyhow::Result<usize> {
         let conn = self.conn.lock().await;
-        // Decay score decreases faster for low-importance memories
+        // Decay score decreases faster for low-importance memories.
+        //
+        // The multiplier is interpolated between `decay_factor` (at importance = 1,
+        // the fastest allowed decay) and 1.0 (at importance = 10, i.e. no decay).
+        // This guarantees the multiplier never exceeds 1.0, so decay_score can only
+        // shrink or stay flat — it must never grow. Importance is clamped to [1, 10]
+        // when a memory is created (see MemoryRecord::with_importance), so this
+        // interpolation is always well-defined.
+        //
+        // Previously this used `decay_factor + (importance / 20.0)`, which added up
+        // to +0.5 on top of decay_factor. With the default background decay_factor
+        // of 0.9 (see rememhq-api/src/main.rs), any memory with importance >= 3
+        // produced a multiplier > 1.0, causing decay_score to *grow* on every pass
+        // instead of decaying — memories with average-or-higher importance (the
+        // majority, since default importance is 5.0) would never decay or archive.
         let rows = conn.execute(
-            "UPDATE memories SET decay_score = decay_score * (?1 + (importance / 20.0))
+            "UPDATE memories SET decay_score = decay_score *
+                (?1 + (importance / 10.0) * (1.0 - ?1))
              WHERE archived = 0 AND decay_score > 0.01",
             params![decay_factor as f64],
         )?;
@@ -1110,5 +1125,48 @@ mod tests {
         assert_eq!(stats.total_memories, 2);
         assert_eq!(stats.by_type.get("fact"), Some(&1));
         assert_eq!(stats.by_type.get("procedure"), Some(&1));
+    }
+
+    #[tokio::test]
+    async fn test_apply_decay_never_increases_score() {
+        let store = SqliteStore::open_in_memory().unwrap();
+
+        let low = MemoryRecord::new("low importance fact", MemoryType::Fact).with_importance(1.0);
+        let high =
+            MemoryRecord::new("high importance fact", MemoryType::Fact).with_importance(10.0);
+        let (low_id, high_id) = (low.id, high.id);
+
+        store.insert(&low).await.unwrap();
+        store.insert(&high).await.unwrap();
+
+        // Apply decay repeatedly with the real background-job factor (0.9). Under the
+        // old formula (`decay_factor + importance / 20.0`) the high-importance
+        // memory's multiplier was 1.4, so its decay_score would balloon well past
+        // 1.0 after a handful of passes instead of shrinking.
+        for _ in 0..5 {
+            store.apply_decay(0.9).await.unwrap();
+        }
+
+        let low_after = store.get(low_id).await.unwrap().unwrap();
+        let high_after = store.get(high_id).await.unwrap().unwrap();
+
+        assert!(
+            low_after.decay_score <= 1.0,
+            "low-importance decay_score grew above 1.0: {}",
+            low_after.decay_score
+        );
+        assert!(
+            high_after.decay_score <= 1.0,
+            "high-importance decay_score grew above 1.0: {}",
+            high_after.decay_score
+        );
+
+        // Importance-weighting must still hold: more important memories decay slower.
+        assert!(
+            high_after.decay_score > low_after.decay_score,
+            "expected high-importance memory ({}) to decay slower than low-importance memory ({})",
+            high_after.decay_score,
+            low_after.decay_score
+        );
     }
 }

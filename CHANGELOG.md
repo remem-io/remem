@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `SqliteStore::apply_decay`: the importance-weighted decay multiplier could exceed `1.0` (`decay_factor + importance / 20.0`), causing `decay_score` to *increase* instead of decrease for any memory with importance >= 3 — including the default importance of `5.0` given to every new memory. In practice this meant the background decay job (`decay_factor = 0.9`) never decayed or auto-archived the majority of memories. The multiplier is now interpolated between `decay_factor` and `1.0` based on importance, so it can never exceed `1.0`.
+
 ## [0.1.5] - 2026-06-19
 
 ### Added
