@@ -230,6 +230,7 @@ If you're building remem from source, use `cargo run` instead of the `remem` bin
 | `REMEM_REASONING_PROVIDER` | Override reasoning provider | Falls back to `REMEM_PROVIDER` |
 | `REMEM_EMBEDDING_PROVIDER` | Override embedding provider | Falls back to `REMEM_PROVIDER` |
 | `REMEM_DATA_DIR` | Root data directory | `~/.remem` |
+| `REMEM_TRUST_PROXY_HEADERS` | Trust `X-Forwarded-For` for rate limiting (only enable behind a proxy/load balancer that overwrites it) | `false` |
 | `ANTHROPIC_API_KEY` | Anthropic Claude API key | — |
 | `OPENAI_API_KEY` | OpenAI API key | — |
 | `GOOGLE_API_KEY` | Google Gemini API key | — |
