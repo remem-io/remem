@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - **Rate-limit bypass via spoofed `X-Forwarded-For`.** `rememhq-api`'s rate limiter keyed requests directly on the client-supplied `X-Forwarded-For` header, which any caller can set to an arbitrary value. Sending a different value on every request bypassed the limiter entirely, since each "new" value got its own fresh bucket. By default, the limiter now keys on the actual TCP peer address (via `ConnectInfo`, which a caller cannot forge) instead. Operators genuinely running behind a proxy/load balancer that overwrites the header can opt back into the old behavior with `REMEM_TRUST_PROXY_HEADERS=true`.
+- **Timing side-channel in API key comparison.** `check_auth` compared the provided `Authorization` bearer token against `REMEM_API_KEY` with `!=`, which short-circuits on the first mismatched byte. An attacker measuring response latency over enough requests could in principle recover the key byte by byte. Replaced with a constant-time comparison that always walks every byte.
 
 ### Fixed
 - `compact_context`: `CompactionReport.compressed_length` was measured on the raw, untrimmed provider response, while `compressed_context` stored the trimmed version — so whenever the LLM padded its output with whitespace (common), the two disagreed. Both fields are surfaced verbatim to end users (REST API `/v1/context/compact` response, MCP `compact_context` tool text), so this produced a visibly wrong character count next to the actual compacted text.
