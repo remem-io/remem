@@ -78,6 +78,38 @@ fn default_delete() -> String {
     "delete".into()
 }
 
+/// Upper bound on `limit + offset` accepted by the recall/search endpoints.
+///
+/// Without a cap, `offset + limit` (both taken directly from the query
+/// string) is passed straight through to the vector index search and,
+/// downstream, to an FFI call into the native HNSW library — so a single
+/// request with an enormous `limit` (no auth required if `REMEM_API_KEY`
+/// isn't set) could force a huge allocation/search there. It also let
+/// `offset + limit` overflow `usize` for extreme inputs. 1000 is generous
+/// relative to the defaults (8 and 20) while still ruling out abuse.
+const MAX_FETCH_LIMIT: usize = 1000;
+
+/// Validates `limit`/`offset` from a query string and returns the safe,
+/// overflow-free `offset + limit` to fetch, or a 400 error describing why
+/// the request was rejected.
+fn validate_fetch_limit(
+    limit: usize,
+    offset: usize,
+) -> Result<usize, (StatusCode, Json<ErrorResponse>)> {
+    let fetch_limit = offset.saturating_add(limit);
+    if fetch_limit > MAX_FETCH_LIMIT {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: format!(
+                    "limit + offset ({fetch_limit}) exceeds the maximum of {MAX_FETCH_LIMIT}"
+                ),
+            }),
+        ));
+    }
+    Ok(fetch_limit)
+}
+
 // --- Handlers ---
 
 pub async fn store_memory(
@@ -142,7 +174,7 @@ pub async fn recall_memories(
 
     let offset = q.offset.unwrap_or(0);
     let limit = q.limit;
-    let fetch_limit = offset + limit;
+    let fetch_limit = validate_fetch_limit(limit, offset)?;
 
     let options = extract_provider_options(&headers);
     let results = engine
@@ -186,7 +218,7 @@ pub async fn search_memories(
 
     let offset = q.offset.unwrap_or(0);
     let limit = q.limit;
-    let fetch_limit = offset + limit;
+    let fetch_limit = validate_fetch_limit(limit, offset)?;
 
     let options = extract_provider_options(&headers);
     let results = engine
@@ -568,5 +600,74 @@ mod tests {
         let body3 = axum::body::to_bytes(res3.into_body(), 10000).await.unwrap();
         let memories3: Vec<MemoryResult> = serde_json::from_slice(&body3).unwrap();
         assert_eq!(memories3.len(), 1);
+    }
+
+    #[test]
+    fn test_validate_fetch_limit_within_bounds() {
+        assert_eq!(validate_fetch_limit(20, 0).unwrap(), 20);
+        assert_eq!(validate_fetch_limit(500, 500).unwrap(), 1000);
+    }
+
+    #[test]
+    fn test_validate_fetch_limit_rejects_over_max() {
+        assert!(validate_fetch_limit(1001, 0).is_err());
+        assert!(validate_fetch_limit(500, 501).is_err());
+    }
+
+    #[test]
+    fn test_validate_fetch_limit_does_not_panic_on_overflow() {
+        // Regression test: `offset + limit` used to be a plain `+`, which
+        // panics on overflow in debug/test builds (and silently wraps in
+        // release builds) for extreme, attacker-controlled query params.
+        // This must return a clean 400 instead of panicking either way.
+        let result = validate_fetch_limit(usize::MAX, usize::MAX);
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_oversized_limit_is_rejected_with_400() {
+        // Relies on REMEM_API_KEY being unset (dev-mode auth). Guard against
+        // the auth middleware's own tests concurrently toggling that same
+        // process-wide env var — see crate::middleware::auth::tests.
+        let _guard = crate::middleware::auth::tests::ENV_TEST_LOCK
+            .lock()
+            .unwrap();
+        std::env::remove_var("REMEM_API_KEY");
+
+        let store = SqliteStore::open_in_memory().unwrap();
+        let index = HNSWVectorIndex::new(768, 100);
+        let provider = Arc::new(MockProvider);
+        let embeddings = Arc::new(MockEmbeddings::new(768));
+        let config = RememConfig::default();
+        let engine = Arc::new(ReasoningEngine::new(
+            config,
+            provider,
+            embeddings,
+            Arc::new(store),
+            Arc::new(index),
+            vec![],
+        ));
+
+        let app = Router::new()
+            .route("/v1/memories/recall", get(recall_memories))
+            .route("/v1/memories/search", get(search_memories))
+            .with_state(engine);
+
+        // A single request asking for an enormous number of results must be
+        // rejected before it ever reaches the vector index, not silently
+        // truncated or (worse) allowed through to a huge/overflowing search.
+        let req = axum::http::Request::builder()
+            .uri("/v1/memories/search?q=Alice&limit=999999999999")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        let req = axum::http::Request::builder()
+            .uri("/v1/memories/recall?q=Alice&limit=100&offset=999999999999")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }
