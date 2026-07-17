@@ -267,12 +267,13 @@ mod tests {
         // trigger. Now the header is ignored by default, so they must all share
         // one bucket keyed by the real peer address and get rate limited.
         let rate_limit_state = Arc::new(Mutex::new(RateLimiterState::new()));
-        let app = Router::new()
-            .route("/test", get(handle))
-            .layer(axum::middleware::from_fn_with_state(
-                rate_limit_state,
-                rate_limit_middleware,
-            ));
+        let app =
+            Router::new()
+                .route("/test", get(handle))
+                .layer(axum::middleware::from_fn_with_state(
+                    rate_limit_state,
+                    rate_limit_middleware,
+                ));
 
         let attacker = peer([10, 0, 0, 1]);
 
