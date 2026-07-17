@@ -67,14 +67,17 @@ pub fn extract_provider_options(headers: &HeaderMap) -> Option<ProviderOptions> 
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
 
     // See rememhq-core/src/config.rs tests for why this lock exists:
     // std::env::set_var/remove_var mutate process-wide global state, and
-    // cargo test runs tests in parallel by default.
-    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
+    // cargo test runs tests in parallel by default. pub(crate) so other
+    // test modules in this crate that read/write REMEM_API_KEY (e.g.
+    // routes::memories's tests, which rely on it being unset for
+    // dev-mode auth to pass) can serialize against these tests too.
+    pub(crate) static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_constant_time_eq_equal_strings() {
