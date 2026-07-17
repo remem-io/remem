@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Rate-limit bypass via spoofed `X-Forwarded-For`.** `rememhq-api`'s rate limiter keyed requests directly on the client-supplied `X-Forwarded-For` header, which any caller can set to an arbitrary value. Sending a different value on every request bypassed the limiter entirely, since each "new" value got its own fresh bucket. By default, the limiter now keys on the actual TCP peer address (via `ConnectInfo`, which a caller cannot forge) instead. Operators genuinely running behind a proxy/load balancer that overwrites the header can opt back into the old behavior with `REMEM_TRUST_PROXY_HEADERS=true`.
+
 ### Fixed
 - `compact_context`: `CompactionReport.compressed_length` was measured on the raw, untrimmed provider response, while `compressed_context` stored the trimmed version — so whenever the LLM padded its output with whitespace (common), the two disagreed. Both fields are surfaced verbatim to end users (REST API `/v1/context/compact` response, MCP `compact_context` tool text), so this produced a visibly wrong character count next to the actual compacted text.
 - `AgentHarness::chat_with_validation`: the accepted assistant message was never appended to the caller's `messages` history on success (only on the retry/failure paths were messages pushed) — despite the method taking `&mut Vec<ChatMessage>` specifically to keep that history in sync. A caller reusing `messages` for a follow-up turn would silently lose the assistant's prior response.
