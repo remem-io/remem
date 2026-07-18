@@ -117,6 +117,7 @@ Select at most {limit} memories. Only select memories that are genuinely relevan
 
     // Parse the LLM response
     let mut results = Vec::new();
+    let mut seen_indices = std::collections::HashSet::new();
     for line in response.lines() {
         let line = line.trim();
         if !line.starts_with("SELECTED") {
@@ -132,7 +133,11 @@ Select at most {limit} memories. Only select memories that are genuinely relevan
                 let reasoning = parts[1].trim().to_string();
 
                 if let Ok(idx) = idx_str.parse::<usize>() {
-                    if idx >= 1 && idx <= candidates.len() {
+                    // Guard against the LLM selecting the same candidate twice
+                    // (e.g. re-listing it under a different rationale), which
+                    // would otherwise let one memory occupy multiple slots
+                    // within `limit` and crowd out a genuinely distinct result.
+                    if idx >= 1 && idx <= candidates.len() && seen_indices.insert(idx) {
                         let mut result = candidates[idx - 1].0.clone();
                         result.reasoning = Some(reasoning);
                         results.push(result);
@@ -276,5 +281,53 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, mem1.id);
         assert_eq!(results[0].reasoning, None);
+    }
+
+    #[tokio::test]
+    async fn test_llm_rerank_dedupes_repeated_selection() {
+        // Regression test: if the LLM selects the same candidate index twice
+        // (e.g. re-listing it under a different rationale), that memory used
+        // to occupy two slots in `results`, silently crowding out a distinct
+        // candidate within `limit`.
+        let provider = MockProviderObj {
+            response: "SELECTED 1 | First rationale\nSELECTED 1 | Duplicate rationale\nSELECTED 2 | Second memory"
+                .to_string(),
+        };
+
+        let mem1 = MemoryResult {
+            id: Uuid::new_v4(),
+            content: "First".to_string(),
+            tags: vec![],
+            importance: 0.5,
+            memory_type: MemoryType::Fact,
+            created_at: Utc::now(),
+            source_session: None,
+            similarity: 0.8,
+            decay_score: 1.0,
+            reasoning: None,
+        };
+        let mem2 = MemoryResult {
+            id: Uuid::new_v4(),
+            content: "Second".to_string(),
+            tags: vec![],
+            importance: 0.5,
+            memory_type: MemoryType::Fact,
+            created_at: Utc::now(),
+            source_session: None,
+            similarity: 0.7,
+            decay_score: 1.0,
+            reasoning: None,
+        };
+
+        let candidates = vec![(mem1.clone(), 0.8), (mem2.clone(), 0.7)];
+
+        let results = llm_rerank(&provider, "query", &candidates, 5, "mock", None)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 2, "duplicate selection must not produce duplicate results");
+        assert_eq!(results[0].id, mem1.id);
+        assert_eq!(results[0].reasoning.as_deref(), Some("First rationale"));
+        assert_eq!(results[1].id, mem2.id);
     }
 }
