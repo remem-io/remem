@@ -132,9 +132,8 @@ mod tests {
 
         let resolver = LlmEntityResolver::new(&provider, "mock".to_string(), &store, None);
 
-        // MockProvider should return "PostgreSQL" if prompt contains "Postgres"
-        // (Wait, I need to update MockProvider to handle this specific test case)
-
+        // MockProvider returns "PostgreSQL" when the prompt contains both
+        // "Postgres" and "PostgreSQL" (see providers::mock::MockProvider).
         let updates = vec![KnowledgeGraphUpdate {
             subject: "Postgres".to_string(),
             predicate: "uses".to_string(),
