@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `ReActLoop` now actually performs context compaction once its message history exceeds 20 messages, using the existing `compact_context` reasoning primitive. Previously this was a stub: the loop logged that context was large and left a comment ("Compact logic could be hooked here") but never did anything, so long-running agent loops accumulated unbounded context. The system prompt and original task message are always preserved; everything since then is summarized into a single message once the threshold is hit. A failed compaction attempt is non-fatal — the loop just continues and tries again once more history builds up.
+
 ### Security
 - **`js-yaml` moderate-severity DoS (quadratic complexity in merge-key handling), transitive via `@istanbuljs/load-nyc-config`** in `bindings/react-native`. Bumped the nested resolution from 3.14.2 to 3.15.0 (the patched version), within the existing `^3.13.1` range already required by that package — no code changes needed. Dev/test-tooling dependency only, not part of any published artifact.
   - Note: `bindings/react-native` also carries a moderate `uuid` advisory (transitive via `xcode`, a dependency of `@expo/config-plugins`), but `xcode`'s current release still pins `uuid@^7.0.3`, so there's no non-breaking upgrade path available yet. Left as-is pending an upstream fix; worth revisiting when `xcode` publishes a new major version.
