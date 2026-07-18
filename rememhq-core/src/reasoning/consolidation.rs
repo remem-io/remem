@@ -233,7 +233,6 @@ Output the facts now:"#
     let (response, _usage) = provider.complete(&prompt, model, options).await?;
 
     let mut facts = Vec::new();
-    let mut current_triple: Option<KnowledgeGraphUpdate> = None;
 
     for line in response.lines() {
         let line = line.trim();
@@ -241,11 +240,38 @@ Output the facts now:"#
         if line.starts_with("TRIPLE |") {
             let parts: Vec<&str> = line.splitn(4, '|').collect();
             if parts.len() == 4 {
-                current_triple = Some(KnowledgeGraphUpdate {
+                let triple = KnowledgeGraphUpdate {
                     subject: parts[1].trim().to_string(),
                     predicate: parts[2].trim().to_string(),
                     object: parts[3].trim().to_string(),
-                });
+                };
+                // A TRIPLE line describes the FACT it follows, not the one
+                // after it — both the prompt's general instruction ("if the
+                // fact represents a relationship, add a knowledge triple"
+                // right after it) and its own procedure example (the
+                // TRIPLE's subject matches the *preceding* FACT's content,
+                // e.g. "To deploy, first run build") confirm this. Attaching
+                // it to the wrong fact matters beyond bookkeeping:
+                // knowledge_graph.memory_id has ON DELETE CASCADE, so a
+                // misattributed triple is tied to the wrong memory's
+                // lifecycle and can vanish (or fail to vanish) at the wrong
+                // time.
+                //
+                // Only the first TRIPLE after a FACT is kept, matching the
+                // one-triple-per-fact data model below; a stray TRIPLE with
+                // no preceding FACT (or a second one before the next FACT)
+                // is dropped rather than guessed at.
+                if let Some(last) = facts.last_mut() {
+                    if last.knowledge_triple.is_none() {
+                        last.knowledge_triple = Some(triple);
+                    } else {
+                        tracing::debug!(
+                            "Dropping extra TRIPLE line: fact already has a knowledge_triple attached"
+                        );
+                    }
+                } else {
+                    tracing::debug!("Dropping TRIPLE line with no preceding FACT to attach it to");
+                }
             }
             continue;
         }
@@ -278,7 +304,7 @@ Output the facts now:"#
             importance,
             memory_type,
             tags,
-            knowledge_triple: current_triple.take(),
+            knowledge_triple: None,
         });
     }
 
@@ -396,6 +422,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_extract_facts_parsing() {
+        // Regression test: a TRIPLE line describes the FACT immediately
+        // *before* it, not the one after — matching both the prompt's
+        // general instruction (add a triple right after the fact it
+        // describes) and its own procedure example (the triple's subject
+        // matches the preceding fact's content).
         let provider = MockProviderObj {
             response: "FACT | fact | 8 | rust, test | This is a test fact\nTRIPLE | subject | pred | obj\nFACT | procedure | 9 | dev | This is a procedure".to_string(),
         };
@@ -410,17 +441,63 @@ mod tests {
         assert_eq!(facts[0].importance, 8.0);
         assert_eq!(facts[0].memory_type, MemoryType::Fact);
         assert_eq!(facts[0].tags, vec!["rust", "test"]);
-        assert!(facts[0].knowledge_triple.is_none());
+        let triple = facts[0].knowledge_triple.as_ref().unwrap();
+        assert_eq!(triple.subject, "subject");
+        assert_eq!(triple.predicate, "pred");
+        assert_eq!(triple.object, "obj");
 
         assert_eq!(facts[1].content, "This is a procedure");
         assert_eq!(facts[1].importance, 9.0);
         assert_eq!(facts[1].memory_type, MemoryType::Procedure);
         assert_eq!(facts[1].tags, vec!["dev"]);
+        assert!(
+            facts[1].knowledge_triple.is_none(),
+            "the triple belongs to the preceding fact, not this one"
+        );
+    }
 
-        let triple = facts[1].knowledge_triple.as_ref().unwrap();
-        assert_eq!(triple.subject, "subject");
-        assert_eq!(triple.predicate, "pred");
-        assert_eq!(triple.object, "obj");
+    #[tokio::test]
+    async fn test_extract_facts_procedure_chain_matches_prompt_example() {
+        // Exactly the "Special Case: PROCEDURES" example from the prompt
+        // itself. The triple's subject ("To deploy, first run build")
+        // matches the first step's content, so it must attach there.
+        let provider = MockProviderObj {
+            response: "FACT | procedure | 8 | deploy | To deploy, first run build\nTRIPLE | To deploy, first run build | next_step | Then run push\nFACT | procedure | 8 | deploy | Then run push".to_string(),
+        };
+
+        let facts = extract_facts(&provider, "session logs", "mock", None)
+            .await
+            .unwrap();
+
+        assert_eq!(facts.len(), 2);
+
+        let triple = facts[0]
+            .knowledge_triple
+            .as_ref()
+            .expect("first step should own the next_step triple");
+        assert_eq!(triple.subject, "To deploy, first run build");
+        assert_eq!(triple.predicate, "next_step");
+        assert_eq!(triple.object, "Then run push");
+
+        assert!(facts[1].knowledge_triple.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_extract_facts_drops_leading_triple_with_no_preceding_fact() {
+        let provider = MockProviderObj {
+            response: "TRIPLE | subject | pred | obj\nFACT | fact | 5 | tag | A fact with no triple"
+                .to_string(),
+        };
+
+        let facts = extract_facts(&provider, "session logs", "mock", None)
+            .await
+            .unwrap();
+
+        assert_eq!(facts.len(), 1);
+        assert!(
+            facts[0].knowledge_triple.is_none(),
+            "a TRIPLE with nothing preceding it must not be misattributed to a later, unrelated fact"
+        );
     }
 
     #[tokio::test]
