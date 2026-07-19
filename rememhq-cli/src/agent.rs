@@ -8,30 +8,53 @@ use rustyline::DefaultEditor;
 use serde_json::json;
 use std::time::Duration;
 
+/// Truncate `s` to at most `max_chars` characters, keeping the front.
+///
+/// Slices on character boundaries (via `char_indices`) rather than a raw
+/// byte offset — naive byte-index slicing (`&s[0..n]`) panics with "byte
+/// index n is not a char boundary" if the cut lands in the middle of a
+/// multi-byte UTF-8 character.
+fn truncate_chars_front(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((byte_idx, _)) => &s[..byte_idx],
+        None => s,
+    }
+}
+
+/// Keep at most the last `max_chars` characters of `s`, on character
+/// boundaries. Used for the directory path, where the *end* of the path is
+/// usually the more useful part to show when truncating.
+fn truncate_chars_back(s: &str, max_chars: usize) -> &str {
+    let char_count = s.chars().count();
+    if char_count <= max_chars {
+        return s;
+    }
+    let skip = char_count - max_chars;
+    match s.char_indices().nth(skip) {
+        Some((byte_idx, _)) => &s[byte_idx..],
+        None => s,
+    }
+}
+
 pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Result<()> {
     let version = env!("CARGO_PKG_VERSION");
     let provider = &config.reasoning.provider;
     let model = &config.reasoning.reasoning_model;
     let dir_str = config.project_data_dir().display().to_string();
 
-    // Truncate strings to fit the box if they are too long
-    let trunc_version = if version.len() > 40 {
-        &version[0..40]
-    } else {
-        version
-    };
-    let trunc_provider = if provider.len() > 10 {
-        &provider[0..10]
-    } else {
-        provider
-    };
-    let trunc_model = if model.len() > 25 {
-        &model[0..25]
-    } else {
-        model
-    };
-    let trunc_dir = if dir_str.len() > 41 {
-        format!("...{}", &dir_str[dir_str.len() - 38..])
+    // Truncate strings to fit the box if they are too long. Slicing by raw
+    // byte index (the previous approach) panics with "byte index N is not a
+    // char boundary" if the cut lands in the middle of a multi-byte UTF-8
+    // character — very plausible for `dir_str` in particular, since project
+    // directory paths routinely contain non-ASCII characters (accents, CJK,
+    // etc.) in real usernames/folder names. truncate_chars_* below slice on
+    // character boundaries instead, which is also what `{:<N}` padding
+    // below actually counts against.
+    let trunc_version = truncate_chars_front(version, 40);
+    let trunc_provider = truncate_chars_front(provider, 10);
+    let trunc_model = truncate_chars_front(model, 25);
+    let trunc_dir = if dir_str.chars().count() > 41 {
+        format!("...{}", truncate_chars_back(&dir_str, 38))
     } else {
         dir_str
     };
@@ -395,4 +418,50 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_chars_front_ascii() {
+        assert_eq!(truncate_chars_front("hello world", 5), "hello");
+        assert_eq!(truncate_chars_front("short", 40), "short");
+        assert_eq!(truncate_chars_front("exact", 5), "exact");
+    }
+
+    #[test]
+    fn test_truncate_chars_front_multibyte_no_panic() {
+        // Regression test: the previous implementation sliced by raw byte
+        // index (&s[0..n]), which panics if the cut lands mid-character.
+        // 'é' is 2 bytes in UTF-8, so a byte-index cut at certain offsets
+        // would land inside it; a char-index cut never does.
+        let s = "café résumé naïve"; // contains multi-byte chars throughout
+        // Should not panic for any max_chars value, including ones that
+        // would have split a multi-byte char under the old byte-slicing.
+        for n in 0..=s.chars().count() + 5 {
+            let truncated = truncate_chars_front(s, n);
+            assert!(truncated.chars().count() <= n.min(s.chars().count()));
+        }
+    }
+
+    #[test]
+    fn test_truncate_chars_back_ascii() {
+        assert_eq!(truncate_chars_back("hello world", 5), "world");
+        assert_eq!(truncate_chars_back("short", 40), "short");
+    }
+
+    #[test]
+    fn test_truncate_chars_back_multibyte_no_panic() {
+        // Mirrors test_truncate_chars_front_multibyte_no_panic, for the
+        // "keep the tail" direction used for the directory path.
+        let s = "/home/café/projects/日本語プロジェクト/naïve-résumé";
+        for n in 0..=s.chars().count() + 5 {
+            let truncated = truncate_chars_back(s, n);
+            assert!(truncated.chars().count() <= n.min(s.chars().count()));
+        }
+        // The tail should actually be the tail, not garbage.
+        assert!(s.ends_with(truncate_chars_back(s, 10)));
+    }
 }
