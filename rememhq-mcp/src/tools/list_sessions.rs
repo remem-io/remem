@@ -17,11 +17,12 @@ pub fn schema() -> Value {
 }
 
 pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Result<Value> {
-    let limit = args
-        .get("limit")
-        .and_then(|v| v.as_u64())
-        .map(|v| v as usize)
-        .unwrap_or(10);
+    let limit = crate::tools::clamp_limit(
+        args.get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(10),
+    );
 
     // Assuming session serialization works directly or needs mapping.
     // Usually, we just serialize it.

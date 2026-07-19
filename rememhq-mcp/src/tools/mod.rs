@@ -22,6 +22,22 @@ use rememhq_core::reasoning::ReasoningEngine;
 use serde_json::Value;
 use std::sync::Arc;
 
+/// Upper bound on `limit` accepted by MCP tools that take one directly from
+/// tool-call arguments — which, unlike a human typing into a REST API, may
+/// be set by an LLM agent acting on untrusted content (e.g. prompt
+/// injection). Without a cap, `limit` is passed straight through to the
+/// vector index search and, downstream, an FFI call into the native HNSW
+/// library, which can force a huge allocation/search. This mirrors
+/// `MAX_FETCH_LIMIT` in `rememhq-api/src/routes/memories.rs`, fixed for the
+/// same reason on the REST `/v1/memories/recall` and `/v1/memories/search`
+/// endpoints.
+pub(crate) const MAX_TOOL_LIMIT: usize = 1000;
+
+/// Clamp a `limit` parsed from tool-call arguments to [`MAX_TOOL_LIMIT`].
+pub(crate) fn clamp_limit(limit: usize) -> usize {
+    limit.min(MAX_TOOL_LIMIT)
+}
+
 /// Return the list of all MCP tools exposed by remem.
 pub fn list_tools() -> Vec<Value> {
     vec![
@@ -80,5 +96,18 @@ pub async fn call_tool(engine: &Arc<ReasoningEngine>, params: &Value) -> anyhow:
         "mem_stats" => stats::handle(engine, &arguments).await,
         "mem_create_store" => create_store::handle(engine, &arguments).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clamp_limit() {
+        assert_eq!(clamp_limit(8), 8, "values under the cap pass through unchanged");
+        assert_eq!(clamp_limit(1000), 1000, "the cap itself is allowed");
+        assert_eq!(clamp_limit(1001), MAX_TOOL_LIMIT);
+        assert_eq!(clamp_limit(usize::MAX), MAX_TOOL_LIMIT);
     }
 }
