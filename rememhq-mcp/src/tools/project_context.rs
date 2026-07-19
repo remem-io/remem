@@ -20,7 +20,7 @@ pub fn schema() -> Value {
 }
 
 pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Result<Value> {
-    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
+    let limit = crate::tools::clamp_limit(args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize);
     use rememhq_core::storage::MemoryStore;
     let memories = engine.store.list(&[], None, None, limit).await?;
 
