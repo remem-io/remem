@@ -363,12 +363,19 @@ Session log:
         key_decisions: Vec<String>,
     }
 
-    let parsed: SummaryOutput =
-        serde_json::from_str(json_text.trim()).unwrap_or_else(|_| SummaryOutput {
-            summary: "Failed to parse session summary.".to_string(),
-            files_touched: vec![],
-            key_decisions: vec![],
-        });
+    let parsed: SummaryOutput = serde_json::from_str(json_text.trim()).map_err(|e| {
+        // Deliberately propagate this as an error rather than falling back to
+        // a placeholder summary: the caller (ReasoningEngine::
+        // compress_session_transcript) only logs a warning on Err and skips
+        // inserting a row on failure. A silent Ok() fallback here used to
+        // mean a literal "Failed to parse session summary." string got
+        // persisted into session_summaries with no warning logged anywhere
+        // — and that placeholder is exactly what mem_get_project_context
+        // surfaces to future sessions under "Recent Sessions Timeline".
+        // Chars (not bytes) in the truncation to avoid slicing mid-character.
+        let snippet: String = response.chars().take(500).collect();
+        anyhow::anyhow!("Failed to parse session summary JSON: {e}. Raw response (truncated): {snippet}")
+    })?;
 
     Ok(crate::memory::types::SessionSummaryRecord {
         session_id: session_id.to_string(),
@@ -510,5 +517,59 @@ mod tests {
             .await
             .unwrap();
         assert!(facts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_generate_session_summary_parses_fenced_json() {
+        let provider = MockProviderObj {
+            response: "Here's the summary:\n```json\n{\"summary\": \"Did some work\", \"files_touched\": [\"a.rs\"], \"key_decisions\": [\"Used SQLite\"]}\n```\nLet me know if you need anything else.".to_string(),
+        };
+
+        let summary = generate_session_summary(&provider, "sess-1", "proj", "log", "mock", None)
+            .await
+            .unwrap();
+
+        assert_eq!(summary.summary, "Did some work");
+        assert_eq!(summary.files_touched, vec!["a.rs"]);
+        assert_eq!(summary.key_decisions, vec!["Used SQLite"]);
+    }
+
+    #[tokio::test]
+    async fn test_generate_session_summary_parses_unfenced_json() {
+        let provider = MockProviderObj {
+            response: "{\"summary\": \"Bare JSON, no fence\"}".to_string(),
+        };
+
+        let summary = generate_session_summary(&provider, "sess-1", "proj", "log", "mock", None)
+            .await
+            .unwrap();
+
+        assert_eq!(summary.summary, "Bare JSON, no fence");
+        assert!(summary.files_touched.is_empty());
+        assert!(summary.key_decisions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_generate_session_summary_errors_on_malformed_json() {
+        // Regression test: malformed JSON used to be silently swallowed into
+        // an Ok() containing a placeholder "Failed to parse session
+        // summary." string, which then got persisted as if it were a real
+        // summary with no warning logged anywhere. It must now surface as
+        // an Err so the caller's existing warning-log-and-skip-insert path
+        // actually runs.
+        let provider = MockProviderObj {
+            response: "This is not JSON at all, the model ignored the format instruction."
+                .to_string(),
+        };
+
+        let result = generate_session_summary(&provider, "sess-1", "proj", "log", "mock", None)
+            .await;
+
+        assert!(result.is_err(), "malformed JSON must propagate as an error, not a placeholder Ok()");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Failed to parse session summary JSON"),
+            "error should be identifiable, got: {err_msg}"
+        );
     }
 }
