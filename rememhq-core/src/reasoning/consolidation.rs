@@ -232,7 +232,7 @@ Output the facts now:"#
 
     let (response, _usage) = provider.complete(&prompt, model, options).await?;
 
-    let mut facts = Vec::new();
+    let mut facts: Vec<ExtractedFact> = Vec::new();
 
     for line in response.lines() {
         let line = line.trim();
