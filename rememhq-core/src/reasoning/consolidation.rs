@@ -374,7 +374,9 @@ Session log:
         // surfaces to future sessions under "Recent Sessions Timeline".
         // Chars (not bytes) in the truncation to avoid slicing mid-character.
         let snippet: String = response.chars().take(500).collect();
-        anyhow::anyhow!("Failed to parse session summary JSON: {e}. Raw response (truncated): {snippet}")
+        anyhow::anyhow!(
+            "Failed to parse session summary JSON: {e}. Raw response (truncated): {snippet}"
+        )
     })?;
 
     Ok(crate::memory::types::SessionSummaryRecord {
@@ -492,8 +494,9 @@ mod tests {
     #[tokio::test]
     async fn test_extract_facts_drops_leading_triple_with_no_preceding_fact() {
         let provider = MockProviderObj {
-            response: "TRIPLE | subject | pred | obj\nFACT | fact | 5 | tag | A fact with no triple"
-                .to_string(),
+            response:
+                "TRIPLE | subject | pred | obj\nFACT | fact | 5 | tag | A fact with no triple"
+                    .to_string(),
         };
 
         let facts = extract_facts(&provider, "session logs", "mock", None)
@@ -562,10 +565,13 @@ mod tests {
                 .to_string(),
         };
 
-        let result = generate_session_summary(&provider, "sess-1", "proj", "log", "mock", None)
-            .await;
+        let result =
+            generate_session_summary(&provider, "sess-1", "proj", "log", "mock", None).await;
 
-        assert!(result.is_err(), "malformed JSON must propagate as an error, not a placeholder Ok()");
+        assert!(
+            result.is_err(),
+            "malformed JSON must propagate as an error, not a placeholder Ok()"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("Failed to parse session summary JSON"),

@@ -325,7 +325,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(results.len(), 2, "duplicate selection must not produce duplicate results");
+        assert_eq!(
+            results.len(),
+            2,
+            "duplicate selection must not produce duplicate results"
+        );
         assert_eq!(results[0].id, mem1.id);
         assert_eq!(results[0].reasoning.as_deref(), Some("First rationale"));
         assert_eq!(results[1].id, mem2.id);

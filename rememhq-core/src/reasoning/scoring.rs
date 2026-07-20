@@ -60,10 +60,16 @@ fn extract_first_number(text: &str) -> Option<f32> {
     let mut i = 0;
     while i < chars.len() {
         if chars[i].is_ascii_digit() {
-            let start = if i > 0 && chars[i - 1] == '-' { i - 1 } else { i };
+            let start = if i > 0 && chars[i - 1] == '-' {
+                i - 1
+            } else {
+                i
+            };
             let mut end = i;
             let mut seen_dot = false;
-            while end < chars.len() && (chars[end].is_ascii_digit() || (chars[end] == '.' && !seen_dot)) {
+            while end < chars.len()
+                && (chars[end].is_ascii_digit() || (chars[end] == '.' && !seen_dot))
+            {
                 if chars[end] == '.' {
                     seen_dot = true;
                 }
@@ -249,7 +255,10 @@ mod tests {
         assert_eq!(extract_first_number("7"), Some(7.0));
         assert_eq!(extract_first_number("Score: 7"), Some(7.0));
         assert_eq!(extract_first_number("7/10"), Some(7.0));
-        assert_eq!(extract_first_number("I'd rate this a 7.5 out of 10"), Some(7.5));
+        assert_eq!(
+            extract_first_number("I'd rate this a 7.5 out of 10"),
+            Some(7.5)
+        );
         assert_eq!(extract_first_number("-3 (too trivial)"), Some(-3.0));
         assert_eq!(extract_first_number("no numbers here"), None);
     }
