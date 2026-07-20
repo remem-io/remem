@@ -27,7 +27,9 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing query"))?;
 
-    let limit = crate::tools::clamp_limit(args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize);
+    let limit = crate::tools::clamp_limit(
+        args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize
+    );
 
     let filter_tags: Vec<String> = args
         .get("filter_tags")

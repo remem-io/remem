@@ -105,7 +105,11 @@ mod tests {
 
     #[test]
     fn test_clamp_limit() {
-        assert_eq!(clamp_limit(8), 8, "values under the cap pass through unchanged");
+        assert_eq!(
+            clamp_limit(8),
+            8,
+            "values under the cap pass through unchanged"
+        );
         assert_eq!(clamp_limit(1000), 1000, "the cap itself is allowed");
         assert_eq!(clamp_limit(1001), MAX_TOOL_LIMIT);
         assert_eq!(clamp_limit(usize::MAX), MAX_TOOL_LIMIT);

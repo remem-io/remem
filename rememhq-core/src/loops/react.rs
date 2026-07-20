@@ -110,7 +110,11 @@ impl AgentLoop for ReActLoop {
 ///
 /// If compaction fails (e.g. a transient provider error), `messages` is left
 /// untouched and the loop simply tries again once more history has built up.
-async fn compact_history(provider: &dyn crate::providers::Provider, model: &str, messages: &mut Vec<ChatMessage>) {
+async fn compact_history(
+    provider: &dyn crate::providers::Provider,
+    model: &str,
+    messages: &mut Vec<ChatMessage>,
+) {
     if messages.len() <= 2 {
         return;
     }
@@ -126,7 +130,15 @@ async fn compact_history(provider: &dyn crate::providers::Provider, model: &str,
         .collect::<Vec<_>>()
         .join("\n\n");
 
-    match crate::reasoning::compaction::compact_context(provider, model, &conversation_text, None, None).await {
+    match crate::reasoning::compaction::compact_context(
+        provider,
+        model,
+        &conversation_text,
+        None,
+        None,
+    )
+    .await
+    {
         Ok(report) => {
             messages.truncate(2);
             messages.push(ChatMessage {
@@ -209,7 +221,9 @@ mod tests {
         assert_eq!(messages[0].content, "system prompt");
         assert_eq!(messages[1].content, "the task");
         assert_eq!(messages[2].role, ChatRole::System);
-        assert!(messages[2].content.contains("Summary of everything that happened."));
+        assert!(messages[2]
+            .content
+            .contains("Summary of everything that happened."));
     }
 
     #[tokio::test]

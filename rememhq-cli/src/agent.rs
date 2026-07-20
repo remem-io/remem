@@ -32,7 +32,12 @@ fn truncate_chars_back(s: &str, max_chars: usize) -> &str {
     let skip = char_count - max_chars;
     match s.char_indices().nth(skip) {
         Some((byte_idx, _)) => &s[byte_idx..],
-        None => s,
+        // nth(skip) is None exactly when skip >= char_count, which (given
+        // the guard above) only happens when max_chars == 0 — i.e. "keep
+        // zero characters." Unlike truncate_chars_front's None case (which
+        // correctly means "shorter than requested, return it all"), this
+        // one means "requested nothing," so it must return "", not `s`.
+        None => "",
     }
 }
 
@@ -438,8 +443,8 @@ mod tests {
         // 'é' is 2 bytes in UTF-8, so a byte-index cut at certain offsets
         // would land inside it; a char-index cut never does.
         let s = "café résumé naïve"; // contains multi-byte chars throughout
-        // Should not panic for any max_chars value, including ones that
-        // would have split a multi-byte char under the old byte-slicing.
+                                     // Should not panic for any max_chars value, including ones that
+                                     // would have split a multi-byte char under the old byte-slicing.
         for n in 0..=s.chars().count() + 5 {
             let truncated = truncate_chars_front(s, n);
             assert!(truncated.chars().count() <= n.min(s.chars().count()));
