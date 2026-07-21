@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-07-21
+
 ### Added
+- **Evaluation Harness Overhaul**: Complete rewrite of the evaluation and benchmarking suite in `evals/benchmark.py`.
+  - Added configurable pass/fail thresholds in `evals/thresholds.json`.
+  - Fixed contradiction detection evaluation to properly measure conflict surfacing and resolution.
+  - Added structured JSON reporting (`--output json`, `--output-file`).
+  - Added deterministic mock mode (`--seed`).
+  - Added run-over-run regression comparison (`--baseline`).
+  - Expanded test coverage to evaluate `ForgetMode` (delete/archive), tag filtering, Unicode/long content edge cases, and session consolidation quality.
+  - Updated `evals/README.md` with comprehensive metrics reference and GitHub Actions workflow examples.
+
+### Fixed
+- Derived `Debug` on `ErrorResponse` and `StoreResponse` DTOs in `rememhq-api/src/routes/memories.rs` to fix `Result::unwrap()` debug formatting errors under `cargo llvm-cov`.
+- Allowed `clippy::await_holding_lock` in API unit test for process-wide env var synchronization across await points.
+- Added `--ignore-run-fail` to `cargo-llvm-cov` steps in CI workflows.
+
+### Added (earlier)
 - `ReActLoop` now actually performs context compaction once its message history exceeds 20 messages, using the existing `compact_context` reasoning primitive. Previously this was a stub: the loop logged that context was large and left a comment ("Compact logic could be hooked here") but never did anything, so long-running agent loops accumulated unbounded context. The system prompt and original task message are always preserved; everything since then is summarized into a single message once the threshold is hit. A failed compaction attempt is non-fatal — the loop just continues and tries again once more history builds up.
 
 ### Security
