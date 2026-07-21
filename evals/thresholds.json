@@ -1,0 +1,15 @@
+{
+  "_comment": "Default pass/fail thresholds for remem evaluation harness. All values are minimums.",
+  "recall_at_5": 75.0,
+  "recall_at_10": 90.0,
+  "semantic_precision": 60.0,
+  "contradiction_detection_rate": 50.0,
+  "forget_correctness": 100.0,
+  "tag_filter_accuracy": 100.0,
+  "edge_case_pass_rate": 75.0,
+  "round_trip_accuracy": 75.0,
+  "consolidation_quality": 7.0,
+  "p95_store_latency_ms": 500.0,
+  "p95_recall_latency_ms": 2000.0,
+  "p95_search_latency_ms": 500.0
+}
