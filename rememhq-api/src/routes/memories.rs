@@ -22,7 +22,7 @@ type AppState = Arc<ReasoningEngine>;
 
 // --- Request/Response types ---
 
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct StoreResponse {
     pub id: uuid::Uuid,
     pub importance: f32,
@@ -30,7 +30,7 @@ pub struct StoreResponse {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct ErrorResponse {
     pub error: String,
 }
