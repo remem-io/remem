@@ -162,7 +162,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test \
-            -scheme RememTests \
+            -scheme Remem \
             -destination "platform=iOS Simulator,name=${{ steps.simulator.outputs.device }}" \
             -skipPackagePluginValidation \
             -resultBundlePath "$RUNNER_TEMP/RememTests.xcresult" \

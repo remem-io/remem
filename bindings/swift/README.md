@@ -23,7 +23,7 @@ snapshot, not a stable public API.
   see `.github/workflows/bindings-swift.yml`
 - A second CI job cross-compiles `rememhq-core` for
   `aarch64-apple-ios-sim` and runs the same test suite against a real
-  **iOS Simulator** via `xcodebuild test -scheme RememTests`, giving
+  **iOS Simulator** via `xcodebuild test -scheme Remem`, giving
   actual signal on whether the engine's Tokio runtime behaves correctly
   under iOS rather than leaving it as a documented unknown. **Caveat:**
   `xcodebuild` against a bare SwiftPM package (no `.xcodeproj`) is known
