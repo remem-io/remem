@@ -41,7 +41,7 @@ let package = Package(
         .target(
             name: "CRemem",
             path: "Sources/CRemem",
-            sources: [],
+            sources: ["shim.c"],
             publicHeadersPath: "include"
         ),
 
