@@ -625,6 +625,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn test_oversized_limit_is_rejected_with_400() {
         // Relies on REMEM_API_KEY being unset (dev-mode auth). Guard against
         // the auth middleware's own tests concurrently toggling that same
