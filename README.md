@@ -81,59 +81,110 @@ Traditional vector stores suffer from "confident recall of irrelevant context." 
 | **Contradictions** | — | **LLM Conflict Detection** between old and new facts |
 | **Decay** | Time-based (linear) | **Importance-Weighted Decay**; critical facts persist longer |
 
+## Installation
+
+### 1. Download Pre-built Binary
+Download the latest executable for your platform (Linux, macOS, Windows) from [GitHub Releases](https://github.com/remem-io/remem/releases):
+
+```bash
+# Verify installation
+remem --help
+```
+
+Or build directly via Cargo:
+```bash
+cargo install --path rememhq-cli
+```
+
+### 2. Install SDKs
+
+```bash
+# Python SDK
+pip install rememhq
+
+# TypeScript SDK
+npm install @rememhq/sdk
+```
+
+## Configuration & Environment Variables
+
+`remem` seamlessly supports **Google Gemini**, **Anthropic Claude**, **OpenAI**, and **Local ONNX** models out of the box without code modifications. Set your preferred provider in your environment:
+
+| Environment Variable | Description | Example |
+| :--- | :--- | :--- |
+| `REMEM_PROVIDER` | AI Provider choice (`gemini`, `claude`, `openai`, `local`, `mock`) | `export REMEM_PROVIDER=gemini` |
+| `GOOGLE_API_KEY` | Google Gemini API key | `export GOOGLE_API_KEY="AIzaSy..."` |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key | `export ANTHROPIC_API_KEY="sk-ant..."` |
+| `OPENAI_API_KEY` | OpenAI API key | `export OPENAI_API_KEY="sk-..."` |
+| `REMEM_DATA_DIR` | Custom root data directory (defaults to `~/.remem`) | `export REMEM_DATA_DIR="/var/data/remem"` |
+
 ## Quickstart
 
-### Model Context Protocol (MCP) — Claude Code / Codex / Cursor / Copilot / Antigravity CLI / OpenCode
+### 1. Auto-Configure AI Assistants (`remem init`)
 
-See our [Quickstart Guide](docs/QUICKSTART.md) for more details, or explore our examples like `examples/multi_agent.py` and `examples/rag_example.py`.
+Automatically inject `remem` memory into your AI coding assistant with a single command:
 
-remem works seamlessly with any MCP-compliant AI assistant. Add the following to your tool's MCP configuration:
+```bash
+# Configure Cursor
+remem init cursor --project my-project
+
+# Configure Claude Code
+remem init claude-code --project my-project
+
+# Configure all supported agents in your workspace
+remem init all --project my-project
+```
+
+### 2. Model Context Protocol (MCP) Manual Setup
+
+Add `remem` to your tool's MCP configuration (`.cursor/mcp.json`, `claude_code_config.json`, etc.):
 
 ```json
 {
   "mcpServers": {
     "remem": {
-      "command": "rememhq",
+      "command": "remem",
       "args": ["mcp", "--project", "my-project"]
     }
   }
 }
 ```
 
-### Python SDK
-
-```bash
-pip install rememhq
-```
+### 3. Python SDK Usage
 
 ```python
+import asyncio
 from rememhq import Memory
 
-m = Memory(project="my-agent", reasoning_model="claude-sonnet-4-8")
+async def main():
+    # Uses provider from environment (REMEM_PROVIDER=gemini, GOOGLE_API_KEY=...)
+    m = Memory(project="my-agent")
 
-# Store a durable preference
-await m.store("The production database is PostgreSQL 15 on RDS", tags=["infra"])
+    # Store durable preferences or facts
+    await m.store("The production database uses PostgreSQL 15 on RDS with SSL", tags=["infra", "db"])
 
-# Recall with reasoning
-results = await m.recall("what database are we using?")
-for r in results:
-    print(f"Content: {r.content}")
-    print(f"Reasoning: {r.reasoning}")
+    # Recall with guided LLM reasoning & RRF hybrid search
+    results = await m.recall("what database are we using?")
+    for r in results:
+        print(f"Content: {r.content}")
+        print(f"Reasoning: {r.reasoning}")
+
+asyncio.run(main())
 ```
 
-### TypeScript SDK
-
-```bash
-npm install @rememhq/sdk
-```
+### 4. TypeScript SDK Usage
 
 ```typescript
 import { Memory } from "@rememhq/sdk";
 
-const m = new Memory({ project: "my-agent", reasoningModel: "gpt-5.5" });
+const m = new Memory({ project: "my-agent" });
+
+// Store memory
 await m.store("This repository uses trunk-based development", { tags: ["workflow"] });
 
+// Recall with reasoning
 const results = await m.recall("how do we manage branches?");
+console.log(results);
 ```
 
 ## Usage Commands
