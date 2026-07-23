@@ -664,7 +664,7 @@ impl MemoryStore for SqliteStore {
             "UPDATE memories SET archived = 1
              WHERE archived = 0
                AND ttl_days IS NOT NULL
-               AND (julianday('now') - julianday(created_at)) > ttl_days",
+               AND (julianday('now') - julianday(created_at)) >= ttl_days",
             [],
         )?;
 
@@ -1184,11 +1184,13 @@ mod tests {
     async fn test_ttl_auto_archiving() {
         let store = SqliteStore::open_in_memory().unwrap();
         let mut expired = MemoryRecord::new("Expired TTL memory", MemoryType::Fact);
-        expired.ttl_days = Some(0); // 0 days TTL -> immediately expired
+        expired.ttl_days = Some(1);
+        expired.created_at = Utc::now() - chrono::Duration::days(2);
         let expired_id = expired.id;
         store.insert(&expired).await.unwrap();
 
-        let active = MemoryRecord::new("Active memory", MemoryType::Fact);
+        let mut active = MemoryRecord::new("Active memory", MemoryType::Fact);
+        active.ttl_days = Some(30);
         let active_id = active.id;
         store.insert(&active).await.unwrap();
 
