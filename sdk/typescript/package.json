@@ -1,6 +1,6 @@
 {
   "name": "@rememhq/sdk",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Reasoning memory layer for AI agents — TypeScript SDK",
   "type": "module",
   "main": "dist/index.js",

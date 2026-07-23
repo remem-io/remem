@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.12] - 2026-07-21
+## [0.1.13] - 2026-07-23
+
+### Added
+- **Reciprocal Rank Fusion (RRF) Hybrid Search**: Combined HNSW vector similarity search with SQLite FTS5 BM25 keyword matching (`RRF = 1/(60+r_vec) + 1/(60+r_bm25)`).
+- **TTL Auto-Archiving Maintenance**: Automatic background archiving of memories whose `ttl_days` period has elapsed during decay processing.
+- **SDK Expansion**: Added `store_batch` (Python) and `storeBatch` (TypeScript) client methods.
+- **Provider Resolution & Multi-Provider Seamless Support**: Flexible provider alias matching (`gemini`, `google`, `claude`, `anthropic`, `openai`) across all environment configuration chains.
+
+### Fixed
+- Fixed soft-deleted node filtering and active element count calculation in HNSW vector index (`libremem`).
+- Fixed sub-millisecond clock evaluation and deterministic `created_at` handling in TTL auto-archiving tests.
+- Fixed `clippy::min_max` warning in retrieval candidate calculation.
 
 ### Added
 - **Evaluation Harness Overhaul**: Complete rewrite of the evaluation and benchmarking suite in `evals/benchmark.py`.
