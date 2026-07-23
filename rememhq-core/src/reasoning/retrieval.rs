@@ -30,7 +30,7 @@ pub async fn guided_retrieval(
     let query_embedding = embeddings.embed(query, options).await?;
 
     // Step 2: Reciprocal Rank Fusion (RRF) candidate search: combine vector + FTS BM25
-    let candidate_count = 50.min(index.len().max(50));
+    let candidate_count = 50;
 
     let vector_results = if !index.is_empty() {
         index
