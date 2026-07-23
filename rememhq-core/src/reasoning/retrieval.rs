@@ -29,19 +29,52 @@ pub async fn guided_retrieval(
     // Step 1: Embed the query
     let query_embedding = embeddings.embed(query, options).await?;
 
-    // Step 2: Get top-50 candidates from vector index
-    let candidate_count = 50.min(index.len());
-    if candidate_count == 0 {
-        return Ok(Vec::new());
+    // Step 2: Reciprocal Rank Fusion (RRF) candidate search: combine vector + FTS BM25
+    let candidate_count = 50.min(index.len().max(50));
+
+    let vector_results = if !index.is_empty() {
+        index
+            .search(&query_embedding, candidate_count)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let fts_results = store
+        .search_fts(query, candidate_count)
+        .await
+        .unwrap_or_default();
+
+    // Map candidate UUID -> (RRF score, similarity, MemoryRecord)
+    use std::collections::HashMap;
+    let mut rrf_scores: HashMap<uuid::Uuid, (f32, f32)> = HashMap::new();
+
+    // Add vector ranks: RRF = 1.0 / (60 + rank)
+    for (rank, vr) in vector_results.iter().enumerate() {
+        let score = 1.0 / (60.0 + (rank + 1) as f32);
+        rrf_scores.insert(vr.id, (score, vr.similarity));
     }
 
-    let vector_results = index.search(&query_embedding, candidate_count).await?;
+    // Add FTS ranks
+    for (rank, rec) in fts_results.iter().enumerate() {
+        let fts_score = 1.0 / (60.0 + (rank + 1) as f32);
+        let entry = rrf_scores.entry(rec.id).or_insert((0.0, 0.5));
+        entry.0 += fts_score;
+    }
+
+    // Rank candidates by RRF score descending
+    let mut ranked_ids: Vec<(uuid::Uuid, f32, f32)> = rrf_scores
+        .into_iter()
+        .map(|(id, (rrf, sim))| (id, rrf, sim))
+        .collect();
+    ranked_ids.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     // Step 3: Fetch full records for candidates, applying filters
     let mut candidates: Vec<(MemoryResult, f32)> = Vec::new();
 
-    for vr in &vector_results {
-        if let Ok(Some(record)) = store.get(vr.id).await {
+    for (id, rrf, sim) in ranked_ids.iter().take(candidate_count) {
+        if let Ok(Some(record)) = store.get(*id).await {
             // Apply filters
             if let Some(mt) = memory_type {
                 if record.memory_type != mt {
@@ -58,8 +91,8 @@ pub async fn guided_retrieval(
             }
 
             let mut result = MemoryResult::from(record);
-            result.similarity = vr.similarity;
-            candidates.push((result, vr.similarity));
+            result.similarity = *sim;
+            candidates.push((result, *rrf));
         }
     }
 

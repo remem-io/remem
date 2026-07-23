@@ -44,12 +44,18 @@ impl<'a> LlmEntityResolver<'a> {
         }
 
         // 2. Fetch a list of "likely" candidates from the store
-        // For now, we'll just use a simple "recent entities" or "similar prefix" approach
-        // In a full implementation, this would use vector search on entity names.
-        let candidates: Vec<String> = self.store.list_recent_entities(20).await?;
+        let candidates: Vec<String> = self.store.list_recent_entities(50).await?;
 
         if candidates.is_empty() {
             return Ok(entity.to_string());
+        }
+
+        // Fast path: Case-insensitive / whitespace-normalized exact match check
+        let normalized_entity = entity.trim().to_lowercase();
+        for candidate in &candidates {
+            if candidate.trim().to_lowercase() == normalized_entity {
+                return Ok(candidate.clone());
+            }
         }
 
         // 3. Ask LLM to resolve
@@ -145,5 +151,40 @@ mod tests {
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].subject, "PostgreSQL"); // Resolved from "Postgres"
         assert_eq!(resolved[0].object, "Port 5432"); // Stayed same
+    }
+
+    #[tokio::test]
+    async fn test_entity_resolution_fast_path() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        let provider = MockProvider;
+
+        let record = MemoryRecord::new("Rust memory layer", MemoryType::Fact);
+        let memory_id = record.id;
+        store.insert(&record).await.unwrap();
+
+        store
+            .insert_knowledge_triple(
+                &KnowledgeGraphUpdate {
+                    subject: "Rust".to_string(),
+                    predicate: "is_a".to_string(),
+                    object: "Language".to_string(),
+                },
+                memory_id,
+            )
+            .await
+            .unwrap();
+
+        let resolver = LlmEntityResolver::new(&provider, "mock".to_string(), &store, None);
+
+        // Lowercase "rust" should match "Rust" via case-insensitive fast-path without invoking LLM
+        let updates = vec![KnowledgeGraphUpdate {
+            subject: "rust".to_string(),
+            predicate: "targets".to_string(),
+            object: "LLVM".to_string(),
+        }];
+
+        let resolved = resolver.resolve(updates).await.unwrap();
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].subject, "Rust");
     }
 }

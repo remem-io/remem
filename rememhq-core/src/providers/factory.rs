@@ -27,15 +27,16 @@ use crate::providers::{EmbeddingProvider, Provider};
 /// are tried: configured → alternatives → `MockProvider`.
 pub fn build_reasoning_provider(config: &RememConfig) -> Arc<dyn Provider> {
     let name = std::env::var("REMEM_REASONING_PROVIDER")
+        .or_else(|_| std::env::var("REMEM_PROVIDER"))
         .unwrap_or_else(|_| config.reasoning.provider.clone());
 
-    match name.as_str() {
+    match name.to_lowercase().trim() {
         "openai" => try_provider_chain(&[
             ProviderKind::OpenAI,
             ProviderKind::Anthropic,
             ProviderKind::Google,
         ]),
-        "anthropic" => try_provider_chain(&[
+        "anthropic" | "claude" => try_provider_chain(&[
             ProviderKind::Anthropic,
             ProviderKind::OpenAI,
             ProviderKind::Google,
@@ -57,10 +58,11 @@ pub fn build_reasoning_provider(config: &RememConfig) -> Arc<dyn Provider> {
 /// `REMEM_EMBEDDING_PROVIDER` as the override env-var.
 pub fn build_embedding_provider(config: &RememConfig) -> Arc<dyn EmbeddingProvider> {
     let name = std::env::var("REMEM_EMBEDDING_PROVIDER")
+        .or_else(|_| std::env::var("REMEM_PROVIDER"))
         .unwrap_or_else(|_| config.reasoning.provider.clone());
 
-    match name.as_str() {
-        "google" => match GoogleEmbeddings::new(None) {
+    match name.to_lowercase().trim() {
+        "google" | "gemini" => match GoogleEmbeddings::new(None) {
             Ok(p) => Arc::new(p),
             Err(e) => {
                 tracing::warn!("Failed to initialise Google embeddings: {e}. Trying fallbacks…");
@@ -74,6 +76,7 @@ pub fn build_embedding_provider(config: &RememConfig) -> Arc<dyn EmbeddingProvid
                 fallback_embedding()
             }
         },
+        "anthropic" | "claude" => fallback_embedding(),
         "mock" => Arc::new(MockEmbeddings::new(768)),
         "local" => try_local_embeddings(),
         _ => auto_detect_embeddings(),
@@ -202,4 +205,27 @@ fn auto_detect_embeddings() -> Arc<dyn EmbeddingProvider> {
         "No embedding API keys or local model files found. Falling back to MockEmbeddings."
     );
     Arc::new(MockEmbeddings::new(768))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_reasoning_provider_mock() {
+        let config = RememConfig::default();
+        std::env::set_var("REMEM_PROVIDER", "mock");
+        let provider = build_reasoning_provider(&config);
+        std::env::remove_var("REMEM_PROVIDER");
+        assert_eq!(provider.name(), "mock");
+    }
+
+    #[test]
+    fn test_build_embedding_provider_mock() {
+        let config = RememConfig::default();
+        std::env::set_var("REMEM_EMBEDDING_PROVIDER", "mock");
+        let embeddings = build_embedding_provider(&config);
+        std::env::remove_var("REMEM_EMBEDDING_PROVIDER");
+        assert_eq!(embeddings.dimension(), 768);
+    }
 }

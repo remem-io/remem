@@ -13,8 +13,6 @@
 
 ---
 
-> **⚠️ In Development** — remem is evolving rapidly. Not yet recommended for mission-critical production workloads.
-
 remem provides agents with **persistent, reasoned memory** that spans across sessions. It enhances AI assistants and agents with an **intelligent memory layer** that enables truly personalized AI interactions — it **remembers user preferences**, **adapts to individual needs**, and **continuously learns over time**, turning stateless AI tools into persistent, context-aware partners.
 
 Unlike traditional vector stores that rely solely on semantic similarity, remem incorporates an LLM reasoning layer to distinguish between what is semantically close and what is actually useful for solving problems. Whether you're using Claude Code, Codex, Cursor, Copilot, Antigravity CLI, or OpenCode, remem gives your AI a durable, cross-session memory that grows smarter with every interaction.

@@ -264,4 +264,27 @@ mod tests {
             remem_ffi::remem_chunks_free(chunks_ptr);
         }
     }
+
+    #[tokio::test]
+    async fn test_hnsw_vector_index_add_search_remove() {
+        let index = HNSWVectorIndex::new(3, 100);
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+
+        index.add(id1, &[1.0, 0.0, 0.0]).await.unwrap();
+        index.add(id2, &[0.0, 1.0, 0.0]).await.unwrap();
+
+        assert_eq!(index.len(), 2);
+
+        let results = index.search(&[1.0, 0.0, 0.0], 5).await.unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, id1);
+
+        index.remove(id1).await.unwrap();
+        assert_eq!(index.len(), 1);
+
+        let results_after = index.search(&[1.0, 0.0, 0.0], 5).await.unwrap();
+        assert_eq!(results_after.len(), 1);
+        assert_eq!(results_after[0].id, id2);
+    }
 }

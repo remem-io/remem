@@ -74,6 +74,17 @@ describe("Memory.store()", () => {
     assert.ok(r.id);
   });
 
+  it("storeBatch stores multiple items", async () => {
+    mockFetch(storeResponse({ importance: 8.0 }), 200);
+    const m = new Memory({ project: "test", baseUrl: BASE });
+    const results = await m.storeBatch([
+      { content: "First" },
+      { content: "Second" },
+    ]);
+    assert.equal(results.length, 2);
+    assert.equal(results[0].importance, 8.0);
+  });
+
   it("sends content, tags, and importance in POST body", async () => {
     let body: Record<string, unknown> = {};
     mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => {

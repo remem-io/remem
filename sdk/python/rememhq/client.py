@@ -85,6 +85,17 @@ class Memory:
         resp.raise_for_status()
         return StoreResponse.model_validate(resp.json())
 
+    async def store_batch(
+        self,
+        items: list[dict],
+    ) -> list[StoreResponse]:
+        """Store multiple memories sequentially. Each dict can contain keys for `store`."""
+        results = []
+        for item in items:
+            res = await self.store(**item)
+            results.append(res)
+        return results
+
     async def recall(
         self,
         query: str,

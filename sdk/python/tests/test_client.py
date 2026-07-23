@@ -50,3 +50,32 @@ class TestMemoryClient:
                 res = await m.decay(factor=0.5)
                 assert res["success"] is True
                 assert res["archived_count"] == 5
+
+    @pytest.mark.asyncio
+    async def test_store_batch(self, base_url):
+        """Verify store_batch() stores multiple items."""
+        from rememhq import Memory
+        import respx
+        import httpx
+
+        async with respx.mock(base_url=base_url) as respx_mock:
+            respx_mock.post("/v1/memories").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "id": "12345678-1234-5678-1234-567812345678",
+                        "importance": 8.0,
+                        "tags": ["test"],
+                        "created_at": "2026-07-23T12:00:00Z",
+                    },
+                )
+            )
+
+            async with Memory(base_url=base_url) as m:
+                items = [
+                    {"content": "First memory", "tags": ["test"]},
+                    {"content": "Second memory", "tags": ["test"]},
+                ]
+                results = await m.store_batch(items)
+                assert len(results) == 2
+                assert results[0].importance == 8.0

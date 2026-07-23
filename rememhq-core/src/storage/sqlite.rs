@@ -658,6 +658,16 @@ impl MemoryStore for SqliteStore {
              WHERE archived = 0 AND decay_score > 0.01",
             params![decay_factor as f64],
         )?;
+
+        // Auto-archive memories whose TTL (ttl_days) has elapsed
+        conn.execute(
+            "UPDATE memories SET archived = 1
+             WHERE archived = 0
+               AND ttl_days IS NOT NULL
+               AND (julianday('now') - julianday(created_at)) > ttl_days",
+            [],
+        )?;
+
         Ok(rows)
     }
 
@@ -1168,5 +1178,27 @@ mod tests {
             high_after.decay_score,
             low_after.decay_score
         );
+    }
+
+    #[tokio::test]
+    async fn test_ttl_auto_archiving() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        let mut expired = MemoryRecord::new("Expired TTL memory", MemoryType::Fact);
+        expired.ttl_days = Some(0); // 0 days TTL -> immediately expired
+        let expired_id = expired.id;
+        store.insert(&expired).await.unwrap();
+
+        let active = MemoryRecord::new("Active memory", MemoryType::Fact);
+        let active_id = active.id;
+        store.insert(&active).await.unwrap();
+
+        // Run apply_decay
+        store.apply_decay(0.9).await.unwrap();
+
+        let expired_rec = store.get(expired_id).await.unwrap();
+        let active_rec = store.get(active_id).await.unwrap();
+
+        assert!(expired_rec.is_none());
+        assert!(active_rec.is_some());
     }
 }

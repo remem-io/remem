@@ -62,10 +62,13 @@ std::vector<HNSWIndex::SearchResult> HNSWIndex::search(const std::vector<float>&
     while (!result_pq.empty()) {
         auto& top = result_pq.top();
         if (top.second < label_to_id_.size()) {
-            results.push_back({
-                label_to_id_[top.second],
-                1.0f / (1.0f + top.first)
-            });
+            const std::string& id = label_to_id_[top.second];
+            if (!id.empty()) {
+                results.push_back({
+                    id,
+                    1.0f / (1.0f + top.first)
+                });
+            }
         }
         result_pq.pop();
     }
@@ -115,7 +118,7 @@ void HNSWIndex::load(const std::string& path) {
 }
 
 size_t HNSWIndex::size() const {
-    return index_->cur_element_count;
+    return id_to_label_.size();
 }
 
 } // namespace vector_store

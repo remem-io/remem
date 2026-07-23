@@ -78,6 +78,19 @@ export class Memory {
   }
 
   /**
+   * Store multiple memories sequentially.
+   */
+  async storeBatch(
+    items: Array<{ content: string; options?: StoreOptions }>
+  ): Promise<StoreResponse[]> {
+    const results: StoreResponse[] = [];
+    for (const item of items) {
+      results.push(await this.store(item.content, item.options));
+    }
+    return results;
+  }
+
+  /**
    * Guided recall — LLM re-ranks candidates for relevance.
    */
   async recall(query: string, options: RecallOptions = {}): Promise<MemoryResult[]> {
