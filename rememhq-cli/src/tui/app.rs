@@ -81,7 +81,7 @@ impl TypeFilter {
         }
     }
 
-    /// Convert to Option<MemoryType> for store queries.
+    /// Convert to `Option<MemoryType>` for store queries.
     pub fn to_memory_type(self) -> Option<MemoryType> {
         match self {
             TypeFilter::All => None,
