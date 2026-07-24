@@ -85,7 +85,7 @@ async def run_simulation():
 if __name__ == "__main__":
     try:
         asyncio.run(run_simulation())
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"❌ Simulation failed: {e}")
         print(
             "\nTip: Make sure the remem server is running with 'cargo run -p rememhq-api -- --project simulation-alice'"
