@@ -86,6 +86,8 @@ enum Commands {
     },
     /// Show database statistics
     Inspect,
+    /// Check configuration, storage paths, and provider readiness
+    Doctor,
     /// Apply importance-weighted decay to all active memories
     Decay {
         /// Decay factor (0.0 to 1.0, lower means faster decay)
@@ -403,6 +405,8 @@ async fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
+
+        Commands::Doctor => run_doctor(&config).await,
         Commands::Decay { factor } => {
             let engine = build_engine(&config).await?;
             let archived_count = engine.apply_decay(factor).await?;
@@ -923,6 +927,182 @@ fn generate_consumer_config(
     Ok(file_path.display().to_string())
 }
 
+/// Run a read-only health check for the active remem project.
+async fn run_doctor(config: &RememConfig) -> anyhow::Result<()> {
+    println!("remem doctor");
+    println!("  project: {}", config.project);
+    println!("  provider: {}", config.reasoning.provider);
+    println!("  reasoning model: {}", config.reasoning.reasoning_model);
+    println!("  scoring model: {}", config.reasoning.scoring_model);
+    println!();
+
+    print_path_check("data dir", &config.storage.data_dir, false);
+    print_path_check("project dir", &config.project_data_dir(), false);
+    print_path_check("database", &config.db_path(), true);
+    print_path_check("vector index", &config.index_path(), true);
+
+    if config.db_path().exists() {
+        match SqliteStore::open(&config.db_path()) {
+            Ok(store) => match store.stats().await {
+                Ok(stats) => println!(
+                    "  ✓ database readable: {} memories, avg importance {:.1}",
+                    stats.total_memories, stats.avg_importance
+                ),
+                Err(err) => println!("  ✗ database stats failed: {err}"),
+            },
+            Err(err) => println!("  ✗ database open failed: {err}"),
+        }
+    } else {
+        println!("  - database readable: skipped until first memory is stored");
+    }
+
+    println!();
+    print_provider_check("reasoning", &reasoning_provider_status(config));
+    print_provider_check("embeddings", &embedding_provider_status(config));
+
+    Ok(())
+}
+
+fn print_path_check(label: &str, path: &std::path::Path, optional: bool) {
+    if path.exists() {
+        println!("  ✓ {label}: {}", path.display());
+    } else if optional {
+        println!("  - {label}: {} (not created yet)", path.display());
+    } else {
+        println!(
+            "  ! {label}: {} (missing; created on first write)",
+            path.display()
+        );
+    }
+}
+
+fn print_provider_check(label: &str, status: &DoctorStatus) {
+    let marker = if status.ok { "✓" } else { "!" };
+    println!("  {marker} {label}: {}", status.message);
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DoctorStatus {
+    ok: bool,
+    message: String,
+}
+
+fn reasoning_provider_status(config: &RememConfig) -> DoctorStatus {
+    let provider = configured_provider("REMEM_REASONING_PROVIDER", config);
+    reasoning_provider_status_for(
+        &provider,
+        env_is_set("ANTHROPIC_API_KEY"),
+        env_is_set("OPENAI_API_KEY"),
+        env_is_set("GOOGLE_API_KEY"),
+    )
+}
+
+fn reasoning_provider_status_for(
+    provider: &str,
+    has_anthropic_key: bool,
+    has_openai_key: bool,
+    has_google_key: bool,
+) -> DoctorStatus {
+    match provider {
+        "mock" => ok_status("mock provider selected; no API key required"),
+        "local" => ok_status("local provider selected"),
+        "openai" if has_openai_key => ok_status("OpenAI API key found"),
+        "openai" => warn_status("OPENAI_API_KEY missing"),
+        "anthropic" | "claude" if has_anthropic_key => ok_status("Anthropic API key found"),
+        "anthropic" | "claude" => warn_status("ANTHROPIC_API_KEY missing"),
+        "google" | "gemini" if has_google_key => ok_status("Google API key found"),
+        "google" | "gemini" => warn_status("GOOGLE_API_KEY missing"),
+        _ if has_anthropic_key || has_openai_key || has_google_key => {
+            ok_status("auto-detect can use an available API key")
+        }
+        _ => warn_status("no reasoning API key found; runtime will fall back to mock provider"),
+    }
+}
+
+fn embedding_provider_status(config: &RememConfig) -> DoctorStatus {
+    let provider = configured_provider("REMEM_EMBEDDING_PROVIDER", config);
+    embedding_provider_status_for(
+        &provider,
+        env_is_set("OPENAI_API_KEY"),
+        env_is_set("GOOGLE_API_KEY"),
+        local_embedding_files_exist(),
+    )
+}
+
+fn embedding_provider_status_for(
+    provider: &str,
+    has_openai_key: bool,
+    has_google_key: bool,
+    has_local_files: bool,
+) -> DoctorStatus {
+    match provider {
+        "mock" => ok_status("mock embeddings selected; no API key required"),
+        "local" if has_local_files => ok_status("local embedding model and vocab files found"),
+        "local" => warn_status("local embeddings need REMEM_LOCAL_MODEL_PATH and REMEM_LOCAL_VOCAB_PATH files"),
+        "openai" if has_openai_key => ok_status("OpenAI embeddings ready"),
+        "openai" => warn_status("OPENAI_API_KEY missing"),
+        "google" | "gemini" if has_google_key => ok_status("Google embeddings ready"),
+        "google" | "gemini" => warn_status("GOOGLE_API_KEY missing"),
+        "anthropic" | "claude" if has_openai_key || has_google_key || has_local_files => {
+            ok_status("Anthropic reasoning will use available embedding fallback")
+        }
+        "anthropic" | "claude" => warn_status(
+            "Anthropic has no embedding API; set OPENAI_API_KEY, GOOGLE_API_KEY, or local model files",
+        ),
+        _ if has_openai_key || has_google_key || has_local_files => {
+            ok_status("auto-detect can use available embeddings")
+        }
+        _ => warn_status("no embedding provider found; runtime will fall back to mock embeddings"),
+    }
+}
+
+fn configured_provider(override_env: &str, config: &RememConfig) -> String {
+    std::env::var(override_env)
+        .or_else(|_| std::env::var("REMEM_PROVIDER"))
+        .unwrap_or_else(|_| config.reasoning.provider.clone())
+        .trim()
+        .to_lowercase()
+}
+
+#[allow(dead_code)]
+fn env_status(env_var: &str, ok_message: &str, missing_message: &str) -> DoctorStatus {
+    if env_is_set(env_var) {
+        ok_status(ok_message)
+    } else {
+        warn_status(missing_message)
+    }
+}
+
+fn local_embedding_files_exist() -> bool {
+    let model_path = std::env::var("REMEM_LOCAL_MODEL_PATH")
+        .unwrap_or_else(|_| "models/nomic-embed-text.onnx".to_string());
+    let vocab_path =
+        std::env::var("REMEM_LOCAL_VOCAB_PATH").unwrap_or_else(|_| "models/vocab.txt".to_string());
+    std::path::Path::new(&model_path).exists() && std::path::Path::new(&vocab_path).exists()
+}
+
+#[allow(dead_code)]
+fn any_env_set(vars: &[&str]) -> bool {
+    vars.iter().any(|var| env_is_set(var))
+}
+
+fn env_is_set(var: &str) -> bool {
+    std::env::var(var).is_ok_and(|value| !value.trim().is_empty())
+}
+
+fn ok_status(message: &str) -> DoctorStatus {
+    DoctorStatus {
+        ok: true,
+        message: message.to_string(),
+    }
+}
+
+fn warn_status(message: &str) -> DoctorStatus {
+    DoctorStatus {
+        ok: false,
+        message: message.to_string(),
+    }
+}
 /// Build a reasoning engine from config (shared setup for CLI commands).
 ///
 /// Uses the centralised provider factory for cascading fallbacks.
@@ -970,6 +1150,44 @@ struct ExportRecord {
     updated_at: String,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn doctor_accepts_mock_without_keys() {
+        assert_eq!(
+            reasoning_provider_status_for("mock", false, false, false),
+            ok_status("mock provider selected; no API key required")
+        );
+        assert_eq!(
+            embedding_provider_status_for("mock", false, false, false),
+            ok_status("mock embeddings selected; no API key required")
+        );
+    }
+
+    #[test]
+    fn doctor_warns_when_anthropic_has_no_embedding_fallback() {
+        assert_eq!(
+            embedding_provider_status_for("anthropic", false, false, false),
+            warn_status(
+                "Anthropic has no embedding API; set OPENAI_API_KEY, GOOGLE_API_KEY, or local model files",
+            )
+        );
+    }
+
+    #[test]
+    fn doctor_allows_unknown_provider_auto_detect() {
+        assert_eq!(
+            reasoning_provider_status_for("auto", false, true, false),
+            ok_status("auto-detect can use an available API key")
+        );
+        assert_eq!(
+            embedding_provider_status_for("auto", false, false, true),
+            ok_status("auto-detect can use available embeddings")
+        );
+    }
+}
 // --- REPL ---
 
 async fn run_repl(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Result<()> {
