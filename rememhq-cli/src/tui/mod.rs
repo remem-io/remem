@@ -67,6 +67,10 @@ async fn run_tui_loop(
         100,
     );
     data::spawn_stats_fetch(store.clone(), fetch_tx.clone());
+    data::spawn_event_tailer(
+        engine_arc.config.project_data_dir().join("events.jsonl"),
+        fetch_tx.clone(),
+    );
 
     let mut event_stream = EventStream::new();
     let mut engine_rx = engine_arc.event_bus.subscribe();
@@ -366,6 +370,9 @@ fn handle_event(
                 } else {
                     app.set_status("Failed to archive memory");
                 }
+            }
+            FetchResult::LiveEvent(event) => {
+                app.push_event(event);
             }
         },
     }

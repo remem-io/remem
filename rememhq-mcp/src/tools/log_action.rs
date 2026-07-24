@@ -59,8 +59,28 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
     let obs = SessionObservation::new(session_id, observation_type, content, parent_id);
 
     // Store observation in session_logs
+    use rememhq_core::reasoning::ReasoningEvent;
     use rememhq_core::storage::MemoryStore;
     engine.store.log_session_observation(&obs).await?;
+
+    if observation_type == "thinking" || observation_type == "prompt" {
+        engine.emit_event(ReasoningEvent::ThinkingDelta {
+            session_id: session_id.to_string(),
+            thought: content.to_string(),
+        });
+    } else if observation_type == "tool_call" {
+        engine.emit_event(ReasoningEvent::ToolCall {
+            session_id: session_id.to_string(),
+            tool_name: observation_type.to_string(),
+            input_summary: content.to_string(),
+        });
+    } else {
+        engine.emit_event(ReasoningEvent::ObservationStreamed {
+            session_id: session_id.to_string(),
+            observation_type: observation_type.to_string(),
+            content: content.to_string(),
+        });
+    }
 
     Ok(serde_json::json!({
         "status": "success",

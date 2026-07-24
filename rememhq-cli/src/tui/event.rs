@@ -16,6 +16,8 @@ pub enum FetchResult {
     Stats(anyhow::Result<StoreStats>),
     /// An archive operation completed for a memory UUID.
     Archived(Uuid, anyhow::Result<bool>),
+    /// A live streaming ReasoningEvent read from events.jsonl IPC file.
+    LiveEvent(ReasoningEvent),
 }
 
 /// All events the main loop can receive.

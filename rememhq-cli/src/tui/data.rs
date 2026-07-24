@@ -72,3 +72,39 @@ pub fn spawn_archive_task(
         let _ = tx.send(FetchResult::Archived(id, result));
     });
 }
+
+/// Spawn a background task that tails `events.jsonl` for inter-process live streaming.
+pub fn spawn_event_tailer(events_file: std::path::PathBuf, tx: mpsc::UnboundedSender<FetchResult>) {
+    tokio::spawn(async move {
+        let mut position = 0u64;
+        loop {
+            if let Ok(mut file) = tokio::fs::File::open(&events_file).await {
+                use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
+                if let Ok(meta) = file.metadata().await {
+                    if meta.len() >= position {
+                        let _ = file.seek(std::io::SeekFrom::Start(position)).await;
+                        let mut reader = BufReader::new(file);
+                        let mut line = String::new();
+                        while let Ok(n) = reader.read_line(&mut line).await {
+                            if n == 0 {
+                                break;
+                            }
+                            position += n as u64;
+                            let trimmed = line.trim();
+                            if !trimmed.is_empty() {
+                                if let Ok(event) = serde_json::from_str::<
+                                    rememhq_core::reasoning::ReasoningEvent,
+                                >(trimmed)
+                                {
+                                    let _ = tx.send(FetchResult::LiveEvent(event));
+                                }
+                            }
+                            line.clear();
+                        }
+                    }
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    });
+}

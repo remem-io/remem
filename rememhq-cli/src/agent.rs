@@ -208,6 +208,7 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
                         .dimmed()
                     );
                 }
+                _ => {}
             }
         }
     });

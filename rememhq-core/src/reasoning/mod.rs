@@ -42,6 +42,25 @@ pub enum ReasoningEvent {
         session_id: String,
         new_facts: usize,
     },
+    ThinkingDelta {
+        session_id: String,
+        thought: String,
+    },
+    ToolCall {
+        session_id: String,
+        tool_name: String,
+        input_summary: String,
+    },
+    ObservationStreamed {
+        session_id: String,
+        observation_type: String,
+        content: String,
+    },
+    MemoryRecalled {
+        session_id: String,
+        query: String,
+        count: usize,
+    },
 }
 
 #[async_trait::async_trait]
@@ -95,6 +114,25 @@ impl ReasoningEngine {
             event_bus,
             hooks,
             mode: tokio::sync::RwLock::new(mode),
+        }
+    }
+
+    /// Emit a reasoning event to the in-process event bus and write to events.jsonl
+    pub fn emit_event(&self, event: ReasoningEvent) {
+        let _ = self.event_bus.send(event.clone());
+        let events_file = self.config.project_data_dir().join("events.jsonl");
+        if let Ok(json) = serde_json::to_string(&event) {
+            tokio::spawn(async move {
+                if let Ok(mut file) = tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(events_file)
+                    .await
+                {
+                    use tokio::io::AsyncWriteExt;
+                    let _ = file.write_all(format!("{}\n", json).as_bytes()).await;
+                }
+            });
         }
     }
 
@@ -188,6 +226,12 @@ impl ReasoningEngine {
             hook.after_recall(&mut results).await?;
         }
 
+        self.emit_event(ReasoningEvent::MemoryRecalled {
+            session_id: "active".to_string(),
+            query: query.to_string(),
+            count: results.len(),
+        });
+
         Ok(results)
     }
 
@@ -274,7 +318,7 @@ impl ReasoningEngine {
         session_id: &str,
         options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<crate::memory::types::ConsolidationReport> {
-        let _ = self.event_bus.send(ReasoningEvent::ConsolidationStarted {
+        self.emit_event(ReasoningEvent::ConsolidationStarted {
             session_id: session_id.to_string(),
         });
 
@@ -311,7 +355,7 @@ impl ReasoningEngine {
         .await?;
 
         for f in &facts {
-            let _ = self.event_bus.send(ReasoningEvent::FactExtracted {
+            self.emit_event(ReasoningEvent::FactExtracted {
                 content: f.content.clone(),
             });
         }
@@ -357,7 +401,7 @@ impl ReasoningEngine {
 
         // Handle auto-resolution
         for c in &contradictions {
-            let _ = self.event_bus.send(ReasoningEvent::ContradictionDetected {
+            self.emit_event(ReasoningEvent::ContradictionDetected {
                 existing_id: c.existing_memory_id,
                 new_content: c.new_content.clone(),
             });
@@ -381,7 +425,7 @@ impl ReasoningEngine {
             self.index.add(record.id, &embedding).await?;
 
             if let Some(triple) = fact.knowledge_triple {
-                let _ = self.event_bus.send(ReasoningEvent::KnowledgeTripleFound {
+                self.emit_event(ReasoningEvent::KnowledgeTripleFound {
                     subject: triple.subject.clone(),
                     predicate: triple.predicate.clone(),
                     object: triple.object.clone(),
@@ -414,7 +458,7 @@ impl ReasoningEngine {
             }
         }
 
-        let _ = self.event_bus.send(ReasoningEvent::ConsolidationCompleted {
+        self.emit_event(ReasoningEvent::ConsolidationCompleted {
             session_id: session_id.to_string(),
             new_facts: new_count,
         });
