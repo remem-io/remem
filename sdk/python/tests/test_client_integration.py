@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -24,7 +24,7 @@ def _memory_result(content: str = "test content", **kw) -> dict:
         "importance": kw.get("importance", 5.0),
         "tags": kw.get("tags", []),
         "memory_type": kw.get("memory_type", "fact"),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "source_session": None,
         "similarity": kw.get("similarity", 0.85),
         "decay_score": kw.get("decay_score", 1.0),
@@ -37,7 +37,7 @@ def _store_response(**kw) -> dict:
         "id": str(uuid.uuid4()),
         "importance": kw.get("importance", 7.0),
         "tags": kw.get("tags", []),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -312,7 +312,7 @@ class TestForget:
 class TestConsolidate:
     @pytest.mark.asyncio
     async def test_consolidate_returns_report(self):
-        from rememhq import Memory, ConsolidationReport
+        from rememhq import ConsolidationReport, Memory
 
         payload = {
             "session_id": "sess-abc",

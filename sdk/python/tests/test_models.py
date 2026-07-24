@@ -1,8 +1,8 @@
 """Unit tests for remem SDK Pydantic models."""
 
 import uuid
-from datetime import datetime
-from rememhq.models import MemoryType, MemoryResult
+from datetime import UTC, datetime
+from rememhq.models import MemoryResult, MemoryType
 
 
 class TestMemoryType:
@@ -27,7 +27,7 @@ class TestMemoryResult:
             importance=5.0,
             tags=[],
             memory_type=MemoryType.FACT,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         assert result.content == "test content"
         assert result.importance == 5.0
@@ -42,7 +42,7 @@ class TestMemoryResult:
             importance=5.0,
             tags=["a", "b"],
             memory_type=MemoryType.FACT,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         assert len(result.tags) == 2
         assert "a" in result.tags
@@ -54,7 +54,7 @@ class TestMemoryResult:
             importance=5.0,
             tags=[],
             memory_type=MemoryType.FACT,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         data = result.model_dump()
         assert "content" in data
@@ -68,7 +68,7 @@ class TestMemoryResult:
             importance=5.0,
             tags=[],
             memory_type=MemoryType.FACT,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             similarity=0.5,
             reasoning="because",
         )
