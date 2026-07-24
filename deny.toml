@@ -4,7 +4,7 @@
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-# paste is unmaintained but pulled transitively by utoipa-axum — no fix available
+# Unmaintained transitive dependencies (paste, number_prefix via indicatif, proc-macro-error2 via utoipa) — tracked as upstream deps update
 ignore = ["RUSTSEC-2024-0436", "RUSTSEC-2025-0119", "RUSTSEC-2026-0173"]
 
 [licenses]

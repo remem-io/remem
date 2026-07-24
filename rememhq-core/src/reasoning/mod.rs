@@ -165,16 +165,20 @@ impl ReasoningEngine {
             hook.before_recall(&mut query_str).await?;
         }
 
+        let params = retrieval::RetrievalParams {
+            query: &query_str,
+            limit,
+            filter_tags,
+            since,
+            memory_type,
+        };
+
         let mut results = retrieval::guided_retrieval(
             &*self.provider,
             &*self.embeddings,
             &self.store,
             self.index.as_ref(),
-            &query_str,
-            limit,
-            filter_tags,
-            since,
-            memory_type,
+            &params,
             &self.config.reasoning.reasoning_model,
             options,
         )

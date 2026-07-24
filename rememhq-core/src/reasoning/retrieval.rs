@@ -11,23 +11,28 @@ use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
 use chrono::{DateTime, Utc};
 
+/// Parameters for guided retrieval search and filtering.
+#[derive(Debug, Clone)]
+pub struct RetrievalParams<'a> {
+    pub query: &'a str,
+    pub limit: usize,
+    pub filter_tags: &'a [String],
+    pub since: Option<DateTime<Utc>>,
+    pub memory_type: Option<MemoryType>,
+}
+
 /// Perform guided retrieval: vector search → LLM re-ranking → reasoning traces.
-#[allow(clippy::too_many_arguments)]
 pub async fn guided_retrieval(
     provider: &dyn Provider,
     embeddings: &dyn EmbeddingProvider,
     store: &SqliteStore,
     index: &dyn VectorIndex,
-    query: &str,
-    limit: usize,
-    filter_tags: &[String],
-    since: Option<DateTime<Utc>>,
-    memory_type: Option<MemoryType>,
+    params: &RetrievalParams<'_>,
     model: &str,
     options: Option<&ProviderOptions>,
 ) -> anyhow::Result<Vec<MemoryResult>> {
     // Step 1: Embed the query
-    let query_embedding = embeddings.embed(query, options).await?;
+    let query_embedding = embeddings.embed(params.query, options).await?;
 
     // Step 2: Reciprocal Rank Fusion (RRF) candidate search: combine vector + FTS BM25
     let candidate_count = 50;
@@ -42,7 +47,7 @@ pub async fn guided_retrieval(
     };
 
     let fts_results = store
-        .search_fts(query, candidate_count)
+        .search_fts(params.query, candidate_count)
         .await
         .unwrap_or_default();
 
@@ -76,17 +81,19 @@ pub async fn guided_retrieval(
     for (id, rrf, sim) in ranked_ids.iter().take(candidate_count) {
         if let Ok(Some(record)) = store.get(*id).await {
             // Apply filters
-            if let Some(mt) = memory_type {
+            if let Some(mt) = params.memory_type {
                 if record.memory_type != mt {
                     continue;
                 }
             }
-            if let Some(since_dt) = since {
+            if let Some(since_dt) = params.since {
                 if record.created_at < since_dt {
                     continue;
                 }
             }
-            if !filter_tags.is_empty() && !filter_tags.iter().any(|t| record.tags.contains(t)) {
+            if !params.filter_tags.is_empty()
+                && !params.filter_tags.iter().any(|t| record.tags.contains(t))
+            {
                 continue;
             }
 
@@ -101,13 +108,20 @@ pub async fn guided_retrieval(
     }
 
     // Step 4: LLM re-ranking with reasoning
-    let reranked = llm_rerank(provider, query, &candidates, limit, model, options).await?;
+    let reranked = llm_rerank(
+        provider,
+        params.query,
+        &candidates,
+        params.limit,
+        model,
+        options,
+    )
+    .await?;
 
     Ok(reranked)
 }
 
 /// Use the LLM to re-rank candidate memories and provide reasoning.
-#[allow(clippy::too_many_arguments)]
 async fn llm_rerank(
     provider: &dyn Provider,
     query: &str,

@@ -30,6 +30,11 @@ use utoipa::ToSchema;
 use base64::{engine::general_purpose, Engine as _};
 use validator::Validate;
 
+/// Decodes an opaque base64-encoded pagination cursor into a numerical offset.
+///
+/// NOTE: This cursor implementation is a simple base64 encoding over a numeric offset.
+/// It is NOT a cryptographically signed or tamper-proof token, nor is it a stable cursor
+/// snapshot across dataset mutations. Callers must not rely on cursor values as security boundaries.
 fn decode_cursor(cursor: Option<String>) -> usize {
     cursor
         .and_then(|c| {
@@ -42,6 +47,10 @@ fn decode_cursor(cursor: Option<String>) -> usize {
         .unwrap_or(0)
 }
 
+/// Encodes a numerical offset into an opaque base64 pagination cursor string.
+///
+/// NOTE: This is an opaque wrapper for API consumers. It is NOT a cryptographically signed
+/// token or stable dataset cursor.
 fn encode_cursor(offset: usize) -> String {
     general_purpose::STANDARD.encode(offset.to_string())
 }
@@ -84,6 +93,11 @@ struct Args {
     port: u16,
     #[arg(long, default_value = "default")]
     project: String,
+    /// Allowed CORS origin(s), e.g. "http://localhost:3000" or "*".
+    /// Can also be set via REMEM_CORS_ORIGIN env var.
+    /// Defaults to local origins (http://localhost, http://127.0.0.1).
+    #[arg(long)]
+    cors_origin: Option<String>,
 }
 
 // --- Response types ---
@@ -1184,18 +1198,75 @@ async fn main() -> anyhow::Result<()> {
             "/v1/memory_stores/{store_id}/memories/{path_or_id}/versions",
             get(routes::memory_stores::list_memory_versions),
         )
+        .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024))
+        .layer(tower_http::timeout::TimeoutLayer::new(
+            std::time::Duration::from_secs(30),
+        ))
         .layer(axum::middleware::from_fn_with_state(
             rate_limit_state,
             middleware::rate_limit::rate_limit_middleware,
         ))
-        .layer(tower_http::trace::TraceLayer::new_for_http())
-        .layer(
+        .layer(tower_http::trace::TraceLayer::new_for_http());
+
+    let cors_origin = args
+        .cors_origin
+        .or_else(|| std::env::var("REMEM_CORS_ORIGIN").ok());
+
+    let cors_layer = match cors_origin.as_deref() {
+        Some("*") | Some("any") => {
+            tracing::warn!("CORS configured with wildcard origin ('*'). All origins permitted.");
             tower_http::cors::CorsLayer::new()
                 .allow_origin(tower_http::cors::Any)
                 .allow_methods(tower_http::cors::Any)
-                .allow_headers(tower_http::cors::Any),
-        )
-        .with_state(engine);
+                .allow_headers(tower_http::cors::Any)
+        }
+        Some(origins_str) => {
+            let origins: Vec<axum::http::HeaderValue> = origins_str
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .filter_map(|s| s.parse().ok())
+                .collect();
+
+            if origins.is_empty() {
+                tracing::warn!(
+                    "REMEM_CORS_ORIGIN was set to '{}' but contained no valid header values. Falling back to default local origins.",
+                    origins_str
+                );
+                create_default_cors_layer()
+            } else {
+                tracing::info!("CORS enabled for origins: {}", origins_str);
+                tower_http::cors::CorsLayer::new()
+                    .allow_origin(origins)
+                    .allow_methods([
+                        axum::http::Method::GET,
+                        axum::http::Method::POST,
+                        axum::http::Method::PATCH,
+                        axum::http::Method::DELETE,
+                        axum::http::Method::OPTIONS,
+                    ])
+                    .allow_headers(tower_http::cors::Any)
+            }
+        }
+        None => {
+            tracing::info!("CORS initialized with safe default (localhost / 127.0.0.1 origins)");
+            create_default_cors_layer()
+        }
+    };
+
+    let app = app.layer(cors_layer).with_state(engine);
+
+    let auth_enabled = std::env::var("REMEM_API_KEY")
+        .map(|k| !k.trim().is_empty())
+        .unwrap_or(false);
+
+    if !auth_enabled {
+        tracing::warn!(
+            "⚠️  REMEM_API_KEY is unset! API server running in unauthenticated mode (dev mode). All requests will be allowed."
+        );
+    } else {
+        tracing::info!("Bearer token authentication enabled via REMEM_API_KEY.");
+    }
 
     let addr = format!("0.0.0.0:{}", args.port);
     tracing::info!("remem REST API listening on {}", addr);
@@ -1209,6 +1280,28 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     Ok(())
+}
+
+fn create_default_cors_layer() -> tower_http::cors::CorsLayer {
+    tower_http::cors::CorsLayer::new()
+        .allow_origin(tower_http::cors::AllowOrigin::predicate(|origin, _| {
+            if let Ok(origin_str) = origin.to_str() {
+                origin_str == "http://localhost"
+                    || origin_str == "http://127.0.0.1"
+                    || origin_str.starts_with("http://localhost:")
+                    || origin_str.starts_with("http://127.0.0.1:")
+            } else {
+                false
+            }
+        }))
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PATCH,
+            axum::http::Method::DELETE,
+            axum::http::Method::OPTIONS,
+        ])
+        .allow_headers(tower_http::cors::Any)
 }
 
 async fn shutdown_signal() {

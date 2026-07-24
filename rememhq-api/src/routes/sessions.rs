@@ -1,7 +1,5 @@
 //! Session route handlers — consolidation.
 
-#![allow(dead_code)]
-
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},

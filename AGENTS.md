@@ -77,7 +77,7 @@ cd sdk/typescript && npm install && npm run build
 - **Edition**: 2021
 - **Format**: Always run `cargo fmt` — CI enforces `--check`
 - **Clippy**: CI runs with `-Dwarnings` — no clippy warnings allowed
-- **Error handling**: Use `anyhow::Result` for application code; `thiserror` for library error types
+- **Error handling**: Use `anyhow::Result` for application glue & workflow orchestration; `thiserror` for domain/library-boundary typed error types (see [ADR 001](file:///C:/Users/frimp/Documents/remem/docs/ADR_ERROR_HANDLING.md))
 - **Async**: All I/O-bound operations use `async/await` with Tokio
 - **Naming**: snake_case for functions/variables, PascalCase for types, SCREAMING_SNAKE for constants
 - **FFI**: All C++ interop goes through `rememhq-core/src/storage/vector.rs::remem_ffi` module. Use opaque `*mut c_void` handles. **Every FFI call must be wrapped in try-catch on the C++ side.**
@@ -138,6 +138,7 @@ test(core): add sqlite store archival tests
 | `REMEM_LOCAL_MODEL_PATH` | Path to ONNX model for local embeddings | `models/nomic-embed-text.onnx` |
 | `REMEM_DATA_DIR` | Root data directory | `~/.remem` |
 | `REMEM_API_KEY` | API key for authenticating requests | None (auth disabled) |
+| `REMEM_CORS_ORIGIN` | Configurable CORS allowed origin(s) | Local origins (`localhost`, `127.0.0.1`) |
 | `GOOGLE_API_KEY` | Google Gemini API key | None |
 | `OPENAI_API_KEY` | OpenAI API key | None |
 | `ANTHROPIC_API_KEY` | Anthropic API key | None |

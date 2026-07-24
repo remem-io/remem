@@ -395,6 +395,22 @@ impl SqliteStore {
     }
 }
 
+/// Prepares a raw user query string for safe matching in SQLite FTS5.
+///
+/// Raw user inputs (e.g. `it's`, `C++`, `-1`, `AND`, or unclosed `"`) contain characters or
+/// keywords that FTS5 interprets as query language syntax operators, column filters, or
+/// prefix markers, causing syntax errors or unexpected search semantics.
+///
+/// This function tokenizes the query into whitespace-separated terms, escapes internal double
+/// quotes by doubling them (`"` -> `""`), and wraps each term in double quotes (`"term"`).
+pub fn escape_fts5_query(query: &str) -> String {
+    query
+        .split_whitespace()
+        .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[async_trait::async_trait]
 impl MemoryStore for SqliteStore {
     async fn insert(&self, record: &MemoryRecord) -> anyhow::Result<()> {
@@ -521,6 +537,11 @@ impl MemoryStore for SqliteStore {
     }
 
     async fn search_fts(&self, query: &str, limit: usize) -> anyhow::Result<Vec<MemoryRecord>> {
+        let safe_query = escape_fts5_query(query);
+        if safe_query.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT m.id, m.content, m.importance, m.tags, m.memory_type, m.created_at, m.updated_at, m.decay_score, m.source_session, m.ttl_days
@@ -532,7 +553,7 @@ impl MemoryStore for SqliteStore {
         )?;
 
         let records = stmt
-            .query_map(params![query, limit as i64], Self::row_to_record)?
+            .query_map(params![safe_query, limit as i64], Self::row_to_record)?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -1202,5 +1223,42 @@ mod tests {
 
         assert!(expired_rec.is_none());
         assert!(active_rec.is_some());
+    }
+
+    #[test]
+    fn test_escape_fts5_query_formatting() {
+        assert_eq!(escape_fts5_query("it's"), "\"it's\"");
+        assert_eq!(escape_fts5_query("C++"), "\"C++\"");
+        assert_eq!(escape_fts5_query("-1"), "\"-1\"");
+        assert_eq!(escape_fts5_query("AND OR NOT"), "\"AND\" \"OR\" \"NOT\"");
+        assert_eq!(escape_fts5_query("foo \"bar\""), "\"foo\" \"\"\"bar\"\"\"");
+        assert_eq!(escape_fts5_query("   "), "");
+    }
+
+    #[tokio::test]
+    async fn test_fts5_special_characters_robustness() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        let m1 = MemoryRecord::new("Learning C++ programming", MemoryType::Fact);
+        let m2 = MemoryRecord::new("It's a beautiful day", MemoryType::Fact);
+        let m3 = MemoryRecord::new("Error code -1 returned", MemoryType::Fact);
+        store.insert(&m1).await.unwrap();
+        store.insert(&m2).await.unwrap();
+        store.insert(&m3).await.unwrap();
+
+        // Ensure special queries don't throw FTS5 syntax errors
+        let res_cpp = store.search_fts("C++", 10).await.unwrap();
+        assert!(!res_cpp.is_empty());
+
+        let res_its = store.search_fts("it's", 10).await.unwrap();
+        assert!(!res_its.is_empty());
+
+        let res_neg = store.search_fts("-1", 10).await.unwrap();
+        assert!(!res_neg.is_empty());
+
+        let res_quote = store.search_fts("\"unclosed quote", 10).await.unwrap();
+        assert!(res_quote.is_empty());
+
+        let res_and = store.search_fts("AND", 10).await.unwrap();
+        assert!(res_and.is_empty());
     }
 }

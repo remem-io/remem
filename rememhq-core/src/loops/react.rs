@@ -11,6 +11,7 @@ pub struct ReActLoop {
     pub max_iterations: usize,
     pub task: String,
     pub messages: Vec<ChatMessage>,
+    pub tool_timeout: std::time::Duration,
 }
 
 impl ReActLoop {
@@ -21,6 +22,7 @@ impl ReActLoop {
             max_iterations: 10,
             task,
             messages: Vec::new(),
+            tool_timeout: std::time::Duration::from_secs(60),
         }
     }
 }
@@ -58,10 +60,16 @@ impl AgentLoop for ReActLoop {
             if let Some(tool_calls) = response.message.tool_calls {
                 if let Some(executor) = &self.harness.executor {
                     for tool_call in tool_calls {
-                        let result = match executor.execute(&tool_call).await {
-                            Ok(res) => res,
-                            Err(e) => format!("Error executing tool: {}", e),
-                        };
+                        let exec_future = executor.execute(&tool_call);
+                        let result =
+                            match tokio::time::timeout(self.tool_timeout, exec_future).await {
+                                Ok(Ok(res)) => res,
+                                Ok(Err(e)) => format!("Error executing tool: {}", e),
+                                Err(_) => format!(
+                                    "Tool execution timed out after {} seconds.",
+                                    self.tool_timeout.as_secs()
+                                ),
+                            };
                         self.messages.push(ChatMessage {
                             role: ChatRole::Tool,
                             content: result,
@@ -289,5 +297,87 @@ mod tests {
         for (a, b) in messages.iter().zip(original.iter()) {
             assert_eq!(a.content, b.content);
         }
+    }
+
+    struct HangingToolExecutor;
+    #[async_trait]
+    impl crate::harness::ToolExecutor for HangingToolExecutor {
+        async fn execute(&self, _tool_call: &crate::providers::ToolCall) -> anyhow::Result<String> {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            Ok("done".to_string())
+        }
+    }
+
+    struct MockToolProvider;
+    #[async_trait]
+    impl crate::providers::Provider for MockToolProvider {
+        async fn complete(
+            &self,
+            _prompt: &str,
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<(String, Option<TokenUsage>)> {
+            Ok(("".to_string(), None))
+        }
+        async fn chat(
+            &self,
+            _messages: &[ChatMessage],
+            _tools: &[crate::providers::Tool],
+            _model: &str,
+            _options: Option<&ProviderOptions>,
+        ) -> anyhow::Result<crate::providers::ChatResponse> {
+            Ok(crate::providers::ChatResponse {
+                message: ChatMessage {
+                    role: ChatRole::Assistant,
+                    content: "".to_string(),
+                    tool_calls: Some(vec![crate::providers::ToolCall {
+                        id: "call_1".to_string(),
+                        name: "test_tool".to_string(),
+                        arguments: serde_json::json!({}),
+                    }]),
+                    tool_call_id: None,
+                },
+                usage: None,
+            })
+        }
+        fn name(&self) -> &str {
+            "mock_tool_provider"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tool_execution_timeout_in_react_loop() {
+        let provider: Arc<dyn crate::providers::Provider> = Arc::new(MockToolProvider);
+        let mut harness = AgentHarness::new(provider.clone());
+        harness.executor = Some(Arc::new(HangingToolExecutor));
+
+        let embeddings = Arc::new(crate::providers::mock::MockEmbeddings::new(768));
+        let store = Arc::new(crate::storage::sqlite::SqliteStore::open_in_memory().unwrap());
+        let index = Arc::new(crate::storage::vector::HNSWVectorIndex::new(768, 100));
+        let config = crate::config::RememConfig::default();
+        let engine = Arc::new(ReasoningEngine::new(
+            config,
+            provider,
+            embeddings,
+            store,
+            index,
+            Vec::new(),
+        ));
+
+        let mut react_loop = ReActLoop::new(harness, engine, "test task".to_string());
+        react_loop.max_iterations = 1;
+        react_loop.tool_timeout = std::time::Duration::from_millis(50);
+
+        let _ = react_loop.run().await;
+
+        let tool_msg = react_loop
+            .messages
+            .iter()
+            .find(|m| m.role == ChatRole::Tool);
+        assert!(tool_msg.is_some());
+        assert!(tool_msg
+            .unwrap()
+            .content
+            .contains("Tool execution timed out"));
     }
 }

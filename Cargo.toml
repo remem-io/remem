@@ -20,6 +20,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.1.13"
+rust-version = "1.85.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/remem-io/remem"
@@ -65,7 +66,7 @@ clap = { version = "4", features = ["derive"] }
 # Web framework (API)
 axum = "0.8"
 tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.7.0", features = ["cors", "trace", "auth"] }
+tower-http = { version = "0.7.0", features = ["cors", "trace", "auth", "limit", "timeout"] }
 utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-axum = "0.2"
 

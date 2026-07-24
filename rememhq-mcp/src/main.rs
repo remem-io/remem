@@ -5,13 +5,11 @@
 //! and any other MCP-compatible agent.
 
 mod tools;
-#[allow(dead_code)]
 mod transport;
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use rememhq_core::config::RememConfig;
 use rememhq_core::reasoning::ReasoningEngine;
@@ -161,25 +159,16 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    // Run the stdio JSON-RPC loop
-    let stdin = tokio::io::stdin();
-    let mut stdout = tokio::io::stdout();
-    let reader = BufReader::new(stdin);
-    let mut lines = reader.lines();
-
+    // Run the stdio JSON-RPC loop using the transport module abstraction
     let shutdown_signal = async {
         let _ = tokio::signal::ctrl_c().await;
         tracing::info!("Shutdown signal received, exiting gracefully...");
     };
 
     tokio::select! {
-        res = async {
-            while let Ok(Some(line)) = lines.next_line().await {
-                let line = line.trim().to_string();
-                if line.is_empty() {
-                    continue;
-                }
-
+        res = transport::stdio::run_stdio_loop(|line| {
+            let engine = engine.clone();
+            async move {
                 let response = match serde_json::from_str::<JsonRpcRequest>(&line) {
                     Ok(request) => handle_request(&engine, request).await,
                     Err(e) => Some(JsonRpcResponse::error(
@@ -188,18 +177,11 @@ async fn main() -> anyhow::Result<()> {
                         format!("Parse error: {}", e),
                     )),
                 };
-
-                if let Some(response) = response {
-                    let json = serde_json::to_string(&response)?;
-                    stdout.write_all(json.as_bytes()).await?;
-                    stdout.write_all(b"\n").await?;
-                    stdout.flush().await?;
-                }
+                response.and_then(|resp| serde_json::to_string(&resp).ok())
             }
-            Ok::<(), anyhow::Error>(())
-        } => {
+        }) => {
             if let Err(e) = res {
-                tracing::error!("Error in stdin loop: {:?}", e);
+                tracing::error!("Error in stdio loop: {:?}", e);
             }
         }
         _ = shutdown_signal => {}

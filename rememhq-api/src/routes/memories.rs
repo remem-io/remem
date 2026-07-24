@@ -1,7 +1,5 @@
 //! Memory route handlers — store, recall, search, update, forget.
 
-#![allow(dead_code)]
-
 use axum::{
     extract::{Path, Query, State},
     http::HeaderMap,
