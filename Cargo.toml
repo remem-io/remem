@@ -19,7 +19,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.13"
+version = "0.1.14"
 rust-version = "1.85.0"
 edition = "2021"
 license = "Apache-2.0"
@@ -77,7 +77,7 @@ ndarray = "0.17"
 cc = "1.2"
 
 # Internal crates
-rememhq-core = { path = "rememhq-core", version = "0.1.13" }
+rememhq-core = { path = "rememhq-core", version = "0.1.14" }
 
 # NOTE: rememhq-mcp implements its own stdio JSON-RPC loop and does NOT use
 # the rmcp crate. If a future version migrates to the rmcp SDK, add it back

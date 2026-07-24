@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.13] - 2026-07-23
+## [0.1.14] - 2026-07-24
+
+### Added
+- **Terminal UI (`remem tui`)**: Added full-screen interactive Terminal UI (`ratatui`) for memory browsing, search, detail inspection, and real-time statistics.
+- **Inter-Process Live Agent Token & Thinking Streaming**: Real-time event streaming (`events.jsonl`) for thinking tokens, tool execution (`⚙️ TOOL`), memory queries (`🔍 RECALL`), and observations (`👁 OBS`) across processes and AI agent sessions.
+- **Help Modal & Memory Archiving**: Added interactive keyboard cheat-sheet (`?` / `h`), memory type filtering (`t`), and memory archiving confirmation dialog (`d` / `y` / `n`).
+- **Environment Default Project Selection**: Support `REMEM_PROJECT` environment variable in `rememhq-cli` (`env = "REMEM_PROJECT"`) and project `.env` files.
+
 
 ### Added
 - **Reciprocal Rank Fusion (RRF) Hybrid Search**: Combined HNSW vector similarity search with SQLite FTS5 BM25 keyword matching (`RRF = 1/(60+r_vec) + 1/(60+r_bm25)`).
