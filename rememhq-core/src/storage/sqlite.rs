@@ -656,6 +656,76 @@ impl MemoryStore for SqliteStore {
         Ok(rows > 0)
     }
 
+    async fn unarchive(&self, id: Uuid) -> anyhow::Result<bool> {
+        let conn = self.conn.lock().await;
+        let rows = conn.execute(
+            "UPDATE memories SET archived = 0, updated_at = ?1 WHERE id = ?2",
+            params![Utc::now().to_rfc3339(), id.to_string()],
+        )?;
+        Ok(rows > 0)
+    }
+
+    async fn list_paged(
+        &self,
+        filter_tags: &[String],
+        memory_type: Option<MemoryType>,
+        since: Option<DateTime<Utc>>,
+        limit: usize,
+        offset: usize,
+        include_archived: bool,
+    ) -> anyhow::Result<(Vec<MemoryRecord>, usize)> {
+        let conn = self.conn.lock().await;
+
+        let mut base_sql = String::from("FROM memories WHERE 1=1");
+        let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+        if !include_archived {
+            base_sql.push_str(" AND archived = 0");
+        }
+
+        if let Some(mt) = memory_type {
+            base_sql.push_str(" AND memory_type = ?");
+            param_values.push(Box::new(mt.to_string()));
+        }
+
+        if let Some(s) = since {
+            base_sql.push_str(" AND created_at >= ?");
+            param_values.push(Box::new(s.to_rfc3339()));
+        }
+
+        // Total count matching criteria
+        let count_sql = format!("SELECT COUNT(*) {}", base_sql);
+        let mut count_stmt = conn.prepare(&count_sql)?;
+        let total_count: i64 =
+            count_stmt.query_row(rusqlite::params_from_iter(&param_values), |r| r.get(0))?;
+
+        // Paged data query
+        let data_sql = format!(
+            "SELECT id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days {} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            base_sql
+        );
+        param_values.push(Box::new(limit as i64));
+        param_values.push(Box::new(offset as i64));
+
+        let mut data_stmt = conn.prepare(&data_sql)?;
+        let mut records = Vec::new();
+
+        let filtered_tags = filter_tags.to_vec();
+        let rows = data_stmt.query_map(
+            rusqlite::params_from_iter(&param_values),
+            Self::row_to_record,
+        )?;
+
+        for rec in rows.flatten() {
+            if !filtered_tags.is_empty() && !filtered_tags.iter().any(|t| rec.tags.contains(t)) {
+                continue;
+            }
+            records.push(rec);
+        }
+
+        Ok((records, total_count as usize))
+    }
+
     async fn apply_decay(&self, decay_factor: f32) -> anyhow::Result<usize> {
         let conn = self.conn.lock().await;
         // Decay score decreases faster for low-importance memories.

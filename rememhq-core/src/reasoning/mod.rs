@@ -593,6 +593,25 @@ impl ReasoningEngine {
         Ok(archived_count)
     }
 
+    // ── Session Consolidation ──────────────────────────────────────────
+
+    /// Consolidate a session by extracting facts and writing session summary.
+    pub async fn consolidate_session(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<crate::memory::types::ConsolidationReport> {
+        crate::reasoning::consolidation::consolidate_session(
+            self.provider.as_ref(),
+            self.embeddings.as_ref(),
+            self.store.as_ref(),
+            self.index.as_ref(),
+            session_id,
+            &self.config.project,
+            None,
+        )
+        .await
+    }
+
     // ── TTL Expiration ──────────────────────────────────────────────────
 
     /// Expire memories that have exceeded their TTL and remove them from the

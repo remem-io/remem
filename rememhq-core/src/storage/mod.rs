@@ -69,6 +69,26 @@ pub trait MemoryStore: Send + Sync {
     /// Archive a memory (soft delete with decay).
     async fn archive(&self, id: Uuid) -> anyhow::Result<bool>;
 
+    /// Unarchive a previously archived memory.
+    async fn unarchive(&self, _id: Uuid) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
+    /// List memories with pagination and optional archived inclusion.
+    async fn list_paged(
+        &self,
+        filter_tags: &[String],
+        memory_type: Option<MemoryType>,
+        since: Option<DateTime<Utc>>,
+        limit: usize,
+        _offset: usize,
+        _include_archived: bool,
+    ) -> anyhow::Result<(Vec<MemoryRecord>, usize)> {
+        let records = self.list(filter_tags, memory_type, since, limit).await?;
+        let len = records.len();
+        Ok((records, len))
+    }
+
     /// Apply decay to all memories based on importance weighting.
     async fn apply_decay(&self, decay_factor: f32) -> anyhow::Result<usize>;
 
