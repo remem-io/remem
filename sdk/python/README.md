@@ -41,27 +41,30 @@ By default, the server listens on `http://localhost:7474`.
 import asyncio
 from rememhq import Memory
 
+
 async def main():
     # Initialize the memory client
     memory = Memory(
         base_url="http://localhost:7474",
         project="my-agent",
-        reasoning_model="claude-sonnet-4-6"  # Configure the underlying reasoning engine
+        reasoning_model="claude-sonnet-4-6",  # Configure the underlying reasoning engine
     )
 
     # Store a memory
     store_resp = await memory.store(
-        content="The user prefers Python for ML tasks.",
-        tags=["preferences", "ml"]
+        content="The user prefers Python for ML tasks.", tags=["preferences", "ml"]
     )
     print(f"Stored memory ID: {store_resp.id}")
 
     # Recall memories using semantic reasoning
-    results = await memory.recall(query="What language does the user prefer for machine learning?", limit=5)
-    
+    results = await memory.recall(
+        query="What language does the user prefer for machine learning?", limit=5
+    )
+
     for result in results:
         print(f"Content: {result.content}")
         print(f"Reasoning trace: {result.reasoning}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -76,7 +79,7 @@ memory = Memory(
     base_url="http://localhost:7474",
     project="my-agent",
     reasoning_model="gpt-4o",
-    timeout=30.0
+    timeout=30.0,
 )
 ```
 
