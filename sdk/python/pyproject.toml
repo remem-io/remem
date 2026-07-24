@@ -58,7 +58,8 @@ packages = ["rememhq"]
 line-length = 120
 
 [tool.ruff.lint]
-ignore = ["UP042", "E501"]
+ignore = ["UP042", "E501", "BLE001"]
+
 
 
 
