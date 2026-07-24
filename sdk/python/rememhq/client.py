@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Self
 from uuid import UUID
 
 import httpx
@@ -206,7 +207,7 @@ class Memory:
         """Close the HTTP client."""
         await self._client.aclose()
 
-    async def __aenter__(self) -> Memory:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *args) -> None:
