@@ -182,6 +182,12 @@ impl ReasoningEngine {
             hook.after_store(&record).await?;
         }
 
+        self.emit_event(ReasoningEvent::ObservationStreamed {
+            session_id: "active".to_string(),
+            observation_type: "store".to_string(),
+            content: format!("[{}] {}", record.memory_type, record.content),
+        });
+
         Ok(record)
     }
 
