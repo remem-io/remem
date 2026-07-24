@@ -52,9 +52,7 @@ class TestStore:
         from rememhq import Memory
 
         async with respx.mock(base_url=BASE) as mock:
-            mock.post("/v1/memories").mock(
-                return_value=httpx.Response(201, json=_store_response())
-            )
+            mock.post("/v1/memories").mock(return_value=httpx.Response(201, json=_store_response()))
             async with Memory(base_url=BASE) as m:
                 r = await m.store("hello world")
             assert r.importance == 7.0
@@ -67,9 +65,7 @@ class TestStore:
 
         async def handler(request: httpx.Request):
             captured["body"] = json.loads(request.content)
-            return httpx.Response(
-                201, json=_store_response(importance=9.0, tags=["a", "b"])
-            )
+            return httpx.Response(201, json=_store_response(importance=9.0, tags=["a", "b"]))
 
         async with respx.mock(base_url=BASE) as mock:
             mock.post("/v1/memories").mock(side_effect=handler)
@@ -104,9 +100,7 @@ class TestStore:
         from rememhq import Memory
 
         async with respx.mock(base_url=BASE) as mock:
-            mock.post("/v1/memories").mock(
-                return_value=httpx.Response(500, text="oops")
-            )
+            mock.post("/v1/memories").mock(return_value=httpx.Response(500, text="oops"))
             async with Memory(base_url=BASE) as m:
                 with pytest.raises(httpx.HTTPStatusError):
                     await m.store("fail")
@@ -124,9 +118,7 @@ class TestRecall:
 
         payload = [_memory_result("memory A"), _memory_result("memory B")]
         async with respx.mock(base_url=BASE) as mock:
-            mock.get("/v1/memories/recall").mock(
-                return_value=httpx.Response(200, json=payload)
-            )
+            mock.get("/v1/memories/recall").mock(return_value=httpx.Response(200, json=payload))
             async with Memory(base_url=BASE) as m:
                 results = await m.recall("test query")
         assert len(results) == 2
@@ -174,9 +166,7 @@ class TestRecall:
         from rememhq import Memory
 
         async with respx.mock(base_url=BASE) as mock:
-            mock.get("/v1/memories/recall").mock(
-                return_value=httpx.Response(200, json=[])
-            )
+            mock.get("/v1/memories/recall").mock(return_value=httpx.Response(200, json=[]))
             async with Memory(base_url=BASE) as m:
                 results = await m.recall("nothing")
         assert results == []
@@ -194,9 +184,7 @@ class TestSearch:
 
         payload = [_memory_result()]
         async with respx.mock(base_url=BASE) as mock:
-            mock.get("/v1/memories/search").mock(
-                return_value=httpx.Response(200, json=payload)
-            )
+            mock.get("/v1/memories/search").mock(return_value=httpx.Response(200, json=payload))
             async with Memory(base_url=BASE) as m:
                 results = await m.search("deploy")
         assert len(results) == 1
@@ -322,9 +310,7 @@ class TestConsolidate:
             "knowledge_graph_updates": [],
         }
         async with respx.mock(base_url=BASE) as mock:
-            mock.post("/v1/sessions/sess-abc/consolidate").mock(
-                return_value=httpx.Response(200, json=payload)
-            )
+            mock.post("/v1/sessions/sess-abc/consolidate").mock(return_value=httpx.Response(200, json=payload))
             async with Memory(base_url=BASE) as m:
                 r = await m.consolidate("sess-abc")
         assert isinstance(r, ConsolidationReport)
@@ -435,9 +421,7 @@ class TestContextManager:
         from rememhq import Memory
 
         async with respx.mock(base_url=BASE) as mock:
-            mock.post("/v1/memories").mock(
-                return_value=httpx.Response(201, json=_store_response())
-            )
+            mock.post("/v1/memories").mock(return_value=httpx.Response(201, json=_store_response()))
             async with Memory(base_url=BASE) as m:
                 r = await m.store("ctx test")
             assert r.id is not None

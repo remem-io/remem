@@ -1,5 +1,6 @@
 import asyncio
 from uuid import uuid4
+
 from rememhq import Memory
 
 
@@ -8,9 +9,7 @@ async def run_simulation():
 
     # Initialize client
     # We'll use the 'mock' provider so we don't need real keys
-    async with Memory(
-        project="simulation-alice", base_url="http://localhost:7474"
-    ) as m:
+    async with Memory(project="simulation-alice", base_url="http://localhost:7474") as m:
         session_id = f"session-{uuid4().hex[:8]}"
         print(f"📂 Created session: {session_id}")
 
@@ -68,9 +67,7 @@ async def run_simulation():
 
         # --- Day 6: Procedural Memory ---
         print("\n--- Day 6: Procedural Memory (Step-by-step) ---")
-        print(
-            "💾 Storing a procedure: 'To bake a cake: First, preheat the oven. Then, mix the batter.'"
-        )
+        print("💾 Storing a procedure: 'To bake a cake: First, preheat the oven. Then, mix the batter.'")
         await m.store(
             "To bake a cake: First, preheat the oven. Then, mix the batter.",
             tags=["cooking"],

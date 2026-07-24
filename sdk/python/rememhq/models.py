@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -43,10 +42,10 @@ class MemoryResult(BaseModel):
     tags: list[str]
     memory_type: MemoryType
     created_at: datetime
-    source_session: Optional[str] = None
+    source_session: str | None = None
     similarity: float = 0.0
     decay_score: float = 1.0
-    reasoning: Optional[str] = None
+    reasoning: str | None = None
 
 
 class ConsolidationReport(BaseModel):
@@ -77,9 +76,9 @@ ConsolidationReport.model_rebuild()
 class MemoryStoreRecord(BaseModel):
     id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     created_at: datetime
-    archived_at: Optional[datetime] = None
+    archived_at: datetime | None = None
 
 
 class MemoryVersionRecord(BaseModel):

@@ -16,7 +16,7 @@ class TestMemoryClient:
 
     def test_models(self):
         """Verify Pydantic models work."""
-        from rememhq.models import MemoryType, ForgetMode
+        from rememhq.models import ForgetMode, MemoryType
 
         assert MemoryType.FACT == "fact"
         assert MemoryType.PROCEDURE == "procedure"
@@ -35,15 +35,14 @@ class TestMemoryClient:
     @pytest.mark.asyncio
     async def test_decay(self, base_url):
         """Verify decay() sends correct request."""
-        from rememhq import Memory
-        import respx
         import httpx
+        import respx
+
+        from rememhq import Memory
 
         async with respx.mock(base_url=base_url) as respx_mock:
             respx_mock.post("/v1/memories/decay").mock(
-                return_value=httpx.Response(
-                    200, json={"success": True, "archived_count": 5}
-                )
+                return_value=httpx.Response(200, json={"success": True, "archived_count": 5})
             )
 
             async with Memory(base_url=base_url) as m:
@@ -54,9 +53,10 @@ class TestMemoryClient:
     @pytest.mark.asyncio
     async def test_store_batch(self, base_url):
         """Verify store_batch() stores multiple items."""
-        from rememhq import Memory
-        import respx
         import httpx
+        import respx
+
+        from rememhq import Memory
 
         async with respx.mock(base_url=base_url) as respx_mock:
             respx_mock.post("/v1/memories").mock(

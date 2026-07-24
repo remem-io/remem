@@ -9,14 +9,14 @@ import httpx
 
 from rememhq.config import RememConfig
 from rememhq.models import (
-    ConsolidationReport,
     CompactResponse,
+    ConsolidationReport,
     ForgetMode,
     MemoryResult,
-    MemoryType,
-    StoreResponse,
     MemoryStoreRecord,
+    MemoryType,
     MemoryVersionRecord,
+    StoreResponse,
 )
 
 
@@ -162,9 +162,7 @@ class Memory:
         mode: ForgetMode = ForgetMode.DELETE,
     ) -> dict:
         """Delete, decay, or archive a memory."""
-        resp = await self._client.delete(
-            f"/v1/memories/{id}", params={"mode": mode.value}
-        )
+        resp = await self._client.delete(f"/v1/memories/{id}", params={"mode": mode.value})
         resp.raise_for_status()
         return resp.json()
 
@@ -179,9 +177,7 @@ class Memory:
         if model:
             payload["model"] = model
 
-        resp = await self._client.post(
-            f"/v1/sessions/{session_id}/consolidate", json=payload
-        )
+        resp = await self._client.post(f"/v1/sessions/{session_id}/consolidate", json=payload)
         resp.raise_for_status()
         return ConsolidationReport.model_validate(resp.json())
 
@@ -210,7 +206,7 @@ class Memory:
         """Close the HTTP client."""
         await self._client.aclose()
 
-    async def __aenter__(self) -> "Memory":
+    async def __aenter__(self) -> Memory:
         return self
 
     async def __aexit__(self, *args) -> None:
@@ -226,9 +222,7 @@ class StoreMemoriesClient:
         resp.raise_for_status()
         return [MemoryResult.model_validate(r) for r in resp.json()]
 
-    async def create(
-        self, store_id: str | UUID, path: str, content: str
-    ) -> MemoryResult:
+    async def create(self, store_id: str | UUID, path: str, content: str) -> MemoryResult:
         resp = await self._client.post(
             f"/v1/memory_stores/{store_id}/memories",
             json={"path": path, "content": content},
@@ -237,15 +231,11 @@ class StoreMemoriesClient:
         return MemoryResult.model_validate(resp.json())
 
     async def get(self, store_id: str | UUID, path_or_id: str | UUID) -> MemoryResult:
-        resp = await self._client.get(
-            f"/v1/memory_stores/{store_id}/memories/{path_or_id}"
-        )
+        resp = await self._client.get(f"/v1/memory_stores/{store_id}/memories/{path_or_id}")
         resp.raise_for_status()
         return MemoryResult.model_validate(resp.json())
 
-    async def update(
-        self, store_id: str | UUID, path_or_id: str | UUID, content: str
-    ) -> MemoryResult:
+    async def update(self, store_id: str | UUID, path_or_id: str | UUID, content: str) -> MemoryResult:
         resp = await self._client.post(
             f"/v1/memory_stores/{store_id}/memories/{path_or_id}",
             json={"content": content},
@@ -253,12 +243,8 @@ class StoreMemoriesClient:
         resp.raise_for_status()
         return MemoryResult.model_validate(resp.json())
 
-    async def list_versions(
-        self, store_id: str | UUID, path_or_id: str | UUID
-    ) -> list[MemoryVersionRecord]:
-        resp = await self._client.get(
-            f"/v1/memory_stores/{store_id}/memories/{path_or_id}/versions"
-        )
+    async def list_versions(self, store_id: str | UUID, path_or_id: str | UUID) -> list[MemoryVersionRecord]:
+        resp = await self._client.get(f"/v1/memory_stores/{store_id}/memories/{path_or_id}/versions")
         resp.raise_for_status()
         return [MemoryVersionRecord.model_validate(r) for r in resp.json()]
 
@@ -268,9 +254,7 @@ class MemoryStoresClient:
         self._client = client
         self.memories = StoreMemoriesClient(client)
 
-    async def create(
-        self, name: str, description: str | None = None
-    ) -> MemoryStoreRecord:
+    async def create(self, name: str, description: str | None = None) -> MemoryStoreRecord:
         payload = {"name": name}
         if description:
             payload["description"] = description
