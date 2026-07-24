@@ -23,7 +23,9 @@ chrono = { workspace = true }
 clap = { workspace = true }
 async-trait = { workspace = true }
 owo-colors = "4.3.0"
-crossterm = "0.29.0"
+crossterm = { version = "0.29.0", features = ["event-stream"] }
 rustyline = "18.0.1"
 indicatif = "0.17"
 termimad = "0.35"
+futures-util = "0.3"
+ratatui = "0.28"

@@ -13,6 +13,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 mod agent;
+mod tui;
 
 use rememhq_core::config::RememConfig;
 use rememhq_core::memory::types::{MemoryRecord, MemoryType};
@@ -98,6 +99,8 @@ enum Commands {
     },
     /// Interactive REPL mode
     Repl,
+    /// Terminal UI for browsing and inspecting memory
+    Tui,
     /// AI Companion Terminal
     Agent,
     /// Bulk import memories from a JSONL file
@@ -605,6 +608,11 @@ async fn main() -> anyhow::Result<()> {
         Commands::Repl => {
             let engine = build_engine(&config).await?;
             run_repl(engine, &config).await
+        }
+
+        Commands::Tui => {
+            let engine = build_engine(&config).await?;
+            tui::run_tui(engine, &config).await
         }
 
         Commands::Agent => {

@@ -238,6 +238,9 @@ remem decay
 # Start an interactive REPL mode
 remem repl
 
+# Launch interactive Terminal UI (TUI) for browsing, searching, and monitoring memories
+remem tui
+
 # Start the Remem AI terminal agent (uses native tool calling to run shell commands)
 # Ensure REMEM_PROVIDER is set to anthropic, openai, gemini, or local
 remem agent
@@ -274,6 +277,9 @@ cargo run -p rememhq-mcp
 
 # Run the CLI tool
 cargo run -p rememhq-cli -- --help
+
+# Run the interactive TUI
+cargo run -p rememhq-cli -- tui
 
 # Run the Remen AI terminal agent
 cargo run -p rememhq-cli -- agent
