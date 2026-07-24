@@ -1150,44 +1150,6 @@ struct ExportRecord {
     updated_at: String,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn doctor_accepts_mock_without_keys() {
-        assert_eq!(
-            reasoning_provider_status_for("mock", false, false, false),
-            ok_status("mock provider selected; no API key required")
-        );
-        assert_eq!(
-            embedding_provider_status_for("mock", false, false, false),
-            ok_status("mock embeddings selected; no API key required")
-        );
-    }
-
-    #[test]
-    fn doctor_warns_when_anthropic_has_no_embedding_fallback() {
-        assert_eq!(
-            embedding_provider_status_for("anthropic", false, false, false),
-            warn_status(
-                "Anthropic has no embedding API; set OPENAI_API_KEY, GOOGLE_API_KEY, or local model files",
-            )
-        );
-    }
-
-    #[test]
-    fn doctor_allows_unknown_provider_auto_detect() {
-        assert_eq!(
-            reasoning_provider_status_for("auto", false, true, false),
-            ok_status("auto-detect can use an available API key")
-        );
-        assert_eq!(
-            embedding_provider_status_for("auto", false, false, true),
-            ok_status("auto-detect can use available embeddings")
-        );
-    }
-}
 // --- REPL ---
 
 async fn run_repl(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Result<()> {
@@ -1315,4 +1277,43 @@ async fn run_repl(engine: ReasoningEngine, config: &RememConfig) -> anyhow::Resu
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn doctor_accepts_mock_without_keys() {
+        assert_eq!(
+            reasoning_provider_status_for("mock", false, false, false),
+            ok_status("mock provider selected; no API key required")
+        );
+        assert_eq!(
+            embedding_provider_status_for("mock", false, false, false),
+            ok_status("mock embeddings selected; no API key required")
+        );
+    }
+
+    #[test]
+    fn doctor_warns_when_anthropic_has_no_embedding_fallback() {
+        assert_eq!(
+            embedding_provider_status_for("anthropic", false, false, false),
+            warn_status(
+                "Anthropic has no embedding API; set OPENAI_API_KEY, GOOGLE_API_KEY, or local model files",
+            )
+        );
+    }
+
+    #[test]
+    fn doctor_allows_unknown_provider_auto_detect() {
+        assert_eq!(
+            reasoning_provider_status_for("auto", false, true, false),
+            ok_status("auto-detect can use an available API key")
+        );
+        assert_eq!(
+            embedding_provider_status_for("auto", false, false, true),
+            ok_status("auto-detect can use available embeddings")
+        );
+    }
 }
