@@ -51,15 +51,11 @@ async def main():
     )
 
     # Store a memory
-    store_resp = await memory.store(
-        content="The user prefers Python for ML tasks.", tags=["preferences", "ml"]
-    )
+    store_resp = await memory.store(content="The user prefers Python for ML tasks.", tags=["preferences", "ml"])
     print(f"Stored memory ID: {store_resp.id}")
 
     # Recall memories using semantic reasoning
-    results = await memory.recall(
-        query="What language does the user prefer for machine learning?", limit=5
-    )
+    results = await memory.recall(query="What language does the user prefer for machine learning?", limit=5)
 
     for result in results:
         print(f"Content: {result.content}")
