@@ -30,7 +30,7 @@ use rememhq_core::storage::MemoryStore;
 )]
 struct Cli {
     /// Project name for memory isolation
-    #[arg(long, global = true, default_value = "default")]
+    #[arg(long, global = true, env = "REMEM_PROJECT", default_value = "default")]
     project: String,
 
     #[command(subcommand)]
