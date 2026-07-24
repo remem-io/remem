@@ -1199,7 +1199,8 @@ async fn main() -> anyhow::Result<()> {
             get(routes::memory_stores::list_memory_versions),
         )
         .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024))
-        .layer(tower_http::timeout::TimeoutLayer::new(
+        .layer(tower_http::timeout::TimeoutLayer::with_status_code(
+            axum::http::StatusCode::REQUEST_TIMEOUT,
             std::time::Duration::from_secs(30),
         ))
         .layer(axum::middleware::from_fn_with_state(
