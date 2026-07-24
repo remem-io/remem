@@ -14,13 +14,16 @@ use rememhq_core::reasoning::ReasoningEngine;
 use crate::middleware::auth::{check_auth, extract_provider_options};
 use crate::routes::memories::ErrorResponse;
 
+#[allow(dead_code)]
 type AppState = Arc<ReasoningEngine>;
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct ConsolidateBody {
     pub model: Option<String>,
 }
 
+#[allow(dead_code)]
 pub async fn consolidate_session(
     State(engine): State<AppState>,
     headers: HeaderMap,

@@ -44,6 +44,7 @@ pub struct RecallQuery {
     pub memory_type: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct SearchQuery {
     pub q: String,
@@ -53,6 +54,7 @@ pub struct SearchQuery {
     pub filter_tags: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct UpdateBody {
     pub content: Option<String>,
@@ -60,36 +62,34 @@ pub struct UpdateBody {
     pub tags: Option<Vec<String>>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct ForgetQuery {
     #[serde(default = "default_delete")]
     pub mode: String,
 }
 
+#[allow(dead_code)]
 fn default_8() -> usize {
     8
 }
+#[allow(dead_code)]
 fn default_20() -> usize {
     20
 }
+#[allow(dead_code)]
 fn default_delete() -> String {
     "delete".into()
 }
 
 /// Upper bound on `limit + offset` accepted by the recall/search endpoints.
-///
-/// Without a cap, `offset + limit` (both taken directly from the query
-/// string) is passed straight through to the vector index search and,
-/// downstream, to an FFI call into the native HNSW library — so a single
-/// request with an enormous `limit` (no auth required if `REMEM_API_KEY`
-/// isn't set) could force a huge allocation/search there. It also let
-/// `offset + limit` overflow `usize` for extreme inputs. 1000 is generous
-/// relative to the defaults (8 and 20) while still ruling out abuse.
+#[allow(dead_code)]
 const MAX_FETCH_LIMIT: usize = 1000;
 
 /// Validates `limit`/`offset` from a query string and returns the safe,
 /// overflow-free `offset + limit` to fetch, or a 400 error describing why
 /// the request was rejected.
+#[allow(dead_code)]
 fn validate_fetch_limit(
     limit: usize,
     offset: usize,
@@ -110,6 +110,7 @@ fn validate_fetch_limit(
 
 // --- Handlers ---
 
+#[allow(dead_code)]
 pub async fn store_memory(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -151,6 +152,7 @@ pub async fn store_memory(
     ))
 }
 
+#[allow(dead_code)]
 pub async fn recall_memories(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -202,6 +204,7 @@ pub async fn recall_memories(
     Ok(Json(paginated))
 }
 
+#[allow(dead_code)]
 pub async fn search_memories(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -239,6 +242,7 @@ pub async fn search_memories(
     Ok(Json(paginated))
 }
 
+#[allow(dead_code)]
 pub async fn update_memory(
     State(engine): State<AppState>,
     headers: HeaderMap,
@@ -284,6 +288,7 @@ pub async fn update_memory(
     })))
 }
 
+#[allow(dead_code)]
 pub async fn forget_memory(
     State(engine): State<AppState>,
     headers: HeaderMap,
