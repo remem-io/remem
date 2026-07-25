@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-07-25
+
+### Added
+- **MCP Envelope Unification**: Standardized all 19 tools on spec-compliant `CallToolResult` text envelope (`{"content":[{"type":"text","text":"..."}]}`).
+- **Domain Error Handling (`isError: true`)**: Updated `tools/call` so domain errors return standard tool results with `"isError": true`, enabling LLMs to self-correct.
+- **Dynamic Client Identification & Disconnection**: Assigned dynamic session IDs (`mcp-<uuid>`) and added `AgentDisconnected` event emission on client stdin disconnects.
+- **Input Length Capping**: Enforced 100,000 character limit on free-text inputs (`content`, `conversation_text`) in `mem_store`, `mem_update`, `mem_compact`, and `mem_log_action`.
+- **TUI & Tailer Resiliency**: Added truncation/rotation reset to TUI event stream tailer and 10MB auto-rotation cap to `events.jsonl`.
+- **Batched DB Operations**: Added `archive_bulk` and `delete_bulk` single-query methods to `SqliteStore` and TUI bulk tasks.
+- **Enhanced `remem doctor`**: Added `--ping` / `-p` reachability check, native HNSW vector engine check, and agent MCP config checks.
+- **Engine Bounded Concurrency & Jitter**: Bounded entity resolution and consolidation embeddings to 5 concurrent streams, added randomized jitter (±25%) to provider retries, and added graceful degradation on transient provider failures.
+- **Integration Test Suite**: Added MCP stdio protocol end-to-end integration test (`stdio_test.rs`) and concurrent SQLite stress test (`concurrent_access_test.rs`).
+
 ## [0.1.14] - 2026-07-24
 
 ### Added
