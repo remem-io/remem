@@ -29,6 +29,7 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .get("content")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing content"))?;
+    crate::tools::validate_input_length(content, "content")?;
 
     let tags: Vec<String> = args
         .get("tags")

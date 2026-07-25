@@ -65,7 +65,7 @@ pub trait MemoryStore: Send + Sync {
 
     /// List all memories associated with a specific session ID.
     async fn list_by_session(&self, session_id: &str) -> anyhow::Result<Vec<MemoryRecord>> {
-        let memories = self.list(&[], None, None, 10000).await?;
+        let memories = self.list(&[], None, None, usize::MAX).await?;
         Ok(memories
             .into_iter()
             .filter(|m| m.source_session.as_deref() == Some(session_id))
@@ -77,6 +77,28 @@ pub trait MemoryStore: Send + Sync {
 
     /// Archive a memory (soft delete with decay).
     async fn archive(&self, id: Uuid) -> anyhow::Result<bool>;
+
+    /// Archive multiple memories in a single batch operation.
+    async fn archive_bulk(&self, ids: &[Uuid]) -> anyhow::Result<usize> {
+        let mut count = 0;
+        for id in ids {
+            if self.archive(*id).await? {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    /// Delete multiple memories in a single batch operation.
+    async fn delete_bulk(&self, ids: &[Uuid]) -> anyhow::Result<usize> {
+        let mut count = 0;
+        for id in ids {
+            if self.delete(*id).await? {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
 
     /// Unarchive a previously archived memory.
     async fn unarchive(&self, _id: Uuid) -> anyhow::Result<bool> {

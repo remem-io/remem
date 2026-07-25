@@ -132,6 +132,17 @@ impl ReasoningEngine {
         let events_file = self.config.project_data_dir().join("events.jsonl");
         if let Ok(json) = serde_json::to_string(&event) {
             tokio::spawn(async move {
+                if let Ok(meta) = tokio::fs::metadata(&events_file).await {
+                    // Cap events.jsonl size at 10MB. Truncate to last 1MB if exceeded.
+                    if meta.len() > 10 * 1024 * 1024 {
+                        if let Ok(content) = tokio::fs::read_to_string(&events_file).await {
+                            let lines: Vec<&str> = content.lines().collect();
+                            let keep_start = lines.len().saturating_sub(1000);
+                            let pruned = lines[keep_start..].join("\n") + "\n";
+                            let _ = tokio::fs::write(&events_file, pruned).await;
+                        }
+                    }
+                }
                 if let Ok(mut file) = tokio::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -436,12 +447,18 @@ impl ReasoningEngine {
             record.tags = fact.tags;
             record.source_session = Some(session_id.to_string());
 
-            // Generate embedding
-            let embedding = self.embeddings.embed(&record.content, options).await?;
-            record.embedding = Some(embedding.clone());
-
-            self.store.insert(&record).await?;
-            self.index.add(record.id, &embedding).await?;
+            // Generate embedding with graceful fallback
+            match self.embeddings.embed(&record.content, options).await {
+                Ok(embedding) => {
+                    record.embedding = Some(embedding.clone());
+                    self.store.insert(&record).await?;
+                    self.index.add(record.id, &embedding).await?;
+                }
+                Err(e) => {
+                    tracing::warn!(content = %record.content, error = %e, "Failed to generate fact embedding, storing unindexed record");
+                    self.store.insert(&record).await?;
+                }
+            }
 
             if let Some(triple) = fact.knowledge_triple {
                 self.emit_event(ReasoningEvent::KnowledgeTripleFound {

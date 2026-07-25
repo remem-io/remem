@@ -57,12 +57,19 @@ impl AgentHarness {
             {
                 Ok(resp) => return Ok(resp),
                 Err(e) => {
-                    if retries >= self.max_retries {
+                    let err_str = e.to_string();
+                    let non_retryable = err_str.contains("400")
+                        || err_str.contains("401")
+                        || err_str.contains("403")
+                        || err_str.contains("Invalid API key");
+
+                    if retries >= self.max_retries || non_retryable {
                         return Err(e);
                     }
                     retries += 1;
-                    let delay =
-                        std::time::Duration::from_millis(250 * 2u64.pow((retries - 1) as u32));
+                    let base_ms = 250 * 2u64.pow((retries - 1) as u32);
+                    let jitter = 0.75 + (fastrand::f64() * 0.5);
+                    let delay = std::time::Duration::from_millis((base_ms as f64 * jitter) as u64);
                     tracing::warn!(error = %e, attempt = retries, "Provider chat failed, retrying in {:?}", delay);
                     tokio::time::sleep(delay).await;
                 }

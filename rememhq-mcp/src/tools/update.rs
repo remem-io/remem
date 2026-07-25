@@ -33,6 +33,9 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .get("content")
         .and_then(|v| v.as_str())
         .map(String::from);
+    if let Some(c) = &content {
+        crate::tools::validate_input_length(c, "content")?;
+    }
     let importance = args
         .get("importance")
         .and_then(|v| v.as_f64())

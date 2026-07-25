@@ -2076,6 +2076,7 @@ dependencies = [
  "axum",
  "chrono",
  "dirs",
+ "fastrand",
  "futures-util",
  "libremem-sys",
  "ndarray",

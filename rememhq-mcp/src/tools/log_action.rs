@@ -51,6 +51,7 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
         .get("content")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing content"))?;
+    crate::tools::validate_input_length(content, "content")?;
 
     let parent_id = match args.get("parent_id").and_then(|v| v.as_str()) {
         Some(id_str) => Some(
@@ -104,7 +105,12 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
     }
 
     Ok(serde_json::json!({
-        "status": "success",
-        "message": format!("Logged {} observation for session {}", observation_type, session_id)
+        "content": [{
+            "type": "text",
+            "text": serde_json::to_string_pretty(&serde_json::json!({
+                "status": "success",
+                "message": format!("Logged {} observation for session {}", observation_type, session_id)
+            }))?
+        }]
     }))
 }

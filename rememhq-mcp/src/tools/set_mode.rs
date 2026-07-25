@@ -39,7 +39,12 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
     *engine.mode.write().await = mode;
 
     Ok(serde_json::json!({
-        "status": "success",
-        "message": format!("Memory mode set to {:?}", mode)
+        "content": [{
+            "type": "text",
+            "text": serde_json::to_string_pretty(&serde_json::json!({
+                "status": "success",
+                "message": format!("Memory mode set to {:?}", mode)
+            }))?
+        }]
     }))
 }

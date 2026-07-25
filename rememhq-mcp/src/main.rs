@@ -159,18 +159,26 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
+    let session_id = format!("mcp-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let active_client_name = Arc::new(tokio::sync::RwLock::new(None::<String>));
+
     // Run the stdio JSON-RPC loop using the transport module abstraction
     let shutdown_signal = async {
         let _ = tokio::signal::ctrl_c().await;
         tracing::info!("Shutdown signal received, exiting gracefully...");
     };
 
+    let session_id_clone = session_id.clone();
+    let client_name_clone = active_client_name.clone();
+    let engine_for_disconnect = engine.clone();
     tokio::select! {
         res = transport::stdio::run_stdio_loop(move |line| {
             let engine = engine.clone();
+            let session_id = session_id_clone.clone();
+            let client_name_state = client_name_clone.clone();
             async move {
                 let response = match serde_json::from_str::<JsonRpcRequest>(&line) {
-                    Ok(request) => handle_request(&engine, request).await,
+                    Ok(request) => handle_request(&engine, request, &session_id, client_name_state).await,
                     Err(e) => Some(JsonRpcResponse::error(
                         serde_json::Value::Null,
                         -32700,
@@ -187,6 +195,15 @@ async fn main() -> anyhow::Result<()> {
         _ = shutdown_signal => {}
     }
 
+    if let Some(agent_name) = active_client_name.read().await.clone() {
+        engine_for_disconnect.emit_event(
+            rememhq_core::reasoning::ReasoningEvent::AgentDisconnected {
+                session_id: session_id.clone(),
+                agent_name,
+            },
+        );
+    }
+
     // Save index on exit
     tracing::info!("Saving vector index to {}", config.index_path().display());
     index.save(&config.index_path()).await?;
@@ -197,6 +214,8 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_request(
     engine: &Arc<ReasoningEngine>,
     request: JsonRpcRequest,
+    session_id: &str,
+    active_client_name: Arc<tokio::sync::RwLock<Option<String>>>,
 ) -> Option<JsonRpcResponse> {
     let id = request.id.unwrap_or(serde_json::Value::Null);
 
@@ -225,8 +244,10 @@ async fn handle_request(
                 "Client connected via MCP initialize"
             );
 
+            *active_client_name.write().await = Some(client_name.clone());
+
             engine.emit_event(rememhq_core::reasoning::ReasoningEvent::AgentConnected {
-                session_id: "mcp-session".to_string(),
+                session_id: session_id.to_string(),
                 agent_name: client_name,
                 agent_version: client_version,
             });
@@ -262,7 +283,16 @@ async fn handle_request(
 
         "tools/call" => match tools::call_tool(engine, &request.params).await {
             Ok(result) => Some(JsonRpcResponse::success(id, result)),
-            Err(e) => Some(JsonRpcResponse::error(id, -32000, e.to_string())),
+            Err(e) => Some(JsonRpcResponse::success(
+                id,
+                serde_json::json!({
+                    "content": [{
+                        "type": "text",
+                        "text": format!("Error: {}", e)
+                    }],
+                    "isError": true
+                }),
+            )),
         },
 
         _ => Some(JsonRpcResponse::error(

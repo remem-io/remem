@@ -32,10 +32,23 @@ use std::sync::Arc;
 /// same reason on the REST `/v1/memories/recall` and `/v1/memories/search`
 /// endpoints.
 pub(crate) const MAX_TOOL_LIMIT: usize = 1000;
+pub(crate) const MAX_INPUT_CHARS: usize = 100_000;
 
 /// Clamp a `limit` parsed from tool-call arguments to [`MAX_TOOL_LIMIT`].
 pub(crate) fn clamp_limit(limit: usize) -> usize {
     limit.min(MAX_TOOL_LIMIT)
+}
+
+/// Validate that a free-text input field does not exceed [`MAX_INPUT_CHARS`].
+pub(crate) fn validate_input_length(text: &str, field_name: &str) -> anyhow::Result<()> {
+    if text.chars().count() > MAX_INPUT_CHARS {
+        anyhow::bail!(
+            "Input field '{}' exceeds maximum length of {} characters",
+            field_name,
+            MAX_INPUT_CHARS
+        );
+    }
+    Ok(())
 }
 
 /// Return the list of all MCP tools exposed by remem.

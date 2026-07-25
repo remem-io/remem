@@ -62,8 +62,10 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
     }
 
     Ok(serde_json::json!({
-        "status": "success",
-        "project_context": context_summary
+        "content": [{
+            "type": "text",
+            "text": context_summary
+        }]
     }))
 }
 

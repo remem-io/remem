@@ -193,13 +193,8 @@ pub fn spawn_bulk_archive_task(
     ids: Vec<Uuid>,
 ) {
     tokio::spawn(async move {
-        let mut count = 0;
-        for id in &ids {
-            if matches!(store.archive(*id).await, Ok(true)) {
-                count += 1;
-            }
-        }
-        let _ = tx.send(FetchResult::BulkArchived(ids, Ok(count)));
+        let res = store.archive_bulk(&ids).await;
+        let _ = tx.send(FetchResult::BulkArchived(ids, res));
     });
 }
 
@@ -210,13 +205,8 @@ pub fn spawn_bulk_delete_task(
     ids: Vec<Uuid>,
 ) {
     tokio::spawn(async move {
-        let mut count = 0;
-        for id in &ids {
-            if matches!(store.delete(*id).await, Ok(true)) {
-                count += 1;
-            }
-        }
-        let _ = tx.send(FetchResult::BulkDeleted(ids, Ok(count)));
+        let res = store.delete_bulk(&ids).await;
+        let _ = tx.send(FetchResult::BulkDeleted(ids, res));
     });
 }
 
@@ -240,26 +230,27 @@ pub fn spawn_event_tailer(events_file: std::path::PathBuf, tx: mpsc::UnboundedSe
             if let Ok(mut file) = tokio::fs::File::open(&events_file).await {
                 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
                 if let Ok(meta) = file.metadata().await {
-                    if meta.len() >= position {
-                        let _ = file.seek(std::io::SeekFrom::Start(position)).await;
-                        let mut reader = BufReader::new(file);
-                        let mut line = String::new();
-                        while let Ok(n) = reader.read_line(&mut line).await {
-                            if n == 0 {
-                                break;
-                            }
-                            position += n as u64;
-                            let trimmed = line.trim();
-                            if !trimmed.is_empty() {
-                                if let Ok(event) = serde_json::from_str::<
-                                    rememhq_core::reasoning::ReasoningEvent,
-                                >(trimmed)
-                                {
-                                    let _ = tx.send(FetchResult::LiveEvent(event));
-                                }
-                            }
-                            line.clear();
+                    if meta.len() < position {
+                        position = 0;
+                    }
+                    let _ = file.seek(std::io::SeekFrom::Start(position)).await;
+                    let mut reader = BufReader::new(file);
+                    let mut line = String::new();
+                    while let Ok(n) = reader.read_line(&mut line).await {
+                        if n == 0 {
+                            break;
                         }
+                        position += n as u64;
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() {
+                            if let Ok(event) = serde_json::from_str::<
+                                rememhq_core::reasoning::ReasoningEvent,
+                            >(trimmed)
+                            {
+                                let _ = tx.send(FetchResult::LiveEvent(event));
+                            }
+                        }
+                        line.clear();
                     }
                 }
             }

@@ -102,13 +102,24 @@ impl<'a> EntityResolver for LlmEntityResolver<'a> {
         }
 
         let entity_list: Vec<String> = unique_entities.into_iter().collect();
-        let futures: Vec<_> = entity_list.iter().map(|e| self.resolve_entity(e)).collect();
+        use futures_util::stream::StreamExt;
 
-        let resolved_results = futures_util::future::join_all(futures).await;
+        let resolved_results: Vec<(String, Result<String>)> =
+            futures_util::stream::iter(entity_list.into_iter().map(|e| async move {
+                let res = self.resolve_entity(&e).await;
+                (e, res)
+            }))
+            .buffer_unordered(5)
+            .collect()
+            .await;
+
         let mut resolved_map = std::collections::HashMap::new();
-
-        for (orig, res) in entity_list.into_iter().zip(resolved_results) {
-            let resolved_name = res?;
+        for (orig, res) in resolved_results {
+            // Graceful degradation: if entity resolution fails for one entity, fall back to original name
+            let resolved_name = res.unwrap_or_else(|e| {
+                tracing::warn!(entity = %orig, error = %e, "Entity resolution failed, using original name");
+                orig.clone()
+            });
             resolved_map.insert(orig, resolved_name);
         }
 

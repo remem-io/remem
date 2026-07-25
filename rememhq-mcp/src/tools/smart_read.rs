@@ -36,7 +36,9 @@ pub async fn handle(_engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Res
     let content = SmartReader::read_and_fold(Path::new(path_str), query)?;
 
     Ok(serde_json::json!({
-        "status": "success",
-        "content": content
+        "content": [{
+            "type": "text",
+            "text": content
+        }]
     }))
 }

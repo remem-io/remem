@@ -707,6 +707,51 @@ impl MemoryStore for SqliteStore {
         Ok(rows > 0)
     }
 
+    async fn archive_bulk(&self, ids: &[Uuid]) -> anyhow::Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let conn = self.conn.lock().await;
+        let mut total = 0;
+        for chunk in ids.chunks(500) {
+            let placeholders = vec!["?"; chunk.len()].join(",");
+            let sql = format!(
+                "UPDATE memories SET archived = 1, updated_at = ?1 WHERE id IN ({})",
+                placeholders
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let now = Utc::now().to_rfc3339();
+            let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(now)];
+            for id in chunk {
+                params_vec.push(Box::new(id.to_string()));
+            }
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                params_vec.iter().map(|b| b.as_ref()).collect();
+            total += stmt.execute(params_refs.as_slice())?;
+        }
+        Ok(total)
+    }
+
+    async fn delete_bulk(&self, ids: &[Uuid]) -> anyhow::Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let conn = self.conn.lock().await;
+        let mut total = 0;
+        for chunk in ids.chunks(500) {
+            let placeholders = vec!["?"; chunk.len()].join(",");
+            let sql = format!("DELETE FROM memories WHERE id IN ({})", placeholders);
+            let mut stmt = conn.prepare(&sql)?;
+            let params_vec: Vec<String> = chunk.iter().map(|id| id.to_string()).collect();
+            let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec
+                .iter()
+                .map(|s| s as &dyn rusqlite::ToSql)
+                .collect();
+            total += stmt.execute(params_refs.as_slice())?;
+        }
+        Ok(total)
+    }
+
     async fn unarchive(&self, id: Uuid) -> anyhow::Result<bool> {
         let conn = self.conn.lock().await;
         let rows = conn.execute(

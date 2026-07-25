@@ -90,7 +90,11 @@ enum Commands {
     /// Show database statistics
     Inspect,
     /// Check configuration, storage paths, and provider readiness
-    Doctor,
+    Doctor {
+        /// Ping the configured LLM provider to test API key reachability
+        #[arg(long, short)]
+        ping: bool,
+    },
     /// Apply importance-weighted decay to all active memories
     Decay {
         /// Decay factor (0.0 to 1.0, lower means faster decay)
@@ -413,7 +417,7 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
 
-        Commands::Doctor => run_doctor(&config).await,
+        Commands::Doctor { ping } => run_doctor(&config, ping).await,
         Commands::Decay { factor } => {
             let engine = build_engine(&config).await?;
             let archived_count = engine.apply_decay(factor).await?;
@@ -939,7 +943,7 @@ fn generate_consumer_config(
 }
 
 /// Run a read-only health check for the active remem project.
-async fn run_doctor(config: &RememConfig) -> anyhow::Result<()> {
+async fn run_doctor(config: &RememConfig, ping: bool) -> anyhow::Result<()> {
     println!("remem doctor");
     println!("  project: {}", config.project);
     println!("  provider: {}", config.reasoning.provider);
@@ -967,11 +971,50 @@ async fn run_doctor(config: &RememConfig) -> anyhow::Result<()> {
         println!("  - database readable: skipped until first memory is stored");
     }
 
+    // Check native vector engine HNSW FFI
+    let _hnsw = HNSWVectorIndex::new(1536, 1000);
+    println!("  ✓ native vector engine (libremem HNSW FFI): ready");
+
+    // Check agent MCP configurations
+    check_agent_mcp_configs();
+
     println!();
     print_provider_check("reasoning", &reasoning_provider_status(config));
     print_provider_check("embeddings", &embedding_provider_status(config));
 
+    if ping {
+        println!();
+        println!("Pinging provider reachability...");
+        let provider = rememhq_core::providers::factory::build_reasoning_provider(config);
+        let options = rememhq_core::providers::ProviderOptions::default();
+        let msg = vec![rememhq_core::providers::ChatMessage::user("ping")];
+        match provider
+            .chat(&msg, &[], &config.reasoning.reasoning_model, Some(&options))
+            .await
+        {
+            Ok(_) => println!("  ✓ provider reachability ping: SUCCESS"),
+            Err(e) => println!("  ✗ provider reachability ping failed: {e}"),
+        }
+    }
+
     Ok(())
+}
+
+fn check_agent_mcp_configs() {
+    let configs = [
+        (".gemini/settings.json", "Antigravity CLI"),
+        (".claude/config.json", "Claude Code"),
+        (".cursor/mcp.json", "Cursor"),
+        (".github/copilot/mcp.json", "Copilot"),
+        (".opencode/config.json", "OpenCode"),
+    ];
+
+    for (path, name) in configs {
+        let p = std::path::Path::new(path);
+        if p.exists() {
+            println!("  ✓ agent mcp config found for {name}: {}", p.display());
+        }
+    }
 }
 
 fn print_path_check(label: &str, path: &std::path::Path, optional: bool) {

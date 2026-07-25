@@ -30,6 +30,26 @@ pub struct ChatMessage {
     pub tool_call_id: Option<String>,
 }
 
+impl ChatMessage {
+    pub fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::User,
+            content: content.into(),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::Assistant,
+            content: content.into(),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,

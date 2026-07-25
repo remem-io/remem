@@ -35,6 +35,7 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, arguments: &Value) -> anyhow:
         .get("conversation_text")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing 'conversation_text' parameter"))?;
+    crate::tools::validate_input_length(conversation_text, "conversation_text")?;
 
     let focus_areas: Option<Vec<String>> = arguments
         .get("focus_areas")

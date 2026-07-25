@@ -33,7 +33,12 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
     let document = builder.build().await?;
 
     Ok(serde_json::json!({
-        "status": "success",
-        "context": document.to_string_formatted()
+        "content": [{
+            "type": "text",
+            "text": serde_json::to_string_pretty(&serde_json::json!({
+                "status": "success",
+                "context": document.to_string_formatted()
+            }))?
+        }]
     }))
 }
