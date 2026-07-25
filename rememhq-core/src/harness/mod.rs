@@ -42,6 +42,34 @@ impl AgentHarness {
 
     /// Enforces output validation. If the model fails to produce valid output,
     /// it retries up to `max_retries` times, injecting the error message into context.
+    pub async fn chat_with_retry(
+        &self,
+        messages: &[ChatMessage],
+        model: &str,
+        options: Option<&crate::providers::ProviderOptions>,
+    ) -> anyhow::Result<ChatResponse> {
+        let mut retries = 0;
+        loop {
+            match self
+                .provider
+                .chat(messages, &self.tools, model, options)
+                .await
+            {
+                Ok(resp) => return Ok(resp),
+                Err(e) => {
+                    if retries >= self.max_retries {
+                        return Err(e);
+                    }
+                    retries += 1;
+                    let delay =
+                        std::time::Duration::from_millis(250 * 2u64.pow((retries - 1) as u32));
+                    tracing::warn!(error = %e, attempt = retries, "Provider chat failed, retrying in {:?}", delay);
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        }
+    }
+
     pub async fn chat_with_validation<V: validator::Validator>(
         &self,
         messages: &mut Vec<ChatMessage>,
@@ -51,10 +79,7 @@ impl AgentHarness {
     ) -> anyhow::Result<ChatResponse> {
         let mut retries = 0;
         loop {
-            let response = self
-                .provider
-                .chat(messages, &self.tools, model, options)
-                .await?;
+            let response = self.chat_with_retry(messages, model, options).await?;
 
             if response.message.tool_calls.is_some() {
                 // If the model tried to call tools, we don't validate the raw text output here.
@@ -85,6 +110,11 @@ impl AgentHarness {
                                 e
                             ));
                         }
+                        retries += 1;
+                        let delay =
+                            std::time::Duration::from_millis(250 * 2u64.pow((retries - 1) as u32));
+                        tokio::time::sleep(delay).await;
+
                         messages.push(response.message.clone());
                         messages.push(ChatMessage {
                             role: ChatRole::User,
@@ -101,6 +131,11 @@ impl AgentHarness {
                             e
                         ));
                     }
+                    retries += 1;
+                    let delay =
+                        std::time::Duration::from_millis(250 * 2u64.pow((retries - 1) as u32));
+                    tokio::time::sleep(delay).await;
+
                     messages.push(response.message.clone());
                     messages.push(ChatMessage {
                         role: ChatRole::User,

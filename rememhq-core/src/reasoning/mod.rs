@@ -23,6 +23,15 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum ReasoningEvent {
+    AgentConnected {
+        session_id: String,
+        agent_name: String,
+        agent_version: String,
+    },
+    AgentDisconnected {
+        session_id: String,
+        agent_name: String,
+    },
     ConsolidationStarted {
         session_id: String,
     },
@@ -168,6 +177,10 @@ impl ReasoningEngine {
 
         // Add to vector index
         self.index.add(record.id, &embedding).await?;
+
+        self.emit_event(ReasoningEvent::FactExtracted {
+            content: record.content.clone(),
+        });
 
         tracing::info!(
             id = %record.id,
@@ -457,6 +470,11 @@ impl ReasoningEngine {
             {
                 Ok(summary) => {
                     let _ = self.store.insert_session_summary(&summary).await;
+                    self.emit_event(ReasoningEvent::ObservationStreamed {
+                        session_id: session_id.to_string(),
+                        observation_type: "summary".to_string(),
+                        content: summary.summary.clone(),
+                    });
                 }
                 Err(e) => {
                     tracing::warn!("Failed to generate session summary: {}", e);

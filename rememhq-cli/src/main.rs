@@ -53,6 +53,9 @@ enum Commands {
         /// Override the remem binary path in generated configs
         #[arg(long, default_value = "remem")]
         binary: String,
+        /// Overwrite existing configuration files if present
+        #[arg(long, short)]
+        force: bool,
     },
     /// Store a memory
     Store {
@@ -286,7 +289,11 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        Commands::Init { consumer, binary } => {
+        Commands::Init {
+            consumer,
+            binary,
+            force,
+        } => {
             let consumers = match consumer {
                 AgentConsumer::All => vec![
                     AgentConsumer::ClaudeCode,
@@ -304,7 +311,7 @@ async fn main() -> anyhow::Result<()> {
             };
 
             for c in &consumers {
-                match generate_consumer_config(c, &cli.project, &binary) {
+                match generate_consumer_config(c, &cli.project, &binary, force) {
                     Ok(path) => println!("  ✓ {} → {}", c, path),
                     Err(e) => eprintln!("  ✗ {} — {}", c, e),
                 }
@@ -729,6 +736,7 @@ fn generate_consumer_config(
     consumer: &AgentConsumer,
     project: &str,
     binary: &str,
+    force: bool,
 ) -> anyhow::Result<String> {
     let (dir_path, file_name, content) = match consumer {
         AgentConsumer::ClaudeCode => (
@@ -917,8 +925,11 @@ fn generate_consumer_config(
     std::fs::create_dir_all(dir)?;
 
     let file_path = dir.join(file_name);
-    if file_path.exists() {
-        anyhow::bail!("Config already exists: {}", file_path.display());
+    if file_path.exists() && !force {
+        anyhow::bail!(
+            "Config already exists: {} (use --force to overwrite)",
+            file_path.display()
+        );
     }
 
     let json_str = serde_json::to_string_pretty(&content)?;

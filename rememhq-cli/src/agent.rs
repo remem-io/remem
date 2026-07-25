@@ -168,6 +168,30 @@ pub async fn run_agent(engine: ReasoningEngine, config: &RememConfig) -> anyhow:
     tokio::spawn(async move {
         while let Ok(event) = rx.recv().await {
             match event {
+                ReasoningEvent::AgentConnected {
+                    session_id,
+                    agent_name,
+                    agent_version,
+                } => {
+                    println!(
+                        "{}",
+                        format!(
+                            "  [Agent] {} v{} connected ({})",
+                            agent_name, agent_version, session_id
+                        )
+                        .green()
+                        .dimmed()
+                    );
+                }
+                ReasoningEvent::AgentDisconnected {
+                    session_id,
+                    agent_name,
+                } => {
+                    println!(
+                        "{}",
+                        format!("  [Agent] {} disconnected ({})", agent_name, session_id).dimmed()
+                    );
+                }
                 ReasoningEvent::ConsolidationStarted { session_id } => {
                     println!(
                         "{}",

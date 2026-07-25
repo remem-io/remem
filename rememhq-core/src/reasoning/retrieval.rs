@@ -159,8 +159,20 @@ SELECTED [number] | [brief reasoning why this is relevant]
 
 Select at most {limit} memories. Only select memories that are genuinely relevant to the query. Output nothing else."#
     );
-
-    let (response, _usage) = provider.complete(&prompt, model, options).await?;
+    let response = match provider.complete(&prompt, model, options).await {
+        Ok((resp, _usage)) => resp,
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "LLM provider completion failed during re-ranking, falling back to similarity ordering"
+            );
+            return Ok(candidates
+                .iter()
+                .take(limit)
+                .map(|(result, _)| result.clone())
+                .collect());
+        }
+    };
 
     // Parse the LLM response
     let mut results = Vec::new();

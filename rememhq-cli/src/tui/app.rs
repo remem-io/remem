@@ -20,6 +20,8 @@ pub struct TimestampedEvent {
 /// Classify a ReasoningEvent into a short type label for counters.
 pub fn event_type_label(event: &ReasoningEvent) -> &'static str {
     match event {
+        ReasoningEvent::AgentConnected { .. } => "conn",
+        ReasoningEvent::AgentDisconnected { .. } => "disc",
         ReasoningEvent::ConsolidationStarted { .. } => "start",
         ReasoningEvent::FactExtracted { .. } => "fact",
         ReasoningEvent::ContradictionDetected { .. } => "clash",

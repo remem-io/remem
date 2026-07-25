@@ -25,6 +25,10 @@ pub fn schema() -> Value {
                 "parent_id": {
                     "type": "string",
                     "description": "Optional ID of the parent observation to support session branching."
+                },
+                "tool_name": {
+                    "type": "string",
+                    "description": "Optional name of the executed tool when observation_type is 'tool_call'."
                 }
             },
             "required": ["session_id", "observation_type", "content"]
@@ -69,9 +73,26 @@ pub async fn handle(engine: &Arc<ReasoningEngine>, args: &Value) -> anyhow::Resu
             thought: content.to_string(),
         });
     } else if observation_type == "tool_call" {
+        let tool_name = args
+            .get("tool_name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                serde_json::from_str::<serde_json::Value>(content)
+                    .ok()
+                    .and_then(|v| {
+                        let name_val = v
+                            .get("tool_name")
+                            .or_else(|| v.get("tool"))
+                            .or_else(|| v.get("name"));
+                        name_val.and_then(|t| t.as_str()).map(|s| s.to_string())
+                    })
+            })
+            .unwrap_or_else(|| "tool_call".to_string());
+
         engine.emit_event(ReasoningEvent::ToolCall {
             session_id: session_id.to_string(),
-            tool_name: observation_type.to_string(),
+            tool_name,
             input_summary: content.to_string(),
         });
     } else {

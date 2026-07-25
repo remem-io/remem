@@ -647,6 +647,57 @@ impl MemoryStore for SqliteStore {
         })
     }
 
+    async fn list_by_session(&self, session_id: &str) -> anyhow::Result<Vec<MemoryRecord>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days
+             FROM memories WHERE archived = 0 AND source_session = ?1 ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map(params![session_id], |row| {
+            let tags_json: String = row.get(3)?;
+            let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
+            let mt_str: String = row.get(4)?;
+            let memory_type: MemoryType = mt_str.parse().unwrap_or(MemoryType::Observation);
+
+            let created_at_str: String = row.get(5)?;
+            let updated_at_str: String = row.get(6)?;
+
+            let created_at = DateTime::parse_from_rfc3339(&created_at_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+            let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+
+            let id_str: String = row.get(0)?;
+            let id = Uuid::parse_str(&id_str).unwrap_or_default();
+            let source_session: Option<String> = row.get(8)?;
+
+            Ok(MemoryRecord {
+                id,
+                content: row.get(1)?,
+                importance: row.get(2)?,
+                tags,
+                memory_type,
+                observation_kind: None,
+                created_at,
+                updated_at,
+                decay_score: row.get(7)?,
+                embedding: None,
+                source_session,
+                ttl_days: row.get(9)?,
+                store_id: None,
+                path: None,
+            })
+        })?;
+
+        let mut records = Vec::new();
+        for r in rows {
+            records.push(r?);
+        }
+        Ok(records)
+    }
+
     async fn archive(&self, id: Uuid) -> anyhow::Result<bool> {
         let conn = self.conn.lock().await;
         let rows = conn.execute(

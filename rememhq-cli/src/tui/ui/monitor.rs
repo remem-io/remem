@@ -266,6 +266,20 @@ fn draw_event_log(f: &mut Frame, app: &App, area: Rect) {
 /// Format a ReasoningEvent into (prefix, content, color) without emojis.
 fn format_event(event: &ReasoningEvent) -> (&'static str, String, Color) {
     match event {
+        ReasoningEvent::AgentConnected {
+            agent_name,
+            agent_version,
+            ..
+        } => (
+            "CONN ",
+            format!("{} v{} connected", agent_name, agent_version),
+            Color::Green,
+        ),
+        ReasoningEvent::AgentDisconnected { agent_name, .. } => (
+            "DISC ",
+            format!("{} disconnected", agent_name),
+            Color::DarkGray,
+        ),
         ReasoningEvent::ConsolidationStarted { session_id } => {
             ("START", format!("session {}", session_id), Color::Green)
         }

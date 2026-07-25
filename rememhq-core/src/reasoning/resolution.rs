@@ -94,11 +94,32 @@ impl<'a> EntityResolver for LlmEntityResolver<'a> {
         &self,
         updates: Vec<KnowledgeGraphUpdate>,
     ) -> Result<Vec<KnowledgeGraphUpdate>> {
-        let mut resolved_updates = Vec::new();
+        // Deduplicate unique entities across subjects and objects
+        let mut unique_entities = std::collections::HashSet::new();
+        for update in &updates {
+            unique_entities.insert(update.subject.clone());
+            unique_entities.insert(update.object.clone());
+        }
 
+        let entity_list: Vec<String> = unique_entities.into_iter().collect();
+        let futures: Vec<_> = entity_list.iter().map(|e| self.resolve_entity(e)).collect();
+
+        let resolved_results = futures_util::future::join_all(futures).await;
+        let mut resolved_map = std::collections::HashMap::new();
+
+        for (orig, res) in entity_list.into_iter().zip(resolved_results) {
+            let resolved_name = res?;
+            resolved_map.insert(orig, resolved_name);
+        }
+
+        let mut resolved_updates = Vec::new();
         for mut update in updates {
-            update.subject = self.resolve_entity(&update.subject).await?;
-            update.object = self.resolve_entity(&update.object).await?;
+            if let Some(sub) = resolved_map.get(&update.subject) {
+                update.subject = sub.clone();
+            }
+            if let Some(obj) = resolved_map.get(&update.object) {
+                update.object = obj.clone();
+            }
             resolved_updates.push(update);
         }
 

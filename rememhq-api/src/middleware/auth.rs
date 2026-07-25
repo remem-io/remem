@@ -66,6 +66,33 @@ pub fn extract_provider_options(headers: &HeaderMap) -> Option<ProviderOptions> 
     None
 }
 
+/// Extract client identity (name, version) from HTTP request headers.
+/// Checks `x-agent-name`, `x-client-name`, or falls back to `User-Agent`.
+#[allow(dead_code)]
+pub fn extract_client_identity(headers: &HeaderMap) -> (String, String) {
+    let name = headers
+        .get("x-agent-name")
+        .or_else(|| headers.get("x-client-name"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            headers
+                .get("user-agent")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "REST Client".to_string());
+
+    let version = headers
+        .get("x-agent-version")
+        .or_else(|| headers.get("x-client-version"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("1.0.0")
+        .to_string();
+
+    (name, version)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;

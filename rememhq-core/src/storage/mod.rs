@@ -63,6 +63,15 @@ pub trait MemoryStore: Send + Sync {
         limit: usize,
     ) -> anyhow::Result<Vec<MemoryRecord>>;
 
+    /// List all memories associated with a specific session ID.
+    async fn list_by_session(&self, session_id: &str) -> anyhow::Result<Vec<MemoryRecord>> {
+        let memories = self.list(&[], None, None, 10000).await?;
+        Ok(memories
+            .into_iter()
+            .filter(|m| m.source_session.as_deref() == Some(session_id))
+            .collect())
+    }
+
     /// Get database statistics.
     async fn stats(&self) -> anyhow::Result<StoreStats>;
 

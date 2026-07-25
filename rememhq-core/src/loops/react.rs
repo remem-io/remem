@@ -47,10 +47,8 @@ impl AgentLoop for ReActLoop {
         for _ in 0..self.max_iterations {
             let response = self
                 .harness
-                .provider
-                .chat(
+                .chat_with_retry(
                     &self.messages,
-                    &self.harness.tools,
                     &self.engine.config.reasoning.reasoning_model,
                     None,
                 )

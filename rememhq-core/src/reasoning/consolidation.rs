@@ -36,12 +36,7 @@ pub async fn consolidate_session(
     options: Option<&ProviderOptions>,
 ) -> anyhow::Result<ConsolidationReport> {
     // Get all memories from this session
-    let session_memories = store
-        .list(&[], None, None, 1000)
-        .await?
-        .into_iter()
-        .filter(|m| m.source_session.as_deref() == Some(session_id))
-        .collect::<Vec<_>>();
+    let session_memories = store.list_by_session(session_id).await?;
 
     if session_memories.is_empty() {
         return Ok(ConsolidationReport {
@@ -101,7 +96,7 @@ pub async fn consolidate_session(
     let mut updates = Vec::new();
     let mut archives = Vec::new();
     let mut triples = Vec::new();
-    let mut index_adds = Vec::new();
+    let mut index_adds: Vec<(uuid::Uuid, Vec<f32>)> = Vec::new();
 
     // Auto-resolve contradictions by preparing archives
     for c in &contradictions {
@@ -118,14 +113,19 @@ pub async fn consolidate_session(
     let mut updated_count = 0;
     let mut kg_updates = Vec::new();
 
-    for fact in &facts {
+    // Generate embeddings concurrently for all extracted facts
+    let embed_futures: Vec<_> = facts
+        .iter()
+        .map(|f| embeddings.embed(&f.content, options))
+        .collect();
+    let embedding_results = futures_util::future::join_all(embed_futures).await;
+
+    for (fact, embedding_res) in facts.iter().zip(embedding_results) {
+        let embedding = embedding_res?;
         let mut record = MemoryRecord::new(&fact.content, fact.memory_type)
             .with_importance(fact.importance)
             .with_tags(fact.tags.clone())
             .with_session(session_id);
-
-        // Generate embedding
-        let embedding = embeddings.embed(&record.content, options).await?;
         record.embedding = Some(embedding.clone());
 
         // Check if this fact updates an existing memory

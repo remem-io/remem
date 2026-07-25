@@ -166,7 +166,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     tokio::select! {
-        res = transport::stdio::run_stdio_loop(|line| {
+        res = transport::stdio::run_stdio_loop(move |line| {
             let engine = engine.clone();
             async move {
                 let response = match serde_json::from_str::<JsonRpcRequest>(&line) {
@@ -203,6 +203,34 @@ async fn handle_request(
     match request.method.as_str() {
         // MCP protocol methods
         "initialize" => {
+            let client_name = request
+                .params
+                .get("clientInfo")
+                .and_then(|info| info.get("name"))
+                .and_then(|n| n.as_str())
+                .unwrap_or("Unknown Agent")
+                .to_string();
+
+            let client_version = request
+                .params
+                .get("clientInfo")
+                .and_then(|info| info.get("version"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("0.0.0")
+                .to_string();
+
+            tracing::info!(
+                agent_name = %client_name,
+                agent_version = %client_version,
+                "Client connected via MCP initialize"
+            );
+
+            engine.emit_event(rememhq_core::reasoning::ReasoningEvent::AgentConnected {
+                session_id: "mcp-session".to_string(),
+                agent_name: client_name,
+                agent_version: client_version,
+            });
+
             let result = serde_json::json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
