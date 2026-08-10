@@ -29,4 +29,5 @@ utoipa = { workspace = true }
 utoipa-axum = { workspace = true }
 validator = { version = "0.20.0", features = ["derive"] }
 base64 = "0.23"
-
+hmac = "0.12"
+sha2 = "0.10"

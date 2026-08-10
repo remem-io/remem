@@ -38,7 +38,7 @@ impl<'a> ContextBuilder<'a> {
 
     /// Very rough heuristic: 4 chars per token for English text
     fn estimate_tokens(text: &str) -> usize {
-        text.len() / 4
+        super::fragment::estimate_tokens(text)
     }
 
     pub async fn build(&self) -> anyhow::Result<ContextDocument> {
