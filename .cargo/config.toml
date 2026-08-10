@@ -1,0 +1,49 @@
+# .cargo/config.toml — Workspace-level Cargo configuration
+#
+# This file applies to all crates in the workspace. Settings here are
+# overridden by environment variables and CLI flags.
+
+# ---------------------------------------------------------------------------
+# Build settings
+# ---------------------------------------------------------------------------
+
+[build]
+# Use all available CPU cores for compilation
+jobs = 0
+
+# ---------------------------------------------------------------------------
+# Aliases — shortcuts for common multi-flag commands
+# ---------------------------------------------------------------------------
+
+[alias]
+# Quick workspace check (no codegen, fastest feedback)
+c = "check --workspace --all-targets"
+# Run all workspace tests
+t = "test --workspace"
+# Format all code
+f = "fmt --all"
+# Clippy with CI-matching severity
+l = "clippy --workspace --all-targets -- -Dwarnings"
+
+# ---------------------------------------------------------------------------
+# Profile: dev — fast compile, slow run
+# ---------------------------------------------------------------------------
+
+[profile.dev]
+# Slightly higher optimisation for dependencies in dev builds.
+# This makes iterative dev builds a bit slower on first compile but
+# significantly faster at runtime (vector math, SQLite, etc.).
+[profile.dev.package."*"]
+opt-level = 2
+
+# ---------------------------------------------------------------------------
+# Profile: release — full optimisation
+# ---------------------------------------------------------------------------
+
+[profile.release]
+# Link-Time Optimisation for smaller, faster release binaries.
+lto = "thin"
+# Single codegen unit for better whole-program optimisation.
+codegen-units = 1
+# Strip debug symbols from release binaries to reduce size.
+strip = true

@@ -1,0 +1,19 @@
+# clippy.toml — Project-wide Clippy configuration
+#
+# These settings supplement the default clippy behaviour and are enforced
+# in CI via `cargo clippy --workspace --all-targets -- -Dwarnings`.
+
+# Warn on functions with many arguments (default is 7, we tighten to 6)
+too-many-arguments-threshold = 6
+
+# Warn on types with too many fields
+max-struct-bools = 3
+
+# Limit cognitive complexity of functions
+cognitive-complexity-threshold = 30
+
+# Large enum variant difference triggers a warning (default 200 bytes)
+enum-variant-size-threshold = 200
+
+# Warn on very large types on the stack
+trivial-copy-size-limit = 32
