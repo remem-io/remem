@@ -1,10 +1,10 @@
 //! Storage layer — SQLite persistence and vector index.
 
+pub mod event_log;
 pub mod sqlite;
 pub mod vector;
-pub mod event_log;
 
-pub use event_log::{EventLog, SessionEvent, EventKind, EventMetadata};
+pub use event_log::{EventKind, EventLog, EventMetadata, SessionEvent};
 
 use crate::memory::types::{
     KnowledgeGraphUpdate, MemoryRecord, MemoryStoreRecord, MemoryType, MemoryVersionRecord,

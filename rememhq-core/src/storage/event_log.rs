@@ -61,11 +61,7 @@ pub struct SessionEvent {
 
 impl SessionEvent {
     /// Create a new event with the current timestamp.
-    pub fn new(
-        kind: EventKind,
-        project: impl Into<String>,
-        summary: impl Into<String>,
-    ) -> Self {
+    pub fn new(kind: EventKind, project: impl Into<String>, summary: impl Into<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -181,10 +177,7 @@ impl EventLog {
             match serde_json::from_str::<SessionEvent>(&line) {
                 Ok(event) => events.push(event),
                 Err(e) => {
-                    tracing::warn!(
-                        "Skipping malformed event log line: {}",
-                        e
-                    );
+                    tracing::warn!("Skipping malformed event log line: {}", e);
                 }
             }
         }
@@ -202,7 +195,7 @@ impl EventLog {
         }
 
         let metadata = fs::metadata(&self.log_path)?;
-        
+
         // For small files, just read everything
         if metadata.len() < 65536 {
             let mut all = self.read_all()?;
@@ -213,27 +206,27 @@ impl EventLog {
         // For large files, read from the end
         use std::io::{Read, Seek, SeekFrom};
         let mut file = fs::File::open(&self.log_path)?;
-        
+
         // Read the last chunk (generous buffer to capture n events)
         let chunk_size = std::cmp::min(metadata.len(), (n as u64) * 4096);
         file.seek(SeekFrom::End(-(chunk_size as i64)))?;
-        
+
         let mut buffer = String::new();
         file.read_to_string(&mut buffer)?;
-        
+
         // Skip the first (potentially partial) line
         let buffer = if let Some(pos) = buffer.find('\n') {
             &buffer[pos + 1..]
         } else {
             &buffer
         };
-        
+
         let mut events: Vec<SessionEvent> = buffer
             .lines()
             .filter(|line| !line.trim().is_empty())
             .filter_map(|line| serde_json::from_str(line).ok())
             .collect();
-        
+
         let start = events.len().saturating_sub(n);
         Ok(events.split_off(start))
     }
@@ -266,12 +259,8 @@ mod tests {
 
     #[test]
     fn test_event_metadata_from() {
-        let event = SessionEvent::new(
-            EventKind::MemoryRecall,
-            "proj",
-            "Recalled memories",
-        )
-        .with_payload(serde_json::json!({"query": "test"}));
+        let event = SessionEvent::new(EventKind::MemoryRecall, "proj", "Recalled memories")
+            .with_payload(serde_json::json!({"query": "test"}));
 
         let meta = EventMetadata::from(&event);
         assert_eq!(meta.id, event.id);
@@ -312,11 +301,7 @@ mod tests {
         let log = EventLog::open(dir.path()).unwrap();
 
         for i in 0..10 {
-            let event = SessionEvent::new(
-                EventKind::MemoryStore,
-                "proj",
-                format!("Event {}", i),
-            );
+            let event = SessionEvent::new(EventKind::MemoryStore, "proj", format!("Event {}", i));
             log.append(&event).unwrap();
         }
 
@@ -350,6 +335,9 @@ mod tests {
     #[test]
     fn test_event_kind_display() {
         assert_eq!(EventKind::MemoryStore.to_string(), "memory_store");
-        assert_eq!(EventKind::SessionConsolidate.to_string(), "session_consolidate");
+        assert_eq!(
+            EventKind::SessionConsolidate.to_string(),
+            "session_consolidate"
+        );
     }
 }
