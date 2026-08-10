@@ -2,6 +2,9 @@
 
 pub mod sqlite;
 pub mod vector;
+pub mod event_log;
+
+pub use event_log::{EventLog, SessionEvent, EventKind, EventMetadata};
 
 use crate::memory::types::{
     KnowledgeGraphUpdate, MemoryRecord, MemoryStoreRecord, MemoryType, MemoryVersionRecord,
