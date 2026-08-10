@@ -46,7 +46,12 @@ pub struct TextFragment {
 }
 
 impl TextFragment {
-    pub fn new(label: impl Into<String>, content: impl Into<String>, max_tokens: usize, priority: u8) -> Self {
+    pub fn new(
+        label: impl Into<String>,
+        content: impl Into<String>,
+        max_tokens: usize,
+        priority: u8,
+    ) -> Self {
         Self {
             label: label.into(),
             content: content.into(),
@@ -76,7 +81,11 @@ impl ContextFragment for TextFragment {
             self.content.clone()
         } else {
             // Truncate at char boundary
-            let truncated: String = self.content.chars().take(max_chars.saturating_sub(4)).collect();
+            let truncated: String = self
+                .content
+                .chars()
+                .take(max_chars.saturating_sub(4))
+                .collect();
             format!("{}...", truncated)
         }
     }
@@ -165,7 +174,7 @@ mod tests {
     #[test]
     fn test_assemble_fragments_budget_exhaustion() {
         let mut fragments: Vec<Box<dyn ContextFragment>> = vec![
-            Box::new(TextFragment::new("First", "a".repeat(400), 200, 90)),  // 100 tokens
+            Box::new(TextFragment::new("First", "a".repeat(400), 200, 90)), // 100 tokens
             Box::new(TextFragment::new("Second", "b".repeat(400), 200, 50)), // 100 tokens
         ];
 
