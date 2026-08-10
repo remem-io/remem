@@ -6,6 +6,15 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Configuration keys that project-local `.remem/config.toml` files are
+/// forbidden from overriding. This prevents untrusted repositories from
+/// redirecting API traffic to rogue endpoints or tampering with auth.
+const PROJECT_LOCAL_DENYLIST: &[&str] = &[
+    "reasoning.provider",
+    "reasoning.local_model_path",
+    "storage.data_dir",
+];
+
 /// Top-level configuration for a remem instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RememConfig {
@@ -226,21 +235,61 @@ impl Mode {
 }
 
 impl RememConfig {
+    /// Merge project-local configuration, rejecting any denylisted keys.
+    ///
+    /// Project-local configs from `.remem/config.toml` in a repository are
+    /// potentially untrusted (any contributor can modify them). Sensitive
+    /// fields like provider selection and data directories are blocked to
+    /// prevent exfiltration attacks.
+    fn merge_project_config(&mut self, project_config: &RememConfig) {
+        // Only merge safe fields from project config
+        // memory.* fields are safe
+        self.memory.working_memory_tokens = project_config.memory.working_memory_tokens;
+        self.memory.importance_decay_interval_hours = project_config.memory.importance_decay_interval_hours;
+        self.memory.keep_raw_sessions = project_config.memory.keep_raw_sessions;
+        self.memory.transcript_watch_dir = project_config.memory.transcript_watch_dir.clone();
+        self.memory.mode = project_config.memory.mode;
+        
+        // server port and transport are safe
+        self.server.port = project_config.server.port;
+        self.server.transport = project_config.server.transport.clone();
+        
+        // storage.hnsw_* tuning params are safe
+        self.storage.hnsw_m = project_config.storage.hnsw_m;
+        self.storage.hnsw_ef_construction = project_config.storage.hnsw_ef_construction;
+        self.storage.hnsw_ef_search = project_config.storage.hnsw_ef_search;
+        
+        // BLOCKED: reasoning.provider, reasoning.local_model_path, storage.data_dir
+        // These are security-sensitive and only settable via user config or env vars
+        tracing::debug!("Project-local config applied (denylisted keys skipped)");
+    }
+
     /// Load config from `.remem/config.toml` in the given project directory,
     /// falling back to defaults and environment variables.
     pub fn load(project: &str, project_dir: Option<&std::path::Path>) -> anyhow::Result<Self> {
-        let mut config = if let Some(dir) = project_dir {
-            let config_path = dir.join(".remem").join("config.toml");
-            if config_path.exists() {
-                let raw = std::fs::read_to_string(&config_path)?;
-                toml::from_str::<RememConfig>(&raw)?
-            } else {
-                RememConfig::default()
+        // Start with defaults (includes env var overrides via serde defaults)
+        let mut config = RememConfig::default();
+        
+        // Layer 1: User-level config (~/.remem/config.toml) — fully trusted
+        let user_config_path = dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".remem")
+            .join("config.toml");
+        if user_config_path.exists() {
+            let raw = std::fs::read_to_string(&user_config_path)?;
+            config = toml::from_str::<RememConfig>(&raw)?;
+        }
+        
+        // Layer 2: Project-local config — restricted by denylist
+        if let Some(dir) = project_dir {
+            let project_config_path = dir.join(".remem").join("config.toml");
+            if project_config_path.exists() {
+                let raw = std::fs::read_to_string(&project_config_path)?;
+                let project_config = toml::from_str::<RememConfig>(&raw)?;
+                config.merge_project_config(&project_config);
             }
-        } else {
-            RememConfig::default()
-        };
-
+        }
+        
         config.project = project.to_string();
         Ok(config)
     }
@@ -356,5 +405,22 @@ mod tests {
         assert_eq!(config.reasoning.provider, "anthropic");
         assert_eq!(config.reasoning.reasoning_model, "claude-sonnet-4-5");
         assert_eq!(config.reasoning.scoring_model, "claude-haiku-4-5");
+    }
+
+    #[test]
+    fn test_project_config_denylist_blocks_provider() {
+        let mut base = RememConfig::default();
+        let mut project = RememConfig::default();
+        project.reasoning.provider = "evil-provider".into();
+        project.storage.data_dir = PathBuf::from("/tmp/evil");
+        project.memory.working_memory_tokens = 999;
+        
+        base.merge_project_config(&project);
+        
+        // Denylisted fields should NOT change
+        assert_eq!(base.reasoning.provider, "anthropic");
+        assert_ne!(base.storage.data_dir, PathBuf::from("/tmp/evil"));
+        // Safe fields SHOULD change
+        assert_eq!(base.memory.working_memory_tokens, 999);
     }
 }
