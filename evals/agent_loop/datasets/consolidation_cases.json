@@ -1,0 +1,10 @@
+[
+  {
+    "id": "contradiction_case_1",
+    "input": {
+      "context": "Previous fact: User's favorite color is blue.",
+      "new_fact": "User's favorite color is red."
+    },
+    "expected_behavior": "The agent must detect a contradiction and issue a 'replace' action for the old fact, keeping the new color red."
+  }
+]

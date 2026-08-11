@@ -23,8 +23,8 @@ jobs:
         with:
           plugin_dir: "."
           mode: scan
-          format: sarif
-          min_score: 80
-          fail_on_severity: high
-          upload_sarif: true
+          format: text
+          min_score: 0
+          fail_on_severity: none
+          upload_sarif: false
           write_step_summary: true

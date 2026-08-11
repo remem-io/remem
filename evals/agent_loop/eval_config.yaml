@@ -1,0 +1,12 @@
+metrics:
+  - name: contradiction_detected
+    type: custom
+    path: metrics/contradiction_detected.py
+
+datasets:
+  - path: datasets/consolidation_cases.json
+
+target:
+  name: remem-consolidation-agent
+  type: executable
+  path: ../../target/debug/rememhq-cli.exe
