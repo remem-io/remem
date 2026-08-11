@@ -6,8 +6,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-
-
 /// Top-level configuration for a remem instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RememConfig {
