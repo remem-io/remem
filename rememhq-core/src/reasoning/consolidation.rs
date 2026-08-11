@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 /// 3. **Contradiction Detection**: Facts are compared against the existing memory store using
 ///    a vector index to discover contradictions, resolving them in favor of newer information.
 /// 4. **Storage**: The consolidated facts are indexed and written to the persistent store.
+#[allow(clippy::too_many_arguments)]
 pub async fn consolidate_session(
     provider: &dyn Provider,
     embeddings: &dyn EmbeddingProvider,

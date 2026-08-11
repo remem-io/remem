@@ -216,6 +216,7 @@ impl ReasoningEngine {
     }
 
     /// Guided recall: HNSW search → LLM re-ranking → top-k with reasoning.
+    #[allow(clippy::too_many_arguments)]
     pub async fn recall(
         &self,
         query: &str,

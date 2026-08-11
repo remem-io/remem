@@ -102,7 +102,7 @@ pub fn assemble_fragments(
     total_budget: usize,
 ) -> String {
     // Sort by priority descending
-    fragments.sort_by(|a, b| b.priority().cmp(&a.priority()));
+    fragments.sort_by_key(|b| std::cmp::Reverse(b.priority()));
 
     let mut parts = Vec::new();
     let mut remaining = total_budget;

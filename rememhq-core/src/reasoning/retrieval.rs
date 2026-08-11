@@ -22,6 +22,7 @@ pub struct RetrievalParams<'a> {
 }
 
 /// Perform guided retrieval: vector search → LLM re-ranking → reasoning traces.
+#[allow(clippy::too_many_arguments)]
 pub async fn guided_retrieval(
     provider: &dyn Provider,
     embeddings: &dyn EmbeddingProvider,

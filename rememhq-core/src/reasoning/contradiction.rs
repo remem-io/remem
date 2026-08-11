@@ -5,6 +5,7 @@ use crate::storage::MemoryStore;
 
 /// Detect contradictions between new facts and existing memories.
 /// Uses the vector index to find potentially conflicting candidates first.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn detect_contradictions(
     provider: &dyn Provider,
     embeddings: &dyn EmbeddingProvider,

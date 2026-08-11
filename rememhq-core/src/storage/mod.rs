@@ -18,6 +18,7 @@ pub use async_trait::async_trait as storage_trait;
 
 /// Trait for memory persistence backends.
 #[async_trait]
+#[allow(clippy::too_many_arguments)]
 pub trait MemoryStore: Send + Sync {
     /// Insert a new memory record.
     async fn insert(&self, record: &MemoryRecord) -> anyhow::Result<()>;
@@ -109,6 +110,7 @@ pub trait MemoryStore: Send + Sync {
     }
 
     /// List memories with pagination and optional archived inclusion.
+    #[allow(clippy::too_many_arguments)]
     async fn list_paged(
         &self,
         filter_tags: &[String],
