@@ -172,7 +172,7 @@ pub fn draw_browser(f: &mut Frame, app: &App, area: Rect) {
     let table = Table::new(rows, widths)
         .header(header)
         .block(table_block)
-        .highlight_style(
+        .row_highlight_style(
             Style::default()
                 .add_modifier(Modifier::REVERSED)
                 .fg(Color::Cyan),
