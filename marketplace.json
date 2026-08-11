@@ -1,0 +1,10 @@
+{
+  "name": "remem",
+  "version": "0.2.0",
+  "description": "Reasoning memory layer for AI agents",
+  "author": "remem-io",
+  "category": "Community Plugins",
+  "repository": "https://github.com/remem-io/remem",
+  "license": "Apache-2.0",
+  "tags": ["memory", "agent", "database", "reasoning"]
+}
