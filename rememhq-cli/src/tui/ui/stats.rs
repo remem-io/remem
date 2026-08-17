@@ -20,7 +20,7 @@ pub fn draw_stats(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let block = Block::default()
-        .borders(Borders::ALL)
+        .borders(Borders::TOP)
         .title(" Stats Dashboard ")
         .border_style(border_style);
 
@@ -85,7 +85,7 @@ pub fn draw_stats(f: &mut Frame, app: &App, area: Rect) {
     let gauge = Gauge::default()
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::TOP)
                 .title(" Avg Importance ")
                 .border_style(Style::default().fg(Color::DarkGray)),
         )
@@ -119,7 +119,7 @@ pub fn draw_stats(f: &mut Frame, app: &App, area: Rect) {
     let bar_chart = BarChart::default()
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::TOP)
                 .title(" By Type ")
                 .border_style(Style::default().fg(Color::DarkGray)),
         )

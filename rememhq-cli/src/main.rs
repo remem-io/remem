@@ -109,7 +109,11 @@ enum Commands {
     /// Interactive REPL mode
     Repl,
     /// Terminal UI for browsing and inspecting memory
-    Tui,
+    Tui {
+        /// Launch alongside an agent consumer in a split terminal pane
+        #[arg(long)]
+        companion: Option<String>,
+    },
     /// AI Companion Terminal
     Agent,
     /// Bulk import memories from a JSONL file
@@ -145,6 +149,16 @@ enum Commands {
     },
     /// Forget a memory by ID
     Forget { id: String },
+    /// Execute Graph workflows
+    Graph {
+        #[command(subcommand)]
+        action: GraphAction,
+    },
+    /// Interact directly with the Agent Harness
+    Harness {
+        #[command(subcommand)]
+        action: HarnessAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -166,6 +180,30 @@ enum LoopAction {
         task: String,
         #[arg(long, default_value = "5")]
         max_iterations: usize,
+    },
+}
+
+#[derive(Subcommand)]
+enum GraphAction {
+    /// Run the CI Triage graph
+    Triage {
+        /// Raw CI log content
+        log_content: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum HarnessAction {
+    /// Send a chat prompt via the Agent Harness
+    Chat {
+        /// System prompt
+        #[arg(long, default_value = "You are a helpful assistant.")]
+        system: String,
+        /// User prompt
+        prompt: String,
+        /// Maximum retry limit for constraint validation
+        #[arg(long, default_value = "3")]
+        retries: usize,
     },
 }
 
@@ -323,6 +361,20 @@ async fn main() -> anyhow::Result<()> {
 
             println!("\nDone! Start the MCP server with:");
             println!("  {} mcp --project {}", binary, cli.project);
+
+            if consumers
+                .iter()
+                .any(|c| matches!(c, AgentConsumer::AntigravityCli))
+            {
+                println!("\nTip for Antigravity CLI users:");
+                println!("  To enable automatic memory extraction from antigravity-cli transcripts (Endless Mode),");
+                println!("  add the following to your .remem/config.toml:");
+                println!("  [memory]");
+                println!("  transcript_watch_dir = \"<appDataDir>/brain\"");
+                println!(
+                    "  (Replace <appDataDir> with your actual Antigravity CLI data directory)"
+                );
+            }
             Ok(())
         }
 
@@ -620,12 +672,100 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
 
+        Commands::Graph { action } => match action {
+            GraphAction::Triage { log_content } => {
+                let engine = build_engine(&config).await?;
+
+                println!("Running CI Triage Graph...");
+                let result = rememhq_core::reasoning::triage::run_triage_graph(
+                    engine.provider.clone(),
+                    &config.reasoning.reasoning_model,
+                    log_content,
+                )
+                .await?;
+
+                println!("Triage Result:\n");
+                println!("Failure Type: {:?}", result.failure_type);
+                println!("Fix Attempt:\n{:?}", result.fix_attempt);
+                if result.escalation_reason.is_some() {
+                    println!(
+                        "\n[ESCALATION REQUIRED] Human intervention needed: {:?}",
+                        result.escalation_reason
+                    );
+                }
+
+                Ok(())
+            }
+        },
+
+        Commands::Harness { action } => match action {
+            HarnessAction::Chat {
+                system,
+                prompt,
+                retries,
+            } => {
+                let engine = build_engine(&config).await?;
+                let mut harness = rememhq_core::harness::AgentHarness::new(engine.provider.clone());
+                harness = harness.with_retries(retries);
+
+                let messages = vec![
+                    rememhq_core::providers::ChatMessage::system(system),
+                    rememhq_core::providers::ChatMessage::user(prompt),
+                ];
+
+                println!("Sending to Agent Harness (retries={})...", retries);
+                let response = harness
+                    .chat_with_retry(&messages, &config.reasoning.reasoning_model, None)
+                    .await?;
+
+                println!("Response:\n{}", response.message.content);
+                Ok(())
+            }
+        },
+
         Commands::Repl => {
             let engine = build_engine(&config).await?;
             run_repl(engine, &config).await
         }
 
-        Commands::Tui => {
+        Commands::Tui { companion } => {
+            if let Some(cmd) = companion {
+                let exe = std::env::current_exe()
+                    .unwrap_or_else(|_| "remem".into())
+                    .display()
+                    .to_string();
+
+                if cfg!(target_os = "windows") {
+                    println!("Launching TUI and '{}' in Windows Terminal...", cmd);
+                    std::process::Command::new("wt")
+                        .arg("-d")
+                        .arg(".")
+                        .arg("cmd")
+                        .arg("/c")
+                        .arg(format!("{} tui", exe))
+                        .arg(";")
+                        .arg("split-pane")
+                        .arg("-d")
+                        .arg(".")
+                        .arg("cmd")
+                        .arg("/k")
+                        .arg(cmd)
+                        .spawn()?;
+                    return Ok(());
+                } else {
+                    println!("Launching TUI and '{}' in tmux...", cmd);
+                    std::process::Command::new("tmux")
+                        .arg("new-session")
+                        .arg(format!("{} tui", exe))
+                        .arg("\\;")
+                        .arg("split-window")
+                        .arg("-h")
+                        .arg(cmd)
+                        .spawn()?;
+                    return Ok(());
+                }
+            }
+
             let engine = build_engine(&config).await?;
             tui::run_tui(engine, &config).await
         }

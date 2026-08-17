@@ -82,7 +82,7 @@ pub fn draw_version_history(f: &mut Frame, app: &App, area: Rect) {
 
     let list_widget = List::new(items).block(
         Block::default()
-            .borders(Borders::ALL)
+            .borders(Borders::TOP)
             .title(list_title)
             .border_style(Style::default().fg(Color::Cyan)),
     );
@@ -130,7 +130,7 @@ pub fn draw_version_history(f: &mut Frame, app: &App, area: Rect) {
     let detail_widget = Paragraph::new(detail_text)
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::TOP)
                 .title(" Revision Snapshot Details ")
                 .border_style(Style::default().fg(Color::DarkGray)),
         )

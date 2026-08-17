@@ -10,6 +10,7 @@ mod update;
 
 mod build_context;
 mod create_store;
+mod harness_chat;
 mod list_memories;
 mod list_sessions;
 mod log_action;
@@ -17,6 +18,7 @@ mod project_context;
 mod set_mode;
 mod smart_read;
 mod stats;
+mod triage;
 
 use rememhq_core::reasoning::ReasoningEngine;
 use serde_json::Value;
@@ -73,6 +75,8 @@ pub fn list_tools() -> Vec<Value> {
         build_context::schema(),
         smart_read::schema(),
         set_mode::schema(),
+        harness_chat::schema(),
+        triage::schema(),
     ]
 }
 
@@ -108,6 +112,8 @@ pub async fn call_tool(engine: &Arc<ReasoningEngine>, params: &Value) -> anyhow:
         "mem_list_sessions" => list_sessions::handle(engine, &arguments).await,
         "mem_stats" => stats::handle(engine, &arguments).await,
         "mem_create_store" => create_store::handle(engine, &arguments).await,
+        "mem_harness_chat" => harness_chat::handle(engine, &arguments).await,
+        "mem_run_triage_graph" => triage::handle(engine, &arguments).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }

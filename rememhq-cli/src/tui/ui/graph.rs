@@ -65,7 +65,7 @@ pub fn draw_graph_browser(f: &mut Frame, app: &App, area: Rect) {
 
     let list_widget = List::new(items).block(
         Block::default()
-            .borders(Borders::ALL)
+            .borders(Borders::TOP)
             .title(list_title)
             .border_style(Style::default().fg(Color::Green)),
     );
@@ -129,7 +129,7 @@ pub fn draw_graph_browser(f: &mut Frame, app: &App, area: Rect) {
     let detail_widget = Paragraph::new(detail_text)
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::TOP)
                 .title(" Relationship Inspector ")
                 .border_style(Style::default().fg(Color::DarkGray)),
         )

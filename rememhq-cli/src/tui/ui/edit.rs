@@ -23,6 +23,7 @@ pub fn draw_edit_modal(f: &mut Frame, app: &App, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .title(Span::styled(
             title,
             Style::default()
@@ -49,6 +50,7 @@ pub fn draw_edit_modal(f: &mut Frame, app: &App, area: Rect) {
     let is_field0 = app.edit_focus_field == 0;
     let field0_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .title(" [1] Memory Content ")
         .border_style(if is_field0 {
             Style::default()
@@ -67,6 +69,7 @@ pub fn draw_edit_modal(f: &mut Frame, app: &App, area: Rect) {
     let is_field1 = app.edit_focus_field == 1;
     let field1_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .title(" [2] Memory Type (press Space/t to cycle) ")
         .border_style(if is_field1 {
             Style::default()
@@ -89,6 +92,7 @@ pub fn draw_edit_modal(f: &mut Frame, app: &App, area: Rect) {
     let is_field2 = app.edit_focus_field == 2;
     let field2_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .title(" [3] Importance (1.0 to 10.0) ")
         .border_style(if is_field2 {
             Style::default()
@@ -105,6 +109,7 @@ pub fn draw_edit_modal(f: &mut Frame, app: &App, area: Rect) {
     let is_field3 = app.edit_focus_field == 3;
     let field3_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .title(" [4] Tags (comma-separated) ")
         .border_style(if is_field3 {
             Style::default()

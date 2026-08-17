@@ -23,7 +23,7 @@ pub fn draw_monitor(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let outer_block = Block::default()
-        .borders(Borders::ALL)
+        .borders(Borders::TOP)
         .border_style(border_style);
 
     let inner = outer_block.inner(area);
@@ -107,8 +107,9 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 
     // Per-type counter line
     let type_order = [
-        "start", "fact", "clash", "graph", "done", "think", "tool", "obs", "recall",
+        "START", "FACT", "CLASH", "GRAPH", "DONE", "THINK", "TOOL", "OBS", "RECALL",
     ];
+    let icon_order = ["⟳", "✧", "⚠", "⛁", "✓", "⚡", "⚙", "👁", "⌕"];
     let type_colors = [
         Color::Green,
         Color::White,
@@ -122,11 +123,15 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     ];
 
     let mut counter_spans: Vec<Span> = vec![Span::raw(" ")];
-    for (label, color) in type_order.iter().zip(type_colors.iter()) {
-        let count = app.monitor_type_counts.get(*label).copied().unwrap_or(0);
+    for (i, (label, color)) in type_order.iter().zip(type_colors.iter()).enumerate() {
+        let count = app
+            .monitor_type_counts
+            .get(label.to_lowercase().as_str())
+            .copied()
+            .unwrap_or(0);
         if count > 0 {
             counter_spans.push(Span::styled(
-                format!("{}:{} ", label, count),
+                format!("{} {}:{} ", icon_order[i], label, count),
                 Style::default().fg(*color),
             ));
         }
@@ -201,7 +206,7 @@ fn draw_sparkline(f: &mut Frame, app: &App, area: Rect) {
     let sparkline = Sparkline::default()
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::TOP)
                 .title(" Throughput (events/tick) ")
                 .border_style(Style::default().fg(Color::DarkGray)),
         )
@@ -256,7 +261,7 @@ fn draw_event_log(f: &mut Frame, app: &App, area: Rect) {
 
     let list = List::new(items).block(
         Block::default()
-            .borders(Borders::ALL)
+            .borders(Borders::TOP)
             .title(title)
             .border_style(Style::default().fg(Color::DarkGray)),
     );
@@ -271,24 +276,24 @@ fn format_event(event: &ReasoningEvent) -> (&'static str, String, Color) {
             agent_version,
             ..
         } => (
-            "CONN ",
+            "▶ CONN  ",
             format!("{} v{} connected", agent_name, agent_version),
             Color::Green,
         ),
         ReasoningEvent::AgentDisconnected { agent_name, .. } => (
-            "DISC ",
+            "⏸ DISC  ",
             format!("{} disconnected", agent_name),
             Color::DarkGray,
         ),
         ReasoningEvent::ConsolidationStarted { session_id } => {
-            ("START", format!("session {}", session_id), Color::Green)
+            ("⟳ START ", format!("session {}", session_id), Color::Green)
         }
-        ReasoningEvent::FactExtracted { content } => ("FACT ", content.clone(), Color::White),
+        ReasoningEvent::FactExtracted { content } => ("✧ FACT  ", content.clone(), Color::White),
         ReasoningEvent::ContradictionDetected {
             existing_id,
             new_content,
         } => (
-            "CLASH",
+            "⚠ CLASH ",
             format!("{} -> {}", &existing_id.to_string()[..8], new_content),
             Color::Yellow,
         ),
@@ -297,7 +302,7 @@ fn format_event(event: &ReasoningEvent) -> (&'static str, String, Color) {
             predicate,
             object,
         } => (
-            "GRAPH",
+            "⛁ GRAPH ",
             format!("{} -{}-> {}", subject, predicate, object),
             Color::Cyan,
         ),
@@ -305,20 +310,20 @@ fn format_event(event: &ReasoningEvent) -> (&'static str, String, Color) {
             session_id: _,
             new_facts,
         } => (
-            "DONE ",
+            "✓ DONE  ",
             format!("{} new facts extracted", new_facts),
             Color::Green,
         ),
         ReasoningEvent::ThinkingDelta {
             session_id: _,
             thought,
-        } => ("THINK", thought.clone(), Color::LightMagenta),
+        } => ("⚡ REASON", thought.clone(), Color::LightMagenta),
         ReasoningEvent::ToolCall {
             session_id: _,
             tool_name,
             input_summary,
         } => (
-            "TOOL ",
+            "⚙ TOOL  ",
             format!("{}({})", tool_name, input_summary),
             Color::LightCyan,
         ),
@@ -327,7 +332,7 @@ fn format_event(event: &ReasoningEvent) -> (&'static str, String, Color) {
             observation_type,
             content,
         } => (
-            "OBS  ",
+            "👁 OBS   ",
             format!("[{}] {}", observation_type, content),
             Color::Blue,
         ),
@@ -336,7 +341,7 @@ fn format_event(event: &ReasoningEvent) -> (&'static str, String, Color) {
             query,
             count,
         } => (
-            "RECALL",
+            "⌕ RECALL",
             format!("'{}' -> {} results", query, count),
             Color::Yellow,
         ),

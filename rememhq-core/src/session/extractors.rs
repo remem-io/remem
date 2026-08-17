@@ -28,12 +28,32 @@ impl TranscriptExtractor {
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown");
 
-                // Convert whole json object as content if no "content" field is present
-                let content = value
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| value.to_string());
+                let mut content = String::new();
+
+                // Handle antigravity-cli specific format
+                if let Some(_ag_type) = value.get("type").and_then(|v| v.as_str()) {
+                    if let Some(c) = value.get("content").and_then(|v| v.as_str()) {
+                        content.push_str(c);
+                    }
+                    if let Some(tool_calls) = value.get("tool_calls").and_then(|v| v.as_array()) {
+                        if !tool_calls.is_empty() {
+                            content.push_str("\nTool Calls:\n");
+                            for t in tool_calls {
+                                let tool = t.as_str().unwrap_or("unknown");
+                                content.push_str(&format!("- {}\n", tool));
+                            }
+                        }
+                    }
+                }
+
+                if content.is_empty() {
+                    // Convert whole json object as content if no "content" field is present
+                    content = value
+                        .get("content")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| value.to_string());
+                }
 
                 let obs = SessionObservation::new(
                     session_id, obs_type, content, None, // parent_id

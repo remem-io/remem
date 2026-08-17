@@ -114,10 +114,34 @@ async fn main() -> anyhow::Result<()> {
 
         tokio::spawn(async move {
             while let Some(path) = rx.recv().await {
-                // Determine session ID from filename (e.g. session_1234.jsonl)
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    let session_id = stem.to_string();
+                let mut session_id = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
 
+                // Special handling for antigravity-cli nested transcripts
+                if session_id == "transcript" || session_id == "transcript_full" {
+                    if let Some(logs_dir) = path.parent() {
+                        if logs_dir.file_name().and_then(|n| n.to_str()) == Some("logs") {
+                            if let Some(sys_gen) = logs_dir.parent() {
+                                if sys_gen.file_name().and_then(|n| n.to_str())
+                                    == Some(".system_generated")
+                                {
+                                    if let Some(conv_dir) = sys_gen.parent() {
+                                        if let Some(conv_id) =
+                                            conv_dir.file_name().and_then(|n| n.to_str())
+                                        {
+                                            session_id = conv_id.to_string();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if session_id != "unknown" {
                     tracing::info!("Extracting observations from {}", path.display());
                     match rememhq_core::session::extractors::TranscriptExtractor::extract_from_file(
                         &path,

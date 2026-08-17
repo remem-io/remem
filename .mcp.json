@@ -3,12 +3,21 @@
     "remem": {
       "type": "stdio",
       "command": "cargo",
-      "args": ["run", "-q", "-p", "rememhq-mcp"],
+      "args": [
+        "run",
+        "-q",
+        "-p",
+        "rememhq-mcp"
+      ],
       "env": {
         "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}",
         "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
       }
+    },
+    "gemini-api-docs-mcp": {
+      "type": "http",
+      "url": "https://gemini-api-docs-mcp.dev"
     }
   }
 }

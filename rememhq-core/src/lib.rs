@@ -5,6 +5,7 @@ extern crate libremem_sys;
 pub mod config;
 pub mod context;
 pub mod ffi;
+pub mod graph;
 pub mod harness;
 pub mod loops;
 pub mod memory;

@@ -63,7 +63,7 @@ pub fn draw_session_viewer(f: &mut Frame, app: &App, area: Rect) {
 
     let list_widget = List::new(items).block(
         Block::default()
-            .borders(Borders::ALL)
+            .borders(Borders::TOP)
             .title(list_title)
             .border_style(Style::default().fg(Color::Yellow)),
     );
@@ -125,7 +125,7 @@ pub fn draw_session_viewer(f: &mut Frame, app: &App, area: Rect) {
     let detail_widget = Paragraph::new(detail_text)
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::TOP)
                 .title(" Session Narrative & Inspection ")
                 .border_style(Style::default().fg(Color::DarkGray)),
         )

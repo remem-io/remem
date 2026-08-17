@@ -31,7 +31,7 @@ pub fn draw_context_usage(f: &mut Frame, app: &App, area: Rect) {
     let border_style = Style::default().fg(Color::Cyan);
 
     let block = Block::default()
-        .borders(Borders::ALL)
+        .borders(Borders::TOP)
         .title(" Memory Store Usage ")
         .border_style(border_style);
 

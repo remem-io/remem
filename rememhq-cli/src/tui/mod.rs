@@ -1067,7 +1067,26 @@ fn handle_event(
                 }
             }
             FetchResult::LiveEvent(event) => {
+                let needs_refresh = matches!(
+                    event,
+                    rememhq_core::reasoning::ReasoningEvent::FactExtracted { .. }
+                        | rememhq_core::reasoning::ReasoningEvent::ContradictionDetected { .. }
+                        | rememhq_core::reasoning::ReasoningEvent::KnowledgeTripleFound { .. }
+                        | rememhq_core::reasoning::ReasoningEvent::ConsolidationCompleted { .. }
+                );
                 app.push_event(event);
+                if needs_refresh {
+                    trigger_live_search(app, store, fetch_tx);
+                    if app.mode == Mode::GraphBrowser {
+                        data::spawn_graph_fetch(store.clone(), fetch_tx.clone());
+                    } else if app.mode == Mode::SessionViewer {
+                        data::spawn_sessions_fetch(
+                            store.clone(),
+                            fetch_tx.clone(),
+                            engine.config.project.clone(),
+                        );
+                    }
+                }
             }
         },
     }

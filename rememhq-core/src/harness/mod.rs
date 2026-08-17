@@ -10,6 +10,29 @@ pub trait ToolExecutor: Send + Sync {
     async fn execute(&self, tool_call: &ToolCall) -> anyhow::Result<String>;
 }
 
+pub trait Observer: Send + Sync {
+    /// Hook to observe messages (e.g. for telemetry, logging, or debugging).
+    fn observe(&self, message: &ChatMessage);
+}
+
+/// Defines what the harness is allowed to do.
+#[derive(Debug, Clone)]
+pub struct Permissions {
+    pub allowed_tools: Vec<String>,
+    pub allow_file_read: bool,
+    pub allow_file_write: bool,
+}
+
+impl Default for Permissions {
+    fn default() -> Self {
+        Self {
+            allowed_tools: Vec::new(),
+            allow_file_read: true,
+            allow_file_write: false,
+        }
+    }
+}
+
 /// Harness represents the scaffolding that constrains, validates, and operationalizes
 /// model behavior. It wraps the core Provider to provide structured outputs and tool execution bounds.
 pub struct AgentHarness {
@@ -17,6 +40,8 @@ pub struct AgentHarness {
     pub max_retries: usize,
     pub tools: Vec<Tool>,
     pub executor: Option<Arc<dyn ToolExecutor>>,
+    pub permissions: Permissions,
+    pub observer: Option<Arc<dyn Observer>>,
 }
 
 impl AgentHarness {
@@ -26,7 +51,19 @@ impl AgentHarness {
             max_retries: 3,
             tools: Vec::new(),
             executor: None,
+            permissions: Permissions::default(),
+            observer: None,
         }
+    }
+
+    pub fn with_permissions(mut self, permissions: Permissions) -> Self {
+        self.permissions = permissions;
+        self
+    }
+
+    pub fn with_observer(mut self, observer: Arc<dyn Observer>) -> Self {
+        self.observer = Some(observer);
+        self
     }
 
     pub fn with_retries(mut self, retries: usize) -> Self {
@@ -55,7 +92,12 @@ impl AgentHarness {
                 .chat(messages, &self.tools, model, options)
                 .await
             {
-                Ok(resp) => return Ok(resp),
+                Ok(resp) => {
+                    if let Some(obs) = &self.observer {
+                        obs.observe(&resp.message);
+                    }
+                    return Ok(resp);
+                }
                 Err(e) => {
                     let err_str = e.to_string();
                     let non_retryable = err_str.contains("400")

@@ -50,7 +50,7 @@ pub fn draw_browser(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let table_block = Block::default()
-        .borders(Borders::ALL)
+        .borders(Borders::TOP)
         .title(title)
         .border_style(border_style);
 
@@ -134,7 +134,7 @@ pub fn draw_browser(f: &mut Frame, app: &App, area: Rect) {
             } else if m.importance >= 5.0 {
                 Color::Yellow
             } else {
-                Color::White
+                Color::DarkGray
             };
 
             let decay_color = if m.decay_score < 0.3 {
@@ -145,13 +145,22 @@ pub fn draw_browser(f: &mut Frame, app: &App, area: Rect) {
                 Color::Green
             };
 
+            let make_bar = |val: f32, max_val: f32, width: usize| -> String {
+                let ratio = (val / max_val).clamp(0.0, 1.0);
+                let filled = (ratio * width as f32).round() as usize;
+                let empty = width.saturating_sub(filled);
+                format!("{}{}", "█".repeat(filled), "░".repeat(empty))
+            };
+
+            let imp_bar = make_bar(m.importance, 10.0, 5);
+            let decay_bar = make_bar(m.decay_score, 1.0, 5);
+
             Row::new(vec![
                 Cell::from(sel_mark).style(sel_style),
                 Cell::from(m.memory_type.to_string()).style(Style::default().fg(type_color)),
                 Cell::from(content_preview),
-                Cell::from(format!("{:.1}", m.importance))
-                    .style(Style::default().fg(importance_color)),
-                Cell::from(format!("{:.2}", m.decay_score)).style(Style::default().fg(decay_color)),
+                Cell::from(imp_bar).style(Style::default().fg(importance_color)),
+                Cell::from(decay_bar).style(Style::default().fg(decay_color)),
                 Cell::from(tags_str).style(Style::default().fg(Color::DarkGray)),
                 Cell::from(age).style(Style::default().fg(Color::DarkGray)),
             ])
@@ -220,7 +229,7 @@ pub fn draw_search_bar(f: &mut Frame, app: &App, area: Rect) {
 
     let line = Line::from(spans);
 
-    let block = Block::default().borders(Borders::ALL).border_style(style);
+    let block = Block::default().borders(Borders::TOP).border_style(style);
 
     let paragraph = ratatui::widgets::Paragraph::new(line).block(block);
     f.render_widget(paragraph, area);

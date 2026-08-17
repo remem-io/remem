@@ -86,6 +86,7 @@ pub fn draw_confirm_modal(f: &mut Frame, app: &App, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .title(Span::styled(
             title,
             Style::default()

@@ -43,7 +43,7 @@ pub fn draw_recall_bar(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let block = Block::default()
-        .borders(Borders::ALL)
+        .borders(Borders::TOP)
         .title(title_str)
         .border_style(style);
 

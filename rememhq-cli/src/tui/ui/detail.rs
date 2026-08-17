@@ -24,7 +24,7 @@ pub fn draw_detail(f: &mut Frame, app: &App, area: Rect) {
             .style(Style::default().fg(Color::DarkGray))
             .block(
                 Block::default()
-                    .borders(Borders::ALL)
+                    .borders(Borders::TOP)
                     .title(" Detail ")
                     .border_style(border_style),
             );
@@ -70,12 +70,43 @@ pub fn draw_detail(f: &mut Frame, app: &App, area: Rect) {
         ]));
     }
 
-    // Importance & Decay
+    // Importance & Decay Context Scoring
+    let make_bar = |val: f32, max_val: f32, width: usize| -> String {
+        let ratio = (val / max_val).clamp(0.0, 1.0);
+        let filled = (ratio * width as f32).round() as usize;
+        let empty = width.saturating_sub(filled);
+        format!("{}{}", "█".repeat(filled), "░".repeat(empty))
+    };
+
+    let imp_color = if memory.importance >= 8.0 {
+        Color::Red
+    } else if memory.importance >= 5.0 {
+        Color::Yellow
+    } else {
+        Color::DarkGray
+    };
+
+    let decay_color = if memory.decay_score < 0.3 {
+        Color::Red
+    } else if memory.decay_score < 0.7 {
+        Color::Yellow
+    } else {
+        Color::Green
+    };
+
     lines.push(Line::from(vec![
         Span::styled("Importance:  ", label_style),
-        Span::styled(format!("{:.1} / 10.0", memory.importance), value_style),
+        Span::styled(
+            format!("[{}]", make_bar(memory.importance, 10.0, 10)),
+            Style::default().fg(imp_color),
+        ),
+        Span::styled(format!(" {:.1}/10.0", memory.importance), value_style),
         Span::styled("    Decay: ", label_style),
-        Span::styled(format!("{:.3}", memory.decay_score), value_style),
+        Span::styled(
+            format!("[{}]", make_bar(memory.decay_score, 1.0, 10)),
+            Style::default().fg(decay_color),
+        ),
+        Span::styled(format!(" {:.3}", memory.decay_score), value_style),
     ]));
 
     // Tags
@@ -156,7 +187,7 @@ pub fn draw_detail(f: &mut Frame, app: &App, area: Rect) {
     let paragraph = Paragraph::new(lines)
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::TOP)
                 .title(title)
                 .border_style(border_style),
         )
