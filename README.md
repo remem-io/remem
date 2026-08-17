@@ -81,13 +81,6 @@ Traditional vector stores suffer from "confident recall of irrelevant context." 
 | **Contradictions** | — | **LLM Conflict Detection** between old and new facts |
 | **Decay** | Time-based (linear) | **Importance-Weighted Decay**; critical facts persist longer |
 
-## Agent Engineering Concepts
-
-To understand how `remem` fits into modern AI agent architectures, we recommend reading these foundational guides on designing production-grade agents:
-
-- **[Harness Engineering](docs/HARNESS_ENGINEERING.md)**: The seven layers around the model that make agent execution reliable (Tool Orchestration, Verification, Context & Memory, Guardrails, Observability, Routing, and Feedback).
-- **[Graph Engineering](docs/GRAPH_ENGINEERING.md)**: The architecture that replaces single-agent loops with specialized nodes, edges, and state to solve complex tasks.
-
 ## Installation
 
 ### 1. Download Pre-built Binary
@@ -249,7 +242,7 @@ remem repl
 remem tui
 
 # Launch TUI alongside an AI agent in a split-pane terminal (works with Windows Terminal, tmux, or iterm2)
-remem tui --companion agy
+remem tui --companion codex
 
 # Start the Remem AI terminal agent (uses native tool calling to run shell commands)
 # Ensure REMEM_PROVIDER is set to anthropic, openai, gemini, or local
