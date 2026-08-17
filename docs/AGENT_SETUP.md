@@ -41,7 +41,7 @@ remem init claude-code --project my-project
 remem init codex       --project my-project
 remem init cursor      --project my-project
 remem init copilot     --project my-project
-remem init antigravity-cli  --project my-project
+remem init agy        --project my-project
 remem init opencode    --project my-project
 
 # All consumers at once
