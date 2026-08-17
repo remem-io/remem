@@ -25,7 +25,7 @@ export REMEM_PROVIDER=openai
 
 ### Google (Gemini)
 
-**Reasoning model:** `gemini-2.0-flash` (reasoning + scoring)
+**Reasoning model:** `gemini-2.5-flash` (reasoning + scoring)
 **Embeddings:** `text-embedding-004` (768 dimensions)
 
 ```bash
@@ -67,7 +67,7 @@ either individually:
 | `REMEM_PROVIDER` | Default provider for all operations | `google` |
 | `REMEM_REASONING_PROVIDER` | Override reasoning provider only | `anthropic` |
 | `REMEM_EMBEDDING_PROVIDER` | Override embedding provider only | `openai` |
-| `REMEM_REASONING_MODEL` | Override reasoning model name | `gemini-1.5-pro` |
+| `REMEM_REASONING_MODEL` | Override reasoning model name | `gemini-2.5-pro` |
 | `REMEM_SCORING_MODEL` | Override scoring model name | `gemini-2.0-flash-lite` |
 
 ## Configuration via TOML
@@ -77,8 +77,8 @@ Providers can be configured in `.remem/config.toml` in your project directory:
 ```toml
 [reasoning]
 provider = "google"
-reasoning_model = "gemini-2.0-flash"
-scoring_model = "gemini-2.0-flash"
+reasoning_model = "gemini-2.5-flash"
+scoring_model = "gemini-2.5-flash"
 ```
 
 ## Adding a New Provider
