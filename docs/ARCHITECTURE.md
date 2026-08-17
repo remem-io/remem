@@ -8,26 +8,26 @@ remem is a reasoning memory layer for AI agents. Unlike simple vector stores, re
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Agent Consumers                     │
+│                  Agent Consumers                    │
 │  Claude Code · Cursor · Python agents · TS agents   │
 └──────────┬──────────────────┬───────────────────────┘
            │ MCP stdio        │ REST API / SDK
 ┌──────────▼──────────────────▼───────────────────────┐
-│              Interface Layer  (Rust)                 │
+│              Interface Layer  (Rust)                │
 │     rememhq-mcp (stdio) · rememhq-api (Axum REST)   │
 │     Python SDK (httpx)  · TypeScript SDK (fetch)    │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────┐
-│          Reasoning Engine  (rememhq-core)            │
+│          Reasoning Engine  (rememhq-core)           │
 │  Consolidation · Guided Retrieval · Contradiction   │
 │  Detection · Importance Scoring · Knowledge Graph   │
 └──────┬──────────────────────────┬───────────────────┘
        │                          │
 ┌──────▼──────┐          ┌────────▼────────────────────┐
-│ Cloud APIs  │          │  Storage Layer               │
-│ Anthropic   │          │  SQLite + WAL (metadata)     │
-│ OpenAI      │          │  Vector Index (cosine sim)   │
+│ Cloud APIs  │          │  Storage Layer              │
+│ Anthropic   │          │  SQLite + WAL (metadata)    │
+│ OpenAI      │          │  Vector Index (cosine sim)  │
 └─────────────┘          └─────────────────────────────┘
 ```
 
