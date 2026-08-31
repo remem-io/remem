@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.16] - 2026-08-31
 
 ### Added
 - **Provider Connection Pooling & Quota Metering**:
@@ -25,13 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `RemoteVectorClient` (`rememhq-core/src/storage/remote_vector.rs`) for distributed vector clusters (Qdrant, Milvus, Weaviate).
   - `QuantizedVector` (`rememhq-core/src/storage/quantization.rs`) for scalar FP32 -> INT8 vector quantization ($4\times$ memory reduction).
   - `DeadLetterQueue` (`rememhq-core/src/storage/event_log.rs`) for error isolation and asynchronous failure recovery.
-- **Telemetry & Developer Tooling**:
+- **Telemetry & Agent Consumer Tooling**:
   - `MemoryMetrics` (`rememhq-core/src/telemetry/mod.rs`) tracking rolling $P_{50}$, $P_{95}$, and $P_{99}$ latency percentiles.
   - `GET /v1/telemetry/metrics` and enhanced `/health` endpoints in `rememhq-api`.
+  - Added **Grok Build** (SpaceXAI / xAI terminal agent) support (`remem init grok-build`) alongside Claude Code, Codex, Cursor, Copilot, Antigravity CLI, OpenCode, Aider, Windsurf, RooCode, and Cline.
   - MCP `resources/list` and `resources/read` handlers for `memory://stats` and `memory://recent` URIs in `rememhq-mcp`.
   - CLI `remem benchmark` and `remem validate` subcommands in `rememhq-cli`.
   - Python SDK: Added `SyncMemory` synchronous client wrapper, `get_telemetry()`, and `get_health()`.
-  - TypeScript SDK: Added React hooks (`useMemory`, `useRecall`, `useStore`), `getTelemetry()`, `getHealth()`, and full type exports (`TelemetryResponse`, `MetricsSnapshot`, `CostSummary`, `CacheStats`).
+  - TypeScript SDK: Added `getTelemetry()`, `getHealth()`, and full type exports (`TelemetryResponse`, `MetricsSnapshot`, `CostSummary`, `CacheStats`).
 
 ### Added
 - **MCP Envelope Unification**: Standardized all 19 tools on spec-compliant `CallToolResult` text envelope (`{"content":[{"type":"text","text":"..."}]}`).
