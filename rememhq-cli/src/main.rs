@@ -228,6 +228,7 @@ enum AgentConsumer {
     Windsurf,
     RooCode,
     Cline,
+    GrokBuild,
     All,
 }
 
@@ -245,9 +246,10 @@ impl std::str::FromStr for AgentConsumer {
             "windsurf" => Ok(Self::Windsurf),
             "roocode" | "roo-code" => Ok(Self::RooCode),
             "cline" => Ok(Self::Cline),
+            "grok-build" | "grok" | "spacexai" | "spacex-ai" | "xai" => Ok(Self::GrokBuild),
             "all" => Ok(Self::All),
             _ => Err(format!(
-                "Unknown consumer '{}'. Valid options: claude-code, codex, cursor, copilot, antigravity-cli, opencode, aider, windsurf, roocode, cline, all",
+                "Unknown consumer '{}'. Valid options: claude-code, codex, cursor, copilot, antigravity-cli, opencode, aider, windsurf, roocode, cline, grok-build, all",
                 s
             )),
         }
@@ -267,6 +269,7 @@ impl std::fmt::Display for AgentConsumer {
             Self::Windsurf => write!(f, "windsurf"),
             Self::RooCode => write!(f, "roocode"),
             Self::Cline => write!(f, "cline"),
+            Self::GrokBuild => write!(f, "grok-build"),
             Self::All => write!(f, "all"),
         }
     }
@@ -356,6 +359,7 @@ async fn main() -> anyhow::Result<()> {
                     AgentConsumer::Windsurf,
                     AgentConsumer::RooCode,
                     AgentConsumer::Cline,
+                    AgentConsumer::GrokBuild,
                 ],
                 other => vec![other],
             };
@@ -1142,6 +1146,25 @@ fn generate_consumer_config(
                         "command": binary,
                         "args": ["mcp", "--project", project],
                         "env": {
+                            "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+                            "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"
+                        }
+                    }
+                }
+            }),
+        ),
+        AgentConsumer::GrokBuild => (
+            ".grok",
+            "config.json",
+            serde_json::json!({
+                "mcpServers": {
+                    "remem": {
+                        "type": "stdio",
+                        "command": binary,
+                        "args": ["mcp", "--project", project],
+                        "env": {
+                            "XAI_API_KEY": "${XAI_API_KEY}",
                             "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
                             "OPENAI_API_KEY": "${OPENAI_API_KEY}",
                             "GOOGLE_API_KEY": "${GOOGLE_API_KEY}"

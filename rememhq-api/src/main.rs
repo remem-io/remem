@@ -41,8 +41,7 @@ type HmacSha256 = Hmac<Sha256>;
 /// (or a hardcoded fallback for dev mode when no key is set).
 fn cursor_secret() -> Vec<u8> {
     std::env::var("REMEM_CURSOR_SECRET")
-        .or_else(|_| std::env::var("REMEM_API_KEY"))
-        .unwrap_or_else(|_| "remem-dev-cursor-key".to_string())
+        .unwrap_or_else(|_| "remem-dev-cursor-key-default".to_string())
         .into_bytes()
 }
 
