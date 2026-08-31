@@ -20,7 +20,7 @@ idna==3.18
     #   httpx
 pydantic==2.13.4
     # via rememhq (pyproject.toml)
-pydantic-core==2.46.4
+pydantic-core==2.48.0
     # via pydantic
 typing-extensions==4.16.0
     # via
