@@ -119,7 +119,12 @@ mod tests {
         assert_eq!(reconstructed.len(), original.len());
 
         for (orig, recon) in original.iter().zip(reconstructed.iter()) {
-            assert!((orig - recon).abs() < 0.02, "Error too large: orig={}, recon={}", orig, recon);
+            assert!(
+                (orig - recon).abs() < 0.02,
+                "Error too large: orig={}, recon={}",
+                orig,
+                recon
+            );
         }
 
         let sim = quantized.cosine_similarity(&quantized);

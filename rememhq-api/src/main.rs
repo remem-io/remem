@@ -993,14 +993,12 @@ async fn health(
     State(engine): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     match engine.store.stats().await {
-        Ok(_) => Ok(Json(
-            serde_json::json!({
-                "status": "ok",
-                "db": "connected",
-                "in_flight_requests": engine.pool.in_flight(),
-                "cache_entries": engine.cache.stats().total_entries
-            }),
-        )),
+        Ok(_) => Ok(Json(serde_json::json!({
+            "status": "ok",
+            "db": "connected",
+            "in_flight_requests": engine.pool.in_flight(),
+            "cache_entries": engine.cache.stats().total_entries
+        }))),
         Err(_) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(serde_json::json!({ "status": "error", "db": "disconnected" })),
@@ -1023,10 +1021,12 @@ pub struct TelemetryResponse {
         (status = 200, description = "Telemetry, performance metrics, and cost metering", body = TelemetryResponse)
     )
 )]
-async fn get_telemetry_metrics(
-    State(engine): State<AppState>,
-) -> Json<TelemetryResponse> {
-    let sessions_count = engine.list_sessions(1000).await.map(|s| s.len()).unwrap_or(0);
+async fn get_telemetry_metrics(State(engine): State<AppState>) -> Json<TelemetryResponse> {
+    let sessions_count = engine
+        .list_sessions(1000)
+        .await
+        .map(|s| s.len())
+        .unwrap_or(0);
     Json(TelemetryResponse {
         metrics: engine.metrics.snapshot(sessions_count),
         cost_meter: engine.pool.cost_tracker.summary(),

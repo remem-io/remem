@@ -1,7 +1,7 @@
 //! Pluggable storage backend abstraction with replica failover routing.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Supported storage backend engine types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,7 +76,9 @@ impl ReplicaManager {
         if self.is_primary_healthy() {
             Ok(&self.primary)
         } else {
-            anyhow::bail!("Cannot perform write: primary storage backend is unhealthy and in failover mode")
+            anyhow::bail!(
+                "Cannot perform write: primary storage backend is unhealthy and in failover mode"
+            )
         }
     }
 }

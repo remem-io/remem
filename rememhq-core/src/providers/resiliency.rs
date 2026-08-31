@@ -93,7 +93,10 @@ impl CircuitBreaker {
         }
         if failures == self.failure_threshold {
             self.total_trips.fetch_add(1, Ordering::Relaxed);
-            tracing::error!("Circuit breaker tripped to OPEN state after {} consecutive failures", failures);
+            tracing::error!(
+                "Circuit breaker tripped to OPEN state after {} consecutive failures",
+                failures
+            );
         }
     }
 
@@ -104,7 +107,11 @@ impl CircuitBreaker {
 }
 
 /// Calculate backoff duration with Decorrelated Full Jitter (AWS recommendation).
-pub fn calculate_jitter_delay(attempt: usize, base_delay: Duration, max_delay: Duration) -> Duration {
+pub fn calculate_jitter_delay(
+    attempt: usize,
+    base_delay: Duration,
+    max_delay: Duration,
+) -> Duration {
     let max_millis = (base_delay.as_millis() as u64)
         .saturating_mul(1u64.checked_shl(attempt.min(10) as u32).unwrap_or(u64::MAX));
     let capped_millis = max_millis.min(max_delay.as_millis() as u64).max(1);

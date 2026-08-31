@@ -462,7 +462,7 @@ impl MemoryStore for SqliteStore {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT subject, predicate, object FROM knowledge_graph 
-             WHERE subject = ?1 OR object = ?1",
+             WHERE LOWER(subject) = LOWER(?1) OR LOWER(object) = LOWER(?1)",
         )?;
 
         let triples = stmt

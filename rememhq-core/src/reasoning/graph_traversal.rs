@@ -131,7 +131,7 @@ impl<'a> GraphTraversalEngine<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::types::KnowledgeGraphUpdate;
+    use crate::memory::types::{KnowledgeGraphUpdate, MemoryRecord, MemoryType};
     use crate::storage::sqlite::SqliteStore;
     use uuid::Uuid;
 
@@ -139,6 +139,11 @@ mod tests {
     async fn test_bfs_path_traversal() {
         let store = SqliteStore::open_in_memory().unwrap();
         let mem_id = Uuid::new_v4();
+
+        let mut memory =
+            MemoryRecord::new("User prefers Rust created by Graydon", MemoryType::Fact);
+        memory.id = mem_id;
+        store.insert(&memory).await.unwrap();
 
         // user -> prefers -> rust
         store

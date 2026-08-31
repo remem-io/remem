@@ -41,7 +41,8 @@ impl CheckpointManager {
     }
 
     fn file_path(&self, session_id: &str) -> PathBuf {
-        self.checkpoint_dir.join(format!("{}.checkpoint.json", session_id))
+        self.checkpoint_dir
+            .join(format!("{}.checkpoint.json", session_id))
     }
 
     /// Save a consolidation job checkpoint to disk.
@@ -54,7 +55,10 @@ impl CheckpointManager {
     }
 
     /// Load an existing checkpoint if one exists for resumption.
-    pub fn load_checkpoint(&self, session_id: &str) -> std::io::Result<Option<ConsolidationCheckpoint>> {
+    pub fn load_checkpoint(
+        &self,
+        session_id: &str,
+    ) -> std::io::Result<Option<ConsolidationCheckpoint>> {
         let path = self.file_path(session_id);
         if !path.exists() {
             return Ok(None);
@@ -99,7 +103,10 @@ mod tests {
 
         mgr.save_checkpoint(&cp).unwrap();
 
-        let loaded = mgr.load_checkpoint("sess-1").unwrap().expect("checkpoint exists");
+        let loaded = mgr
+            .load_checkpoint("sess-1")
+            .unwrap()
+            .expect("checkpoint exists");
         assert_eq!(loaded.step_index, 2);
         assert_eq!(loaded.extracted_facts_count, 8);
         assert_eq!(loaded.status, CheckpointStatus::InProgress);

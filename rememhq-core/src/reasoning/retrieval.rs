@@ -70,10 +70,16 @@ pub fn expand_query(query: &str) -> Vec<String> {
         expansions.push(format!("{} preferences account settings identity", query));
     }
     if q_lower.contains("auth") || q_lower.contains("login") || q_lower.contains("token") {
-        expansions.push(format!("{} authentication authorization session credentials", query));
+        expansions.push(format!(
+            "{} authentication authorization session credentials",
+            query
+        ));
     }
     if q_lower.contains("database") || q_lower.contains("store") || q_lower.contains("db") {
-        expansions.push(format!("{} sqlite postgres persistence storage schema", query));
+        expansions.push(format!(
+            "{} sqlite postgres persistence storage schema",
+            query
+        ));
     }
 
     expansions

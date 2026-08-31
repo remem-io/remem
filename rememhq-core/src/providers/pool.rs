@@ -41,7 +41,8 @@ impl CostTracker {
         completion: usize,
     ) -> f64 {
         self.total_calls.fetch_add(1, Ordering::Relaxed);
-        self.prompt_tokens.fetch_add(prompt as u64, Ordering::Relaxed);
+        self.prompt_tokens
+            .fetch_add(prompt as u64, Ordering::Relaxed);
         self.completion_tokens
             .fetch_add(completion as u64, Ordering::Relaxed);
 
@@ -96,7 +97,7 @@ pub fn estimate_cost(model: &str, prompt_tokens: usize, completion_tokens: usize
         m if m.contains("gemini-1.5-pro") || m.contains("gemini-2.0-pro") => (1.25, 5.00),
         m if m.contains("gemini-1.5-flash") || m.contains("gemini-2.0-flash") => (0.075, 0.30),
         m if m.contains("text-embedding-004") => (0.00, 0.0), // Free tier / negligible
-        _ => (1.00, 3.00),                                   // Fallback baseline
+        _ => (1.00, 3.00),                                    // Fallback baseline
     };
 
     (prompt_tokens as f64 * prompt_rate_per_m / 1_000_000.0)

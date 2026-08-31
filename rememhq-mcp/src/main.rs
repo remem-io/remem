@@ -323,23 +323,33 @@ async fn handle_request(
         }
 
         "resources/read" => {
-            let uri = request.params.get("uri").and_then(|u| u.as_str()).unwrap_or("");
-            let content = match uri {
-                "memory://stats" => {
-                    let stats = engine.store.stats().await.unwrap_or(rememhq_core::storage::StoreStats {
-                        total_memories: 0,
-                        by_type: std::collections::HashMap::new(),
-                        avg_importance: 0.0,
-                        db_size_bytes: 0,
-                    });
-                    serde_json::to_string_pretty(&stats).unwrap_or_default()
-                }
-                "memory://recent" => {
-                    let recent = engine.list_memories(&[], None, None, 20).await.unwrap_or_default();
-                    serde_json::to_string_pretty(&recent).unwrap_or_default()
-                }
-                _ => format!("Resource not found: {}", uri),
-            };
+            let uri = request
+                .params
+                .get("uri")
+                .and_then(|u| u.as_str())
+                .unwrap_or("");
+            let content =
+                match uri {
+                    "memory://stats" => {
+                        let stats = engine.store.stats().await.unwrap_or(
+                            rememhq_core::storage::StoreStats {
+                                total_memories: 0,
+                                by_type: std::collections::HashMap::new(),
+                                avg_importance: 0.0,
+                                db_size_bytes: 0,
+                            },
+                        );
+                        serde_json::to_string_pretty(&stats).unwrap_or_default()
+                    }
+                    "memory://recent" => {
+                        let recent = engine
+                            .list_memories(&[], None, None, 20)
+                            .await
+                            .unwrap_or_default();
+                        serde_json::to_string_pretty(&recent).unwrap_or_default()
+                    }
+                    _ => format!("Resource not found: {}", uri),
+                };
             Some(JsonRpcResponse::success(
                 id,
                 serde_json::json!({

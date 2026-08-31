@@ -49,7 +49,12 @@ impl HierarchicalFact {
     }
 
     /// Attach a detailed sub-fact to this hierarchical node.
-    pub fn add_sub_fact(&mut self, content: impl Into<String>, detail_level: u8, citations: Vec<FactCitation>) {
+    pub fn add_sub_fact(
+        &mut self,
+        content: impl Into<String>,
+        detail_level: u8,
+        citations: Vec<FactCitation>,
+    ) {
         self.sub_facts.push(SubFact {
             id: Uuid::new_v4(),
             content: content.into(),
@@ -60,11 +65,17 @@ impl HierarchicalFact {
 
     /// Render a multi-level Markdown outline of this memory node.
     pub fn render_outline(&self) -> String {
-        let mut out = format!("- **{}** (importance: {:.1})\n", self.summary, self.importance);
+        let mut out = format!(
+            "- **{}** (importance: {:.1})\n",
+            self.summary, self.importance
+        );
         for sub in &self.sub_facts {
             out.push_str(&format!("  * {}\n", sub.content));
             for cite in &sub.citations {
-                out.push_str(&format!("    - [cite: {}] \"{}\"\n", cite.source_type, cite.snippet));
+                out.push_str(&format!(
+                    "    - [cite: {}] \"{}\"\n",
+                    cite.source_type, cite.snippet
+                ));
             }
         }
         out
@@ -77,7 +88,11 @@ mod tests {
 
     #[test]
     fn test_hierarchical_fact_outline() {
-        let mut fact = HierarchicalFact::new("User is building a Rust memory layer", MemoryType::Fact, 9.0);
+        let mut fact = HierarchicalFact::new(
+            "User is building a Rust memory layer",
+            MemoryType::Fact,
+            9.0,
+        );
         fact.add_sub_fact(
             "Uses HNSW for vector search and SQLite for relational triples",
             1,

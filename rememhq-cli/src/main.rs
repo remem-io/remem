@@ -883,9 +883,12 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Benchmark { iterations } => {
             let engine = build_engine(&config).await?;
-            println!("🚀 Starting remem performance benchmark ({} iterations)...", iterations);
+            println!(
+                "🚀 Starting remem performance benchmark ({} iterations)...",
+                iterations
+            );
             println!("Project: {}", cli.project);
-            
+
             let query = "agent memory consolidation and retrieval architecture";
             let mut recall_times = Vec::with_capacity(iterations);
 
@@ -902,8 +905,10 @@ async fn main() -> anyhow::Result<()> {
 
             recall_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
             let p50 = recall_times[(recall_times.len() as f64 * 0.50) as usize];
-            let p95 = recall_times[((recall_times.len() as f64 * 0.95) as usize).min(recall_times.len() - 1)];
-            let p99 = recall_times[((recall_times.len() as f64 * 0.99) as usize).min(recall_times.len() - 1)];
+            let p95 = recall_times
+                [((recall_times.len() as f64 * 0.95) as usize).min(recall_times.len() - 1)];
+            let p99 = recall_times
+                [((recall_times.len() as f64 * 0.99) as usize).min(recall_times.len() - 1)];
             let avg = recall_times.iter().sum::<f64>() / recall_times.len() as f64;
 
             println!("📊 Recall Benchmark Results:");
@@ -912,7 +917,11 @@ async fn main() -> anyhow::Result<()> {
             println!("  P50:        {:.2} ms", p50);
             println!("  P95:        {:.2} ms", p95);
             println!("  P99:        {:.2} ms", p99);
-            println!("  Min / Max:  {:.2} ms / {:.2} ms", recall_times[0], recall_times[recall_times.len() - 1]);
+            println!(
+                "  Min / Max:  {:.2} ms / {:.2} ms",
+                recall_times[0],
+                recall_times[recall_times.len() - 1]
+            );
             println!("  Embedding Cache Hits: {}", engine.cache.stats().hits);
             Ok(())
         }
@@ -922,7 +931,10 @@ async fn main() -> anyhow::Result<()> {
             println!("Project: {}", cli.project);
             let store = SqliteStore::open(&config.db_path())?;
             let stats = store.stats().await?;
-            println!("  ✓ SQLite Database readable: {} memories found", stats.total_memories);
+            println!(
+                "  ✓ SQLite Database readable: {} memories found",
+                stats.total_memories
+            );
 
             let fts_check = store.search_fts("test", 1).await;
             match fts_check {
@@ -930,10 +942,15 @@ async fn main() -> anyhow::Result<()> {
                 Err(e) => println!("  ⚠ FTS5 index check warning: {}", e),
             }
 
-            let index = Arc::new(rememhq_core::storage::vector::HNSWVectorIndex::new(768, 10000));
+            let index = Arc::new(rememhq_core::storage::vector::HNSWVectorIndex::new(
+                768, 10000,
+            ));
             if config.index_path().exists() {
                 match index.load(&config.index_path()).await {
-                    Ok(_) => println!("  ✓ Vector Index loaded successfully (elements: {})", index.len()),
+                    Ok(_) => println!(
+                        "  ✓ Vector Index loaded successfully (elements: {})",
+                        index.len()
+                    ),
                     Err(e) => println!("  ⚠ Vector Index load warning: {}", e),
                 }
             } else {
