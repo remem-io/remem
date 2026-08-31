@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.15] - 2026-07-25
+### Added
+- **Provider Connection Pooling & Quota Metering**:
+  - `ProviderPool` (`rememhq-core/src/providers/pool.rs`) with Semaphore-bounded concurrency limiting and connection reuse.
+  - `CostTracker` / `TokenMeter` for real-time prompt/completion token tracking and estimated USD cost calculation across OpenAI, Anthropic, and Google Gemini.
+  - `EmbeddingCache` with thread-safe TTL expiration, LRU-like capacity eviction, and hit/miss metrics to eliminate redundant embedding API calls.
+  - `CircuitBreaker` and Decorrelated Full Jitter backoff algorithms in `rememhq-core/src/providers/resiliency.rs`.
+- **Advanced Reasoning, Safety & Graph Traversal**:
+  - `SafetyGuard` (`rememhq-core/src/safety/mod.rs`) for automated PII masking (API keys, emails, SSNs) and prompt injection threat scanning.
+  - `GraphTraversalEngine` (`rememhq-core/src/reasoning/graph_traversal.rs`) with multi-hop BFS pathfinding and $N$-depth neighborhood entity discovery.
+  - `CheckpointManager` (`rememhq-core/src/reasoning/checkpoint.rs`) for interrupt-safe consolidation recovery snapshots.
+  - `HierarchicalFact`, `SubFact`, and `FactCitation` in `rememhq-core/src/reasoning/hierarchical.rs` for multi-level memory trees.
+  - `StreamingConsolidator` in `rememhq-core/src/reasoning/consolidation.rs` for chunked real-time observation streaming.
+  - `CompositeScoreWeights` and `expand_query` in `rememhq-core/src/reasoning/retrieval.rs`.
+- **Resilient Multi-Backend Storage & Scalability**:
+  - `BackendType` & `ReplicaManager` (`rememhq-core/src/storage/backend.rs`) for multi-backend routing (SQLite, DuckDB, Postgres) and read/write replica failover.
+  - `RemoteVectorClient` (`rememhq-core/src/storage/remote_vector.rs`) for distributed vector clusters (Qdrant, Milvus, Weaviate).
+  - `QuantizedVector` (`rememhq-core/src/storage/quantization.rs`) for scalar FP32 -> INT8 vector quantization ($4\times$ memory reduction).
+  - `DeadLetterQueue` (`rememhq-core/src/storage/event_log.rs`) for error isolation and asynchronous failure recovery.
+- **Telemetry & Developer Tooling**:
+  - `MemoryMetrics` (`rememhq-core/src/telemetry/mod.rs`) tracking rolling $P_{50}$, $P_{95}$, and $P_{99}$ latency percentiles.
+  - `GET /v1/telemetry/metrics` and enhanced `/health` endpoints in `rememhq-api`.
+  - MCP `resources/list` and `resources/read` handlers for `memory://stats` and `memory://recent` URIs in `rememhq-mcp`.
+  - CLI `remem benchmark` and `remem validate` subcommands in `rememhq-cli`.
+  - Python SDK: Added `SyncMemory` synchronous client wrapper, `get_telemetry()`, and `get_health()`.
+  - TypeScript SDK: Added React hooks (`useMemory`, `useRecall`, `useStore`), `getTelemetry()`, `getHealth()`, and full type exports (`TelemetryResponse`, `MetricsSnapshot`, `CostSummary`, `CacheStats`).
 
 ### Added
 - **MCP Envelope Unification**: Standardized all 19 tools on spec-compliant `CallToolResult` text envelope (`{"content":[{"type":"text","text":"..."}]}`).

@@ -3,13 +3,20 @@
 //! Uses cloud LLMs to add intelligence to every memory operation:
 //! scoring, guided retrieval, consolidation, and contradiction detection.
 
+pub mod checkpoint;
 pub mod compaction;
 pub mod consolidation;
 pub mod contradiction;
+pub mod graph_traversal;
+pub mod hierarchical;
 pub mod resolution;
 pub mod retrieval;
 pub mod scoring;
 pub mod triage;
+
+pub use checkpoint::{CheckpointManager, ConsolidationCheckpoint};
+pub use graph_traversal::{GraphTraversalEngine, KnowledgePath};
+pub use hierarchical::{FactCitation, HierarchicalFact, SubFact};
 
 use crate::config::RememConfig;
 use crate::memory::types::{KnowledgeGraphUpdate, MemoryRecord, MemoryResult};
@@ -100,6 +107,9 @@ pub struct ReasoningEngine {
     pub event_bus: tokio::sync::broadcast::Sender<ReasoningEvent>,
     pub hooks: Vec<Arc<dyn MemoryHook>>,
     pub mode: tokio::sync::RwLock<crate::config::Mode>,
+    pub metrics: Arc<crate::telemetry::MemoryMetrics>,
+    pub cache: Arc<crate::providers::EmbeddingCache>,
+    pub pool: Arc<crate::providers::ProviderPool>,
 }
 
 impl ReasoningEngine {
@@ -114,6 +124,10 @@ impl ReasoningEngine {
     ) -> Self {
         let (event_bus, _) = tokio::sync::broadcast::channel(1024);
         let mode = config.memory.mode;
+        let pool = Arc::new(
+            crate::providers::ProviderPool::default_pool()
+                .unwrap_or_else(|_| crate::providers::ProviderPool::new(10).unwrap()),
+        );
         Self {
             config,
             provider,
@@ -124,6 +138,9 @@ impl ReasoningEngine {
             event_bus,
             hooks,
             mode: tokio::sync::RwLock::new(mode),
+            metrics: Arc::new(crate::telemetry::MemoryMetrics::standard()),
+            cache: Arc::new(crate::providers::EmbeddingCache::standard()),
+            pool,
         }
     }
 
@@ -164,12 +181,27 @@ impl ReasoningEngine {
         auto_score: bool,
         options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<MemoryRecord> {
+        let start = std::time::Instant::now();
+
+        // Safety & PII check
+        let assessment = crate::safety::SafetyGuard::assess_content(&record.content);
+        if assessment.pii_detected {
+            record.content = assessment.sanitized_content;
+        }
+
         for hook in &self.hooks {
             hook.before_store(&mut record).await?;
         }
 
-        // Generate embedding
-        let embedding = self.embeddings.embed(&record.content, options).await?;
+        // Generate embedding (check cache first)
+        let embedding = match self.cache.get(&record.content) {
+            Some(cached) => cached,
+            None => {
+                let emb = self.embeddings.embed(&record.content, options).await?;
+                self.cache.insert(record.content.clone(), emb.clone());
+                emb
+            }
+        };
         record.embedding = Some(embedding.clone());
 
         // Auto-score importance if requested
@@ -213,6 +245,7 @@ impl ReasoningEngine {
             content: format!("[{}] {}", record.memory_type, record.content),
         });
 
+        self.metrics.record_store(start.elapsed());
         Ok(record)
     }
 
@@ -227,6 +260,7 @@ impl ReasoningEngine {
         memory_type: Option<crate::memory::types::MemoryType>,
         options: Option<&crate::providers::ProviderOptions>,
     ) -> anyhow::Result<Vec<MemoryResult>> {
+        let start = std::time::Instant::now();
         let current_mode = *self.mode.read().await;
         limit = current_mode.adjust_recall_limit(limit);
 
@@ -241,6 +275,7 @@ impl ReasoningEngine {
             filter_tags,
             since,
             memory_type,
+            weights: None,
         };
 
         let mut results = retrieval::guided_retrieval(
@@ -264,6 +299,7 @@ impl ReasoningEngine {
             count: results.len(),
         });
 
+        self.metrics.record_recall(start.elapsed());
         Ok(results)
     }
 
@@ -325,6 +361,29 @@ impl ReasoningEngine {
         entity: &str,
     ) -> anyhow::Result<Vec<KnowledgeGraphUpdate>> {
         self.store.get_knowledge_for_entity(entity).await
+    }
+
+    /// Perform multi-hop graph path finding between two entities (BFS).
+    pub async fn traverse_knowledge_path(
+        &self,
+        start_entity: &str,
+        target_entity: &str,
+        max_depth: usize,
+    ) -> anyhow::Result<Option<KnowledgePath>> {
+        let traversal = GraphTraversalEngine::new(self.store.as_ref());
+        traversal
+            .find_path(start_entity, target_entity, max_depth)
+            .await
+    }
+
+    /// Retrieve the N-depth relational neighborhood around an entity.
+    pub async fn get_knowledge_neighborhood(
+        &self,
+        start_entity: &str,
+        depth: usize,
+    ) -> anyhow::Result<Vec<KnowledgeGraphUpdate>> {
+        let traversal = GraphTraversalEngine::new(self.store.as_ref());
+        traversal.get_neighborhood(start_entity, depth).await
     }
 
     /// Compact a conversation trace to save context window tokens.

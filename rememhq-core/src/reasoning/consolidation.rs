@@ -183,14 +183,60 @@ pub async fn consolidate_session(
     })
 }
 
+fn default_confidence() -> f32 {
+    0.90
+}
+
 /// A fact extracted by the LLM during consolidation.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedFact {
     pub content: String,
     pub importance: f32,
     pub memory_type: MemoryType,
     pub tags: Vec<String>,
     pub knowledge_triple: Option<KnowledgeGraphUpdate>,
+    #[serde(default = "default_confidence")]
+    pub confidence: f32,
+    #[serde(default)]
+    pub citations: Vec<String>,
+}
+
+/// Streaming chunked consolidator for processing active session observations in real-time.
+pub struct StreamingConsolidator {
+    chunk_size: usize,
+}
+
+impl StreamingConsolidator {
+    pub fn new(chunk_size: usize) -> Self {
+        Self {
+            chunk_size: chunk_size.max(1),
+        }
+    }
+
+    pub fn default_chunked() -> Self {
+        Self::new(10)
+    }
+
+    /// Process a stream of session memories in chunks, extracting facts incrementally.
+    pub async fn consolidate_chunks(
+        &self,
+        provider: &dyn Provider,
+        memories: &[MemoryRecord],
+        model: &str,
+        options: Option<&ProviderOptions>,
+    ) -> anyhow::Result<Vec<ExtractedFact>> {
+        let mut all_facts = Vec::new();
+        for chunk in memories.chunks(self.chunk_size) {
+            let session_content = chunk
+                .iter()
+                .map(|m| format!("- [{}] {}", m.memory_type, m.content))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let mut facts = extract_facts(provider, &session_content, model, options).await?;
+            all_facts.append(&mut facts);
+        }
+        Ok(all_facts)
+    }
 }
 
 /// Use the LLM to extract durable facts from raw session content.
@@ -306,6 +352,8 @@ Output the facts now:"#
             memory_type,
             tags,
             knowledge_triple: None,
+            confidence: 0.90,
+            citations: Vec::new(),
         });
     }
 

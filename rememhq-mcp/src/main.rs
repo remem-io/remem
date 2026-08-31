@@ -281,6 +281,10 @@ async fn handle_request(
                 "capabilities": {
                     "tools": {
                         "listChanged": false
+                    },
+                    "resources": {
+                        "subscribe": false,
+                        "listChanged": false
                     }
                 },
                 "serverInfo": {
@@ -295,6 +299,57 @@ async fn handle_request(
         method if method.starts_with("notifications/") => {
             tracing::debug!("Received notification: {}", method);
             None
+        }
+
+        "resources/list" => {
+            let resources = serde_json::json!([
+                {
+                    "uri": "memory://stats",
+                    "name": "Memory Statistics",
+                    "description": "Summary metrics, memory counts by type, and database size",
+                    "mimeType": "application/json"
+                },
+                {
+                    "uri": "memory://recent",
+                    "name": "Recent Memories",
+                    "description": "The 20 most recent memory records in the current project",
+                    "mimeType": "application/json"
+                }
+            ]);
+            Some(JsonRpcResponse::success(
+                id,
+                serde_json::json!({ "resources": resources }),
+            ))
+        }
+
+        "resources/read" => {
+            let uri = request.params.get("uri").and_then(|u| u.as_str()).unwrap_or("");
+            let content = match uri {
+                "memory://stats" => {
+                    let stats = engine.store.stats().await.unwrap_or(rememhq_core::storage::StoreStats {
+                        total_memories: 0,
+                        by_type: std::collections::HashMap::new(),
+                        avg_importance: 0.0,
+                        db_size_bytes: 0,
+                    });
+                    serde_json::to_string_pretty(&stats).unwrap_or_default()
+                }
+                "memory://recent" => {
+                    let recent = engine.list_memories(&[], None, None, 20).await.unwrap_or_default();
+                    serde_json::to_string_pretty(&recent).unwrap_or_default()
+                }
+                _ => format!("Resource not found: {}", uri),
+            };
+            Some(JsonRpcResponse::success(
+                id,
+                serde_json::json!({
+                    "contents": [{
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": content
+                    }]
+                }),
+            ))
         }
 
         "tools/list" => {

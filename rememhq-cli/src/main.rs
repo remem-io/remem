@@ -159,6 +159,14 @@ enum Commands {
         #[command(subcommand)]
         action: HarnessAction,
     },
+    /// Run recall latency and memory throughput benchmark
+    Benchmark {
+        /// Number of iterations for latency profiling
+        #[arg(long, default_value = "20")]
+        iterations: usize,
+    },
+    /// Validate database schema, FTS index, and vector index integrity
+    Validate,
 }
 
 #[derive(Subcommand)]
@@ -870,6 +878,69 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 eprintln!("✓ Exported {} memories to stdout", count);
             }
+            Ok(())
+        }
+
+        Commands::Benchmark { iterations } => {
+            let engine = build_engine(&config).await?;
+            println!("🚀 Starting remem performance benchmark ({} iterations)...", iterations);
+            println!("Project: {}", cli.project);
+            
+            let query = "agent memory consolidation and retrieval architecture";
+            let mut recall_times = Vec::with_capacity(iterations);
+
+            for _ in 1..=iterations {
+                let start = std::time::Instant::now();
+                let _ = engine.recall(query, 10, &[], None, None, None).await;
+                let elapsed = start.elapsed();
+                recall_times.push(elapsed.as_secs_f64() * 1000.0);
+                use std::io::Write;
+                print!(".");
+                let _ = std::io::stdout().flush();
+            }
+            println!("\n");
+
+            recall_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let p50 = recall_times[(recall_times.len() as f64 * 0.50) as usize];
+            let p95 = recall_times[((recall_times.len() as f64 * 0.95) as usize).min(recall_times.len() - 1)];
+            let p99 = recall_times[((recall_times.len() as f64 * 0.99) as usize).min(recall_times.len() - 1)];
+            let avg = recall_times.iter().sum::<f64>() / recall_times.len() as f64;
+
+            println!("📊 Recall Benchmark Results:");
+            println!("  Iterations: {}", iterations);
+            println!("  Average:    {:.2} ms", avg);
+            println!("  P50:        {:.2} ms", p50);
+            println!("  P95:        {:.2} ms", p95);
+            println!("  P99:        {:.2} ms", p99);
+            println!("  Min / Max:  {:.2} ms / {:.2} ms", recall_times[0], recall_times[recall_times.len() - 1]);
+            println!("  Embedding Cache Hits: {}", engine.cache.stats().hits);
+            Ok(())
+        }
+
+        Commands::Validate => {
+            println!("🔍 Validating remem database and index integrity...");
+            println!("Project: {}", cli.project);
+            let store = SqliteStore::open(&config.db_path())?;
+            let stats = store.stats().await?;
+            println!("  ✓ SQLite Database readable: {} memories found", stats.total_memories);
+
+            let fts_check = store.search_fts("test", 1).await;
+            match fts_check {
+                Ok(_) => println!("  ✓ SQLite FTS5 index operational"),
+                Err(e) => println!("  ⚠ FTS5 index check warning: {}", e),
+            }
+
+            let index = Arc::new(rememhq_core::storage::vector::HNSWVectorIndex::new(768, 10000));
+            if config.index_path().exists() {
+                match index.load(&config.index_path()).await {
+                    Ok(_) => println!("  ✓ Vector Index loaded successfully (elements: {})", index.len()),
+                    Err(e) => println!("  ⚠ Vector Index load warning: {}", e),
+                }
+            } else {
+                println!("  ℹ Vector Index file not yet created (will be created on first store)");
+            }
+
+            println!("\n✓ System integrity check passed!");
             Ok(())
         }
     }

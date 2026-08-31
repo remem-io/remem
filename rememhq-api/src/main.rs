@@ -994,13 +994,44 @@ async fn health(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     match engine.store.stats().await {
         Ok(_) => Ok(Json(
-            serde_json::json!({ "status": "ok", "db": "connected" }),
+            serde_json::json!({
+                "status": "ok",
+                "db": "connected",
+                "in_flight_requests": engine.pool.in_flight(),
+                "cache_entries": engine.cache.stats().total_entries
+            }),
         )),
         Err(_) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(serde_json::json!({ "status": "error", "db": "disconnected" })),
         )),
     }
+}
+
+/// Telemetry metrics, cost metering, and embedding cache statistics.
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct TelemetryResponse {
+    pub metrics: rememhq_core::telemetry::MetricsSnapshot,
+    pub cost_meter: rememhq_core::providers::CostSummary,
+    pub cache_stats: rememhq_core::providers::CacheStats,
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/telemetry/metrics",
+    responses(
+        (status = 200, description = "Telemetry, performance metrics, and cost metering", body = TelemetryResponse)
+    )
+)]
+async fn get_telemetry_metrics(
+    State(engine): State<AppState>,
+) -> Json<TelemetryResponse> {
+    let sessions_count = engine.list_sessions(1000).await.map(|s| s.len()).unwrap_or(0);
+    Json(TelemetryResponse {
+        metrics: engine.metrics.snapshot(sessions_count),
+        cost_meter: engine.pool.cost_tracker.summary(),
+        cache_stats: engine.cache.stats(),
+    })
 }
 
 const SWAGGER_HTML: &str = r#"<!DOCTYPE html>
@@ -1053,6 +1084,7 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
 #[openapi(
     paths(
         health,
+        get_telemetry_metrics,
         store_memory,
         list_memories,
         recall_memories,
@@ -1079,6 +1111,7 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
             PaginatedResponse<SessionResponse>,
             StoreResponse,
             ErrorResponse,
+            TelemetryResponse,
             MemoryRecord,
             MemoryResult,
             MemoryType,
@@ -1092,7 +1125,10 @@ async fn swagger_ui_handler() -> axum::response::Html<&'static str> {
             Contradiction,
             KnowledgeGraphUpdate,
             SessionResponse,
-            rememhq_core::storage::StoreStats
+            rememhq_core::storage::StoreStats,
+            rememhq_core::telemetry::MetricsSnapshot,
+            rememhq_core::providers::CostSummary,
+            rememhq_core::providers::CacheStats
         )
     ),
     modifiers(&SecurityAddon)
@@ -1184,6 +1220,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(health))
+        .route("/v1/telemetry/metrics", get(get_telemetry_metrics))
         .route("/api-docs/openapi.json", get(get_openapi_json))
         .route("/swagger-ui", get(swagger_ui_handler))
         .route("/swagger-ui/", get(swagger_ui_handler))

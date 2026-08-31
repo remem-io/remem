@@ -1,13 +1,19 @@
 //! Cloud LLM providers for reasoning operations and embedding generation.
 
 pub mod anthropic;
+pub mod cache;
 pub mod embeddings;
 pub mod factory;
 pub mod google;
 pub mod local;
 pub mod mock;
 pub mod openai;
+pub mod pool;
 pub mod resiliency;
+
+pub use cache::{CacheStats, EmbeddingCache};
+pub use pool::{CostSummary, CostTracker, ProviderPool};
+pub use resiliency::{CircuitBreaker, CircuitState};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

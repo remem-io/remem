@@ -39,6 +39,10 @@ export type {
   UpdateOptions,
   MemoryStoreRecord,
   MemoryVersionRecord,
+  MetricsSnapshot,
+  CostSummary,
+  CacheStats,
+  TelemetryResponse,
 } from "./types.js";
 
 export class Memory {
@@ -164,6 +168,20 @@ export class Memory {
       body.focus_areas = focusAreas;
     }
     return this.request("POST", "/v1/memories/compact", body) as Promise<CompactResponse>;
+  }
+
+  /**
+   * Check backend health and connection state.
+   */
+  async getHealth(): Promise<{ status: string; db: string; in_flight_requests?: number; cache_entries?: number }> {
+    return this.request("GET", "/health") as Promise<{ status: string; db: string; in_flight_requests?: number; cache_entries?: number }>;
+  }
+
+  /**
+   * Fetch server telemetry, performance percentiles, and cost metering.
+   */
+  async getTelemetry(): Promise<import("./types.js").TelemetryResponse> {
+    return this.request("GET", "/v1/telemetry/metrics") as Promise<import("./types.js").TelemetryResponse>;
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {

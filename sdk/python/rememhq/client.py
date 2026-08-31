@@ -203,6 +203,18 @@ class Memory:
         resp.raise_for_status()
         return CompactResponse.model_validate(resp.json())
 
+    async def get_health(self) -> dict:
+        """Check the health status of the memory backend."""
+        resp = await self._client.get("/health")
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_telemetry(self) -> dict:
+        """Fetch server telemetry, performance percentiles, and cost metering."""
+        resp = await self._client.get("/v1/telemetry/metrics")
+        resp.raise_for_status()
+        return resp.json()
+
     async def close(self) -> None:
         """Close the HTTP client."""
         await self._client.aclose()
@@ -276,3 +288,95 @@ class MemoryStoresClient:
     async def archive(self, store_id: str | UUID) -> None:
         resp = await self._client.post(f"/v1/memory_stores/{store_id}/archive")
         resp.raise_for_status()
+
+
+class SyncMemory:
+    """Synchronous client wrapper for remem REST API."""
+
+    def __init__(
+        self,
+        project: str = "default",
+        reasoning_model: str = "claude-sonnet-4-5",
+        scoring_model: str = "claude-haiku-4-5",
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: float = 30.0,
+    ):
+        config = RememConfig(
+            project=project,
+            reasoning_model=reasoning_model,
+            scoring_model=scoring_model,
+            timeout=timeout,
+        )
+        if base_url:
+            config.base_url = base_url
+        if api_key:
+            config.api_key = api_key
+
+        self._config = config
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if config.api_key:
+            headers["Authorization"] = f"Bearer {config.api_key}"
+
+        self._client = httpx.Client(
+            base_url=config.base_url,
+            headers=headers,
+            timeout=config.timeout,
+        )
+
+    def store(
+        self,
+        content: str,
+        *,
+        tags: list[str] | None = None,
+        importance: float | None = None,
+        ttl_days: int | None = None,
+        memory_type: MemoryType = MemoryType.FACT,
+    ) -> StoreResponse:
+        """Store a new memory synchronously."""
+        payload: dict = {
+            "content": content,
+            "tags": tags or [],
+            "memory_type": memory_type.value,
+        }
+        if importance is not None:
+            payload["importance"] = importance
+        if ttl_days is not None:
+            payload["ttl_days"] = ttl_days
+
+        resp = self._client.post("/v1/memories", json=payload)
+        resp.raise_for_status()
+        return StoreResponse.model_validate(resp.json())
+
+    def recall(
+        self,
+        query: str,
+        *,
+        limit: int = 8,
+        filter_tags: list[str] | None = None,
+        since: datetime | str | None = None,
+        memory_type: MemoryType | None = None,
+    ) -> list[MemoryResult]:
+        """Recall relevant memories synchronously."""
+        params: dict = {"q": query, "limit": limit}
+        if filter_tags:
+            params["filter_tags"] = ",".join(filter_tags)
+        if since is not None:
+            params["since"] = since.isoformat() if isinstance(since, datetime) else since
+        if memory_type is not None:
+            params["memory_type"] = memory_type.value
+
+        resp = self._client.get("/v1/memories/recall", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("data", data) if isinstance(data, dict) else data
+        return [MemoryResult.model_validate(r) for r in items]
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()

@@ -104,3 +104,38 @@ export interface MemoryVersionRecord {
   content_sha256: string;
   created_at: string;
 }
+
+export interface MetricsSnapshot {
+  total_stores: number;
+  total_recalls: number;
+  total_consolidations: number;
+  store_latency_p50_ms: number;
+  store_latency_p95_ms: number;
+  recall_latency_p50_ms: number;
+  recall_latency_p95_ms: number;
+  recall_latency_p99_ms: number;
+  active_sessions: number;
+  uptime_seconds: number;
+}
+
+export interface CostSummary {
+  total_calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  usage_by_provider: Record<string, number>;
+}
+
+export interface CacheStats {
+  hits: number;
+  misses: number;
+  total_entries: number;
+  hit_rate_percentage: number;
+}
+
+export interface TelemetryResponse {
+  metrics: MetricsSnapshot;
+  cost_meter: CostSummary;
+  cache_stats: CacheStats;
+}

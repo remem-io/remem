@@ -1,10 +1,18 @@
 //! Storage layer — SQLite persistence and vector index.
 
+pub mod backend;
 pub mod event_log;
+pub mod quantization;
+pub mod remote_vector;
 pub mod sqlite;
 pub mod vector;
 
-pub use event_log::{EventKind, EventLog, EventMetadata, SessionEvent};
+pub use backend::{BackendType, ReplicaConfig, ReplicaManager};
+pub use event_log::{
+    DeadLetterQueue, DeadLetterRecord, EventKind, EventLog, EventMetadata, SessionEvent,
+};
+pub use quantization::QuantizedVector;
+pub use remote_vector::{RemoteVectorClient, RemoteVectorConfig, RemoteVectorEngine};
 
 use crate::memory::types::{
     KnowledgeGraphUpdate, MemoryRecord, MemoryStoreRecord, MemoryType, MemoryVersionRecord,

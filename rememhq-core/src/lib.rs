@@ -12,10 +12,14 @@ pub mod memory;
 pub mod models;
 pub mod providers;
 pub mod reasoning;
+pub mod safety;
 pub mod session;
 pub mod storage;
+pub mod telemetry;
 
 pub use config::RememConfig;
 pub use memory::types::{MemoryRecord, MemoryResult, MemoryType};
-pub use providers::{EmbeddingProvider, Provider};
+pub use providers::{EmbeddingCache, EmbeddingProvider, Provider, ProviderPool};
+pub use safety::{SafetyAssessment, SafetyGuard};
 pub use storage::MemoryStore;
+pub use telemetry::{MemoryMetrics, MetricsSnapshot};

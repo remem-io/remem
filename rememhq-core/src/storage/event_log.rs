@@ -237,6 +237,89 @@ impl EventLog {
     }
 }
 
+/// A record in the Dead Letter Queue for unrecoverable errors during memory operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeadLetterRecord {
+    pub id: Uuid,
+    pub timestamp: DateTime<Utc>,
+    pub operation: String,
+    pub payload: serde_json::Value,
+    pub error_message: String,
+    pub retry_count: usize,
+}
+
+/// Dead Letter Queue (DLQ) persisted as a JSONL file for error recovery and replay.
+pub struct DeadLetterQueue {
+    path: PathBuf,
+}
+
+impl DeadLetterQueue {
+    pub fn open(dir: &Path) -> io::Result<Self> {
+        let path = dir.join("dlq.jsonl");
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        Ok(Self { path })
+    }
+
+    /// Push a failed operation record to the dead letter queue.
+    pub fn push(
+        &self,
+        operation: impl Into<String>,
+        payload: serde_json::Value,
+        error_message: impl Into<String>,
+    ) -> io::Result<DeadLetterRecord> {
+        let record = DeadLetterRecord {
+            id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            operation: operation.into(),
+            payload,
+            error_message: error_message.into(),
+            retry_count: 0,
+        };
+
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
+        let mut writer = BufWriter::new(file);
+        let json = serde_json::to_string(&record)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        writeln!(writer, "{}", json)?;
+        writer.flush()?;
+
+        Ok(record)
+    }
+
+    /// Read all unhandled dead letter records.
+    pub fn read_all(&self) -> io::Result<Vec<DeadLetterRecord>> {
+        if !self.path.exists() {
+            return Ok(Vec::new());
+        }
+        let file = fs::File::open(&self.path)?;
+        let reader = io::BufReader::new(file);
+        let mut records = Vec::new();
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            if let Ok(rec) = serde_json::from_str::<DeadLetterRecord>(&line) {
+                records.push(rec);
+            }
+        }
+        Ok(records)
+    }
+
+    /// Clear the dead letter queue.
+    pub fn clear(&self) -> io::Result<()> {
+        if self.path.exists() {
+            fs::write(&self.path, "")?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,5 +422,31 @@ mod tests {
             EventKind::SessionConsolidate.to_string(),
             "session_consolidate"
         );
+    }
+
+    #[test]
+    fn test_dead_letter_queue_push_and_clear() {
+        let dir = tempfile::tempdir().unwrap();
+        let dlq = DeadLetterQueue::open(dir.path()).unwrap();
+
+        assert!(dlq.read_all().unwrap().is_empty());
+
+        let rec = dlq
+            .push(
+                "consolidation",
+                serde_json::json!({"session": "s-123"}),
+                "LLM rate limit reached",
+            )
+            .unwrap();
+
+        assert_eq!(rec.operation, "consolidation");
+        assert_eq!(rec.error_message, "LLM rate limit reached");
+
+        let all = dlq.read_all().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].id, rec.id);
+
+        dlq.clear().unwrap();
+        assert!(dlq.read_all().unwrap().is_empty());
     }
 }

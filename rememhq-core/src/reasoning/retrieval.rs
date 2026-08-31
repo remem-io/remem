@@ -11,6 +11,42 @@ use crate::storage::vector::VectorIndex;
 use crate::storage::MemoryStore;
 use chrono::{DateTime, Utc};
 
+/// Weights for composite score ranking (Vector + BM25 + Importance + Recency Decay).
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct CompositeScoreWeights {
+    pub vector_weight: f32,
+    pub fts_weight: f32,
+    pub importance_weight: f32,
+    pub recency_weight: f32,
+}
+
+impl Default for CompositeScoreWeights {
+    fn default() -> Self {
+        Self {
+            vector_weight: 0.50,
+            fts_weight: 0.25,
+            importance_weight: 0.15,
+            recency_weight: 0.10,
+        }
+    }
+}
+
+impl CompositeScoreWeights {
+    /// Compute a blended composite score for a memory candidate.
+    pub fn compute_score(
+        &self,
+        vector_sim: f32,
+        fts_score: f32,
+        importance: f32,
+        decay_score: f32,
+    ) -> f32 {
+        (self.vector_weight * vector_sim.clamp(0.0, 1.0))
+            + (self.fts_weight * fts_score.clamp(0.0, 1.0))
+            + (self.importance_weight * importance.clamp(0.0, 1.0))
+            + (self.recency_weight * decay_score.clamp(0.0, 1.0))
+    }
+}
+
 /// Parameters for guided retrieval search and filtering.
 #[derive(Debug, Clone)]
 pub struct RetrievalParams<'a> {
@@ -19,6 +55,28 @@ pub struct RetrievalParams<'a> {
     pub filter_tags: &'a [String],
     pub since: Option<DateTime<Utc>>,
     pub memory_type: Option<MemoryType>,
+    pub weights: Option<CompositeScoreWeights>,
+}
+
+/// Simple rule-based synonym / query expansion generator for agent recall.
+pub fn expand_query(query: &str) -> Vec<String> {
+    let mut expansions = vec![query.to_string()];
+    let q_lower = query.to_lowercase();
+
+    if q_lower.contains("error") || q_lower.contains("fail") || q_lower.contains("crash") {
+        expansions.push(format!("{} bug exception traceback panic", query));
+    }
+    if q_lower.contains("user") || q_lower.contains("author") {
+        expansions.push(format!("{} preferences account settings identity", query));
+    }
+    if q_lower.contains("auth") || q_lower.contains("login") || q_lower.contains("token") {
+        expansions.push(format!("{} authentication authorization session credentials", query));
+    }
+    if q_lower.contains("database") || q_lower.contains("store") || q_lower.contains("db") {
+        expansions.push(format!("{} sqlite postgres persistence storage schema", query));
+    }
+
+    expansions
 }
 
 /// Perform guided retrieval: vector search → LLM re-ranking → reasoning traces.
