@@ -31,6 +31,16 @@ pub struct MemoryMetrics {
     max_samples: usize,
 }
 
+/// Optional supplemental metrics for Prometheus export.
+#[derive(Debug, Clone, Default)]
+pub struct PrometheusExtraMetrics {
+    pub total_memories: Option<usize>,
+    pub total_tokens: Option<u64>,
+    pub total_cost_usd: Option<f64>,
+    pub cache_hits: Option<u64>,
+    pub cache_misses: Option<u64>,
+}
+
 impl MemoryMetrics {
     pub fn new(max_samples: usize) -> Self {
         Self {
@@ -128,7 +138,16 @@ impl MemoryMetrics {
 
     /// Render Prometheus text exposition format metrics.
     pub fn render_prometheus(&self, snapshot: &MetricsSnapshot) -> String {
-        format!(
+        self.render_prometheus_full(snapshot, None)
+    }
+
+    /// Render comprehensive Prometheus text exposition format metrics with store, cost, and cache data.
+    pub fn render_prometheus_full(
+        &self,
+        snapshot: &MetricsSnapshot,
+        extra: Option<&PrometheusExtraMetrics>,
+    ) -> String {
+        let mut out = format!(
             "# HELP remem_stores_total Total memories stored\n\
              # TYPE remem_stores_total counter\n\
              remem_stores_total {}\n\n\
@@ -169,7 +188,50 @@ impl MemoryMetrics {
             snapshot.recall_latency_p99_ms,
             snapshot.active_sessions,
             snapshot.uptime_seconds
-        )
+        );
+
+        if let Some(ext) = extra {
+            if let Some(mem_count) = ext.total_memories {
+                out.push_str(&format!(
+                    "\n# HELP remem_active_memories_total Total active memories in database\n\
+                     # TYPE remem_active_memories_total gauge\n\
+                     remem_active_memories_total {}\n",
+                    mem_count
+                ));
+            }
+
+            if let Some(tokens) = ext.total_tokens {
+                out.push_str(&format!(
+                    "\n# HELP remem_llm_tokens_total Total LLM tokens consumed\n\
+                     # TYPE remem_llm_tokens_total counter\n\
+                     remem_llm_tokens_total {}\n",
+                    tokens
+                ));
+            }
+
+            if let Some(cost) = ext.total_cost_usd {
+                out.push_str(&format!(
+                    "\n# HELP remem_llm_cost_usd_total Estimated total LLM cost in USD\n\
+                     # TYPE remem_llm_cost_usd_total counter\n\
+                     remem_llm_cost_usd_total {:.6}\n",
+                    cost
+                ));
+            }
+
+            if let (Some(hits), Some(misses)) = (ext.cache_hits, ext.cache_misses) {
+                out.push_str(&format!(
+                    "\n# HELP remem_cache_hits_total Total embedding cache hits\n\
+                     # TYPE remem_cache_hits_total counter\n\
+                     remem_cache_hits_total {}\n\n\
+                     # HELP remem_cache_misses_total Total embedding cache misses\n\
+                     # TYPE remem_cache_misses_total counter\n\
+                     remem_cache_misses_total {}\n",
+                    hits, misses
+                ));
+            }
+        }
+
+        out
     }
 
     /// Calculate percentage of recall operations completing within target SLA (e.g. 50ms).

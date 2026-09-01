@@ -3,7 +3,7 @@
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Json;
 
-use crate::routes::memories::ErrorResponse;
+use crate::models::ErrorResponse;
 use rememhq_core::providers::ProviderOptions;
 
 /// Compare two strings without leaking information about where the mismatch

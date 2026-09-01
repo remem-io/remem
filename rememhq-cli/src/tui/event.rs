@@ -7,6 +7,14 @@ use rememhq_core::reasoning::ReasoningEvent;
 use rememhq_core::storage::StoreStats;
 use uuid::Uuid;
 
+/// Telemetry, Token Economy, and Cost metrics snapshot for TUI dashboard.
+#[derive(Debug, Clone)]
+pub struct TelemetryData {
+    pub metrics: rememhq_core::telemetry::MetricsSnapshot,
+    pub cost_summary: rememhq_core::providers::CostSummary,
+    pub cache_stats: rememhq_core::providers::CacheStats,
+}
+
 /// Result of an asynchronous data fetch task spawned by `data.rs`.
 #[derive(Debug)]
 pub enum FetchResult {
@@ -18,6 +26,8 @@ pub enum FetchResult {
     Recall(anyhow::Result<Vec<MemoryResult>>),
     /// Store statistics fetch completed.
     Stats(anyhow::Result<StoreStats>),
+    /// Live Telemetry & Cost data fetch completed.
+    Telemetry(anyhow::Result<TelemetryData>),
     /// An archive operation completed for a memory UUID.
     Archived(Uuid, anyhow::Result<bool>),
     /// An unarchive operation completed for a memory UUID.

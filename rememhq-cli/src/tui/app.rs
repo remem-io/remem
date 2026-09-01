@@ -91,6 +91,8 @@ pub enum Mode {
     NewMemoryModal,
     /// Memory Version History & Diff Viewer view.
     VersionHistory,
+    /// Telemetry, Token Economy, and Cost Dashboard view.
+    Telemetry,
     /// Help cheat-sheet overlay.
     HelpModal,
 }
@@ -242,6 +244,8 @@ pub struct App {
         std::collections::HashMap<String, (&'static str, std::time::Instant)>,
     /// Latest store statistics.
     pub stats: Option<StoreStats>,
+    /// Latest telemetry and token cost metrics.
+    pub telemetry: Option<super::event::TelemetryData>,
     /// Action targeted for confirmation modal.
     pub confirm_action: Option<ConfirmAction>,
     /// Memory record currently being edited in EditModal.
@@ -320,6 +324,7 @@ impl App {
             monitor_tick_events: 0,
             active_agent_sessions: std::collections::HashMap::new(),
             stats: None,
+            telemetry: None,
             confirm_action: None,
             edit_record: None,
             edit_content_input: String::new(),

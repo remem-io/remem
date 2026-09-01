@@ -3,164 +3,15 @@
 //! Reads from `.remem/config.toml` in the project directory, falling back
 //! to environment variables for all settings.
 
-use serde::{Deserialize, Serialize};
+pub mod defaults;
+pub mod models;
+
 use std::path::PathBuf;
 
-/// Top-level configuration for a remem instance.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RememConfig {
-    pub project: String,
-    pub reasoning: ReasoningConfig,
-    pub memory: MemoryConfig,
-    pub storage: StorageConfig,
-    pub server: ServerConfig,
-}
+pub use defaults::{reasoning_model_for, scoring_model_for};
+pub use models::{MemoryConfig, Mode, ReasoningConfig, RememConfig, ServerConfig, StorageConfig};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReasoningConfig {
-    /// Cloud provider: "anthropic", "openai", "google", "local", "mock"
-    #[serde(default = "default_provider")]
-    pub provider: String,
-    /// Model for consolidation + guided retrieval.
-    /// Defaults are provider-aware: Anthropic → claude-sonnet-4-5,
-    /// OpenAI → gpt-4o, Google → gemini-2.0-flash.
-    #[serde(default = "default_reasoning_model")]
-    pub reasoning_model: String,
-    /// Model for importance scoring + contradiction pre-check.
-    /// Defaults are provider-aware: Anthropic → claude-haiku-4-5,
-    /// OpenAI → gpt-4o-mini, Google → gemini-2.0-flash.
-    #[serde(default = "default_scoring_model")]
-    pub scoring_model: String,
-    /// Path to local GGUF model (only for provider = "local")
-    pub local_model_path: Option<PathBuf>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemoryConfig {
-    /// Max tokens for working memory
-    #[serde(default = "default_working_memory_tokens")]
-    pub working_memory_tokens: usize,
-    /// Hours between importance decay passes
-    #[serde(default = "default_decay_interval")]
-    pub importance_decay_interval_hours: u32,
-    /// Whether to keep raw session logs after consolidation
-    #[serde(default)]
-    pub keep_raw_sessions: bool,
-    /// Directory to watch for transcript files
-    pub transcript_watch_dir: Option<PathBuf>,
-    /// The current memory mode
-    #[serde(default)]
-    pub mode: Mode,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StorageConfig {
-    /// Root data directory
-    #[serde(default = "default_data_dir")]
-    pub data_dir: PathBuf,
-    /// HNSW M parameter (connections per node)
-    #[serde(default = "default_hnsw_m")]
-    pub hnsw_m: usize,
-    /// HNSW ef_construction parameter
-    #[serde(default = "default_hnsw_ef_construction")]
-    pub hnsw_ef_construction: usize,
-    /// HNSW ef_search parameter
-    #[serde(default = "default_hnsw_ef_search")]
-    pub hnsw_ef_search: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
-    /// REST API port
-    #[serde(default = "default_port")]
-    pub port: u16,
-    /// MCP transport: "stdio", "http-sse", "http-polling"
-    #[serde(default = "default_transport")]
-    pub transport: String,
-}
-
-// ---------------------------------------------------------------------------
-// Provider-aware model defaults
-// ---------------------------------------------------------------------------
-
-/// Return the correct default reasoning model for the active provider.
-///
-/// Priority: `REMEM_REASONING_MODEL` env var → provider-specific default.
-pub fn reasoning_model_for(provider: &str) -> String {
-    if let Ok(v) = std::env::var("REMEM_REASONING_MODEL") {
-        return v;
-    }
-    match provider {
-        "openai" => "gpt-4o".into(),
-        "google" | "gemini" => "gemini-2.5-flash".into(),
-        "local" => std::env::var("REMEM_LOCAL_MODEL_NAME").unwrap_or_else(|_| "phi-3-mini".into()),
-        "mock" => "mock".into(),
-        _ => "claude-sonnet-4-5".into(), // anthropic default
-    }
-}
-
-/// Return the correct default scoring model for the active provider.
-///
-/// Priority: `REMEM_SCORING_MODEL` env var → provider-specific default.
-pub fn scoring_model_for(provider: &str) -> String {
-    if let Ok(v) = std::env::var("REMEM_SCORING_MODEL") {
-        return v;
-    }
-    match provider {
-        "openai" => "gpt-4o-mini".into(),
-        "google" | "gemini" => "gemini-2.5-flash".into(),
-        "local" => std::env::var("REMEM_LOCAL_MODEL_NAME").unwrap_or_else(|_| "phi-3-mini".into()),
-        "mock" => "mock".into(),
-        _ => "claude-haiku-4-5".into(), // anthropic default
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Serde defaults (used when deserialising config.toml without explicit values)
-// ---------------------------------------------------------------------------
-
-fn default_provider() -> String {
-    std::env::var("REMEM_PROVIDER").unwrap_or_else(|_| "anthropic".into())
-}
-
-fn default_reasoning_model() -> String {
-    reasoning_model_for(&default_provider())
-}
-
-fn default_scoring_model() -> String {
-    scoring_model_for(&default_provider())
-}
-
-fn default_working_memory_tokens() -> usize {
-    131072
-}
-fn default_decay_interval() -> u32 {
-    24
-}
-fn default_data_dir() -> PathBuf {
-    std::env::var("REMEM_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".remem")
-        })
-}
-fn default_hnsw_m() -> usize {
-    16
-}
-fn default_hnsw_ef_construction() -> usize {
-    200
-}
-fn default_hnsw_ef_search() -> usize {
-    100
-}
-fn default_port() -> u16 {
-    7474
-}
-fn default_transport() -> String {
-    "stdio".into()
-}
+use defaults::*;
 
 impl Default for RememConfig {
     fn default() -> Self {
@@ -194,37 +45,6 @@ impl Default for RememConfig {
     }
 }
 
-/// Agent memory mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[derive(Default)]
-pub enum Mode {
-    #[default]
-    Standard,
-    Debugging,
-    Refactoring,
-    Exploration,
-    Writing,
-}
-
-impl Mode {
-    pub fn adjust_recall_limit(&self, limit: usize) -> usize {
-        match self {
-            Self::Debugging => limit * 2,
-            Self::Writing => std::cmp::max(1, limit / 2),
-            _ => limit,
-        }
-    }
-
-    pub fn adjust_token_budget(&self, budget: usize) -> usize {
-        match self {
-            Self::Exploration => budget + 2000,
-            Self::Refactoring => budget + 4000,
-            _ => budget,
-        }
-    }
-}
-
 impl RememConfig {
     /// Merge project-local configuration, rejecting any denylisted keys.
     ///
@@ -232,7 +52,7 @@ impl RememConfig {
     /// potentially untrusted (any contributor can modify them). Sensitive
     /// fields like provider selection and data directories are blocked to
     /// prevent exfiltration attacks.
-    fn merge_project_config(&mut self, project_config: &RememConfig) {
+    pub fn merge_project_config(&mut self, project_config: &RememConfig) {
         // Only merge safe fields from project config
         // memory.* fields are safe
         self.memory.working_memory_tokens = project_config.memory.working_memory_tokens;
@@ -307,15 +127,8 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    // `std::env::set_var`/`remove_var` mutate process-wide global state, and
-    // `cargo test` runs tests in parallel by default. Without serialization,
-    // these tests race against each other (and against any other test that
-    // reads REMEM_PROVIDER / REMEM_REASONING_MODEL / REMEM_SCORING_MODEL),
-    // causing intermittent, platform-dependent failures. This mutex ensures
-    // only one of these tests touches the environment at a time.
     static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
 
-    /// Clears all env vars these tests depend on. Call while holding the lock.
     fn clear_env() {
         std::env::remove_var("REMEM_PROVIDER");
         std::env::remove_var("REMEM_REASONING_MODEL");
@@ -342,7 +155,7 @@ mod tests {
         assert_eq!(Mode::Standard.adjust_recall_limit(limit), 10);
         assert_eq!(Mode::Debugging.adjust_recall_limit(limit), 20);
         assert_eq!(Mode::Writing.adjust_recall_limit(limit), 5);
-        assert_eq!(Mode::Writing.adjust_recall_limit(1), 1); // Ensure it doesn't go below 1
+        assert_eq!(Mode::Writing.adjust_recall_limit(1), 1);
         assert_eq!(Mode::Exploration.adjust_recall_limit(limit), 10);
         assert_eq!(Mode::Refactoring.adjust_recall_limit(limit), 10);
     }
@@ -393,7 +206,6 @@ mod tests {
         let _guard = ENV_TEST_LOCK.lock().unwrap();
         clear_env();
         let config = RememConfig::default();
-        // Default provider is anthropic
         assert_eq!(config.reasoning.provider, "anthropic");
         assert_eq!(config.reasoning.reasoning_model, "claude-sonnet-4-5");
         assert_eq!(config.reasoning.scoring_model, "claude-haiku-4-5");
@@ -409,10 +221,8 @@ mod tests {
 
         base.merge_project_config(&project);
 
-        // Denylisted fields should NOT change
         assert_eq!(base.reasoning.provider, "anthropic");
         assert_ne!(base.storage.data_dir, PathBuf::from("/tmp/evil"));
-        // Safe fields SHOULD change
         assert_eq!(base.memory.working_memory_tokens, 999);
     }
 }

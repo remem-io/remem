@@ -28,10 +28,7 @@ pub struct StoreResponse {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct ErrorResponse {
-    pub error: String,
-}
+pub use crate::models::ErrorResponse;
 
 #[derive(Deserialize)]
 pub struct RecallQuery {

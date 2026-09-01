@@ -80,6 +80,26 @@ pub fn spawn_stats_fetch(store: Arc<SqliteStore>, tx: mpsc::UnboundedSender<Fetc
     });
 }
 
+/// Spawn a task that snapshots system telemetry, token costs, and cache statistics.
+pub fn spawn_telemetry_fetch(engine: Arc<ReasoningEngine>, tx: mpsc::UnboundedSender<FetchResult>) {
+    tokio::spawn(async move {
+        let sessions = engine
+            .list_sessions(100)
+            .await
+            .map(|s| s.len())
+            .unwrap_or(0);
+        let metrics = engine.metrics.snapshot(sessions);
+        let cost_summary = engine.pool.cost_tracker.summary();
+        let cache_stats = engine.cache.stats();
+
+        let _ = tx.send(FetchResult::Telemetry(Ok(super::event::TelemetryData {
+            metrics,
+            cost_summary,
+            cache_stats,
+        })));
+    });
+}
+
 /// Spawn a task that archives a memory by ID.
 pub fn spawn_archive_task(
     store: Arc<SqliteStore>,

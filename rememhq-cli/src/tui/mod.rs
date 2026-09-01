@@ -105,6 +105,7 @@ async fn run_app(
         app.show_archived,
     );
     data::spawn_stats_fetch(store.clone(), fetch_tx.clone());
+    data::spawn_telemetry_fetch(engine_arc.clone(), fetch_tx.clone());
     data::spawn_event_tailer(
         engine_arc.config.project_data_dir().join("events.jsonl"),
         fetch_tx.clone(),
@@ -575,6 +576,10 @@ fn handle_event(
                     KeyCode::Char('b') => app.mode = Mode::Browse,
                     KeyCode::Char('s') => app.mode = Mode::Stats,
                     KeyCode::Char('m') => app.mode = Mode::Monitor,
+                    KeyCode::Char('T') | KeyCode::Char('7') => {
+                        app.mode = Mode::Telemetry;
+                        data::spawn_telemetry_fetch(engine.clone(), fetch_tx.clone());
+                    }
 
                     KeyCode::Char('g') => {
                         app.set_status("Fetching Knowledge Graph triples...");
@@ -817,6 +822,16 @@ fn handle_event(
                     }
                     _ => {}
                 },
+
+                Mode::Telemetry => match key.code {
+                    KeyCode::Esc | KeyCode::Char('b') => app.mode = Mode::Browse,
+                    KeyCode::Char('q') => app.should_quit = true,
+                    KeyCode::Char('r') => {
+                        app.set_status("Refreshing telemetry & token cost metrics...");
+                        data::spawn_telemetry_fetch(engine.clone(), fetch_tx.clone());
+                    }
+                    _ => {}
+                },
             }
         }
         AppEvent::Input(_) => {}
@@ -828,6 +843,7 @@ fn handle_event(
         AppEvent::Tick => {
             app.tick_sparkline();
             data::spawn_stats_fetch(store.clone(), fetch_tx.clone());
+            data::spawn_telemetry_fetch(engine.clone(), fetch_tx.clone());
         }
 
         AppEvent::FetchComplete(result) => match result {
@@ -891,6 +907,11 @@ fn handle_event(
             FetchResult::Stats(res) => {
                 if let Ok(stats) = res {
                     app.stats = Some(stats);
+                }
+            }
+            FetchResult::Telemetry(res) => {
+                if let Ok(telemetry) = res {
+                    app.telemetry = Some(telemetry);
                 }
             }
             FetchResult::Archived(id, res) => {

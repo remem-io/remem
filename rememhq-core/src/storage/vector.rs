@@ -103,8 +103,11 @@ impl HNSWVectorIndex {
 
 impl Drop for HNSWVectorIndex {
     fn drop(&mut self) {
-        unsafe {
-            remem_ffi::remem_index_free(self.handle);
+        if !self.handle.is_null() {
+            unsafe {
+                remem_ffi::remem_index_free(self.handle);
+            }
+            self.handle = std::ptr::null_mut();
         }
     }
 }
@@ -115,6 +118,12 @@ unsafe impl Sync for HNSWVectorIndex {}
 #[async_trait]
 impl VectorIndex for HNSWVectorIndex {
     async fn add(&self, id: Uuid, embedding: &[f32]) -> anyhow::Result<()> {
+        if self.handle.is_null() {
+            anyhow::bail!("Vector index handle is uninitialized/null");
+        }
+        if embedding.is_empty() {
+            anyhow::bail!("Embedding vector cannot be empty");
+        }
         let id_str = CString::new(id.to_string())?;
         unsafe {
             let res = remem_ffi::remem_index_add(
@@ -131,6 +140,9 @@ impl VectorIndex for HNSWVectorIndex {
     }
 
     async fn remove(&self, id: Uuid) -> anyhow::Result<()> {
+        if self.handle.is_null() {
+            anyhow::bail!("Vector index handle is uninitialized/null");
+        }
         let id_str = CString::new(id.to_string())?;
         unsafe {
             let res = remem_ffi::remem_index_remove(self.handle, id_str.as_ptr());
@@ -142,6 +154,12 @@ impl VectorIndex for HNSWVectorIndex {
     }
 
     async fn search(&self, query: &[f32], k: usize) -> anyhow::Result<Vec<VectorResult>> {
+        if self.handle.is_null() {
+            anyhow::bail!("Vector index handle is uninitialized/null");
+        }
+        if query.is_empty() || k == 0 {
+            return Ok(vec![]);
+        }
         let mut count: usize = 0;
         unsafe {
             let results_ptr =
@@ -170,6 +188,9 @@ impl VectorIndex for HNSWVectorIndex {
     }
 
     fn len(&self) -> usize {
+        if self.handle.is_null() {
+            return 0;
+        }
         unsafe { remem_ffi::remem_index_size(self.handle) }
     }
 
@@ -178,6 +199,9 @@ impl VectorIndex for HNSWVectorIndex {
     }
 
     async fn save(&self, path: &Path) -> anyhow::Result<()> {
+        if self.handle.is_null() {
+            anyhow::bail!("Vector index handle is uninitialized/null");
+        }
         let path_str = CString::new(path.to_string_lossy().to_string())?;
         unsafe {
             let res = remem_ffi::remem_index_save(self.handle, path_str.as_ptr());
@@ -189,6 +213,9 @@ impl VectorIndex for HNSWVectorIndex {
     }
 
     async fn load(&self, path: &Path) -> anyhow::Result<()> {
+        if self.handle.is_null() {
+            anyhow::bail!("Vector index handle is uninitialized/null");
+        }
         let path_str = CString::new(path.to_string_lossy().to_string())?;
         unsafe {
             let res = remem_ffi::remem_index_load(self.handle, path_str.as_ptr());
@@ -216,6 +243,45 @@ mod tests {
             assert_eq!(normalized_str, "hello world! this is a test");
 
             remem_ffi::remem_free_string_cpp(normalized_ptr);
+        }
+    }
+
+    #[test]
+    fn test_cpp_ffi_null_safety() {
+        unsafe {
+            // Passing null pointers should not crash
+            let null_norm = remem_ffi::remem_normalize_text(std::ptr::null(), 1, 1);
+            assert!(null_norm.is_null());
+
+            let null_chunks = remem_ffi::remem_chunk_text(std::ptr::null(), 10, 2, 1);
+            assert!(null_chunks.is_null());
+
+            let count = remem_ffi::remem_chunks_count(std::ptr::null_mut());
+            assert_eq!(count, 0);
+
+            let chunk_get = remem_ffi::remem_chunks_get(std::ptr::null_mut(), 0);
+            assert!(chunk_get.is_null());
+
+            remem_ffi::remem_chunks_free(std::ptr::null_mut());
+            remem_ffi::remem_free_results(std::ptr::null_mut());
+            remem_ffi::remem_free_string_cpp(std::ptr::null_mut());
+            remem_ffi::remem_free_embedding(std::ptr::null_mut());
+            remem_ffi::remem_index_free(std::ptr::null_mut());
+            remem_ffi::remem_embedder_free(std::ptr::null_mut());
+
+            let add_res = remem_ffi::remem_index_add(
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+            );
+            assert_eq!(add_res, -1);
+
+            let rm_res = remem_ffi::remem_index_remove(std::ptr::null_mut(), std::ptr::null());
+            assert_eq!(rm_res, -1);
+
+            let size_res = remem_ffi::remem_index_size(std::ptr::null_mut());
+            assert_eq!(size_res, 0);
         }
     }
 

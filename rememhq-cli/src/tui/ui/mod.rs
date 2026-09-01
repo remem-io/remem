@@ -13,6 +13,7 @@ pub mod recall;
 pub mod recall_results;
 pub mod sessions;
 pub mod stats;
+pub mod telemetry_dashboard;
 pub mod versions;
 
 use ratatui::{
@@ -119,6 +120,11 @@ fn draw_main_area(f: &mut Frame, app: &App, area: Rect) {
 
     if app.mode == Mode::SessionViewer {
         sessions::draw_session_viewer(f, app, area);
+        return;
+    }
+
+    if app.mode == Mode::Telemetry {
+        telemetry_dashboard::draw_telemetry_dashboard(f, app, area);
         return;
     }
 
@@ -257,6 +263,14 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(": navigate history  ", desc_style),
             Span::styled("Esc / b", key_style),
             Span::styled(": back to browser", desc_style),
+        ],
+        Mode::Telemetry => vec![
+            Span::styled("r", key_style),
+            Span::styled(": refresh metrics  ", desc_style),
+            Span::styled("Esc / b", key_style),
+            Span::styled(": back to browser  ", desc_style),
+            Span::styled("q", key_style),
+            Span::styled(": quit", desc_style),
         ],
         Mode::EditModal => vec![
             Span::styled("Tab", key_style),
@@ -402,6 +416,18 @@ mod tests {
             "Narrow terminal memory",
             MemoryType::Fact,
         ));
+
+        terminal.draw(|f| draw(f, &app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        assert!(!buffer.content().is_empty());
+    }
+
+    #[test]
+    fn test_draw_telemetry_mode() {
+        let backend = TestBackend::new(100, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = App::new();
+        app.mode = Mode::Telemetry;
 
         terminal.draw(|f| draw(f, &app)).unwrap();
         let buffer = terminal.backend().buffer();
