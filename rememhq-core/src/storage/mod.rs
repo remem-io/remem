@@ -1,18 +1,27 @@
 //! Storage layer — SQLite persistence and vector index.
 
+pub mod audit;
 pub mod backend;
 pub mod event_log;
+pub mod migrations;
 pub mod quantization;
 pub mod remote_vector;
 pub mod sqlite;
 pub mod vector;
+pub mod webhooks;
 
-pub use backend::{BackendType, ReplicaConfig, ReplicaManager};
+pub use audit::{AuditEntry, AuditRetentionPolicy};
+pub use backend::{
+    BackendType, DuckDbConfig, DuckDbStore, NodeHealth, PostgresConfig, PostgresStore,
+    ReplicaConfig, ReplicaManager,
+};
 pub use event_log::{
     DeadLetterQueue, DeadLetterRecord, EventKind, EventLog, EventMetadata, SessionEvent,
 };
+pub use migrations::{check_status, migrate_down, migrate_up, MigrationStatus};
 pub use quantization::QuantizedVector;
 pub use remote_vector::{RemoteVectorClient, RemoteVectorConfig, RemoteVectorEngine};
+pub use webhooks::{WebhookDispatcher, WebhookEndpoint, WebhookPayload};
 
 use crate::memory::types::{
     KnowledgeGraphUpdate, MemoryRecord, MemoryStoreRecord, MemoryType, MemoryVersionRecord,

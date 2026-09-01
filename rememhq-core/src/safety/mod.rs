@@ -1,5 +1,8 @@
 //! Content safety, PII redaction, and prompt injection filtering for agent memory records.
 
+pub mod policy;
+pub use policy::{PiiAction, PiiCategory, PiiMatch, PiiPolicyEngine, PiiTokenVault};
+
 use serde::{Deserialize, Serialize};
 
 /// Assessment result from evaluating text for prompt injection and security risks.

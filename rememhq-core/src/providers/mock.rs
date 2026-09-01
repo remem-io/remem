@@ -33,6 +33,12 @@ FACT | procedure | 7 | baking | Then, mix the batter"#
                     None,
                 ));
             }
+            if prompt.contains("compiler semantics") {
+                return Ok((
+                    "FACT | fact | 8 | rust | Rust enforces ownership and lifetimes at compile time\nTRIPLE | Rust | enforces | Ownership".to_string(),
+                    None,
+                ));
+            }
             return Ok((
                 r#"FACT | fact | 8 | rust | Alice likes Rust"#.to_string(),
                 None,
@@ -45,6 +51,16 @@ FACT | procedure | 7 | baking | Then, mix the batter"#
             if prompt.contains("New Entity: \"Port 5432\"") {
                 return Ok(("Port 5432".to_string(), None));
             }
+        }
+        if prompt.contains("domain synonyms")
+            || prompt.contains("search query variations")
+            || prompt.contains("domain synonym generator")
+            || prompt.contains("Query:")
+        {
+            return Ok((
+                "Rust memory safety\nBorrow checker semantics\nRAII pattern".to_string(),
+                None,
+            ));
         }
         Ok(("Mock response".to_string(), None))
     }

@@ -77,6 +77,51 @@ impl CheckpointManager {
         }
         Ok(())
     }
+
+    /// List all active checkpoints found in the directory.
+    pub fn list_active_checkpoints(&self) -> std::io::Result<Vec<ConsolidationCheckpoint>> {
+        let mut list = Vec::new();
+        if !self.checkpoint_dir.exists() {
+            return Ok(list);
+        }
+        for entry in fs::read_dir(&self.checkpoint_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json")
+                || path.to_string_lossy().ends_with(".checkpoint.json")
+            {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(cp) = serde_json::from_str::<ConsolidationCheckpoint>(&content) {
+                        list.push(cp);
+                    }
+                }
+            }
+        }
+        Ok(list)
+    }
+
+    /// Clean up any checkpoint files older than the specified retention days (e.g. 7 days).
+    pub fn cleanup_old_checkpoints(&self, older_than_days: u32) -> std::io::Result<usize> {
+        let cutoff = Utc::now() - chrono::Duration::days(older_than_days as i64);
+        let mut cleaned = 0;
+
+        for entry in fs::read_dir(&self.checkpoint_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.to_string_lossy().ends_with(".checkpoint.json") {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(cp) = serde_json::from_str::<ConsolidationCheckpoint>(&content) {
+                        if cp.last_updated < cutoff {
+                            let _ = fs::remove_file(&path);
+                            cleaned += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(cleaned)
+    }
 }
 
 #[cfg(test)]

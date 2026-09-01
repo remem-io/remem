@@ -237,6 +237,10 @@ impl EventLog {
     }
 }
 
+fn default_dlq_status() -> String {
+    "pending".to_string()
+}
+
 /// A record in the Dead Letter Queue for unrecoverable errors during memory operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeadLetterRecord {
@@ -246,6 +250,35 @@ pub struct DeadLetterRecord {
     pub payload: serde_json::Value,
     pub error_message: String,
     pub retry_count: usize,
+    #[serde(default = "default_dlq_status")]
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_retried_at: Option<DateTime<Utc>>,
+}
+
+/// Background worker that monitors and retries failed operations from the Dead Letter Queue.
+pub struct DeadLetterWorker {
+    pub max_retries: usize,
+    pub alert_threshold: usize,
+}
+
+impl DeadLetterWorker {
+    pub fn new(max_retries: usize, alert_threshold: usize) -> Self {
+        Self {
+            max_retries,
+            alert_threshold,
+        }
+    }
+
+    /// Check if DLQ pending count exceeds the alert threshold.
+    pub fn should_alert(&self, pending_count: usize) -> bool {
+        pending_count >= self.alert_threshold
+    }
+
+    /// Check if a record can still be retried.
+    pub fn can_retry(&self, record: &DeadLetterRecord) -> bool {
+        record.retry_count < self.max_retries && record.status != "resolved"
+    }
 }
 
 /// Dead Letter Queue (DLQ) persisted as a JSONL file for error recovery and replay.
@@ -276,6 +309,8 @@ impl DeadLetterQueue {
             payload,
             error_message: error_message.into(),
             retry_count: 0,
+            status: "pending".into(),
+            last_retried_at: None,
         };
 
         let file = OpenOptions::new()

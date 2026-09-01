@@ -125,6 +125,66 @@ impl MemoryMetrics {
         let p99_idx = ((samples.len() as f64 * 0.99) as usize).min(samples.len() - 1);
         (samples[p50_idx], samples[p95_idx], samples[p99_idx])
     }
+
+    /// Render Prometheus text exposition format metrics.
+    pub fn render_prometheus(&self, snapshot: &MetricsSnapshot) -> String {
+        format!(
+            "# HELP remem_stores_total Total memories stored\n\
+             # TYPE remem_stores_total counter\n\
+             remem_stores_total {}\n\n\
+             # HELP remem_recalls_total Total memory recall queries\n\
+             # TYPE remem_recalls_total counter\n\
+             remem_recalls_total {}\n\n\
+             # HELP remem_consolidations_total Total consolidation passes executed\n\
+             # TYPE remem_consolidations_total counter\n\
+             remem_consolidations_total {}\n\n\
+             # HELP remem_store_latency_p50_ms 50th percentile store latency in ms\n\
+             # TYPE remem_store_latency_p50_ms gauge\n\
+             remem_store_latency_p50_ms {:.2}\n\n\
+             # HELP remem_store_latency_p95_ms 95th percentile store latency in ms\n\
+             # TYPE remem_store_latency_p95_ms gauge\n\
+             remem_store_latency_p95_ms {:.2}\n\n\
+             # HELP remem_recall_latency_p50_ms 50th percentile recall latency in ms\n\
+             # TYPE remem_recall_latency_p50_ms gauge\n\
+             remem_recall_latency_p50_ms {:.2}\n\n\
+             # HELP remem_recall_latency_p95_ms 95th percentile recall latency in ms\n\
+             # TYPE remem_recall_latency_p95_ms gauge\n\
+             remem_recall_latency_p95_ms {:.2}\n\n\
+             # HELP remem_recall_latency_p99_ms 99th percentile recall latency in ms\n\
+             # TYPE remem_recall_latency_p99_ms gauge\n\
+             remem_recall_latency_p99_ms {:.2}\n\n\
+             # HELP remem_active_sessions Number of active sessions\n\
+             # TYPE remem_active_sessions gauge\n\
+             remem_active_sessions {}\n\n\
+             # HELP remem_uptime_seconds Process uptime in seconds\n\
+             # TYPE remem_uptime_seconds counter\n\
+             remem_uptime_seconds {}\n",
+            snapshot.total_stores,
+            snapshot.total_recalls,
+            snapshot.total_consolidations,
+            snapshot.store_latency_p50_ms,
+            snapshot.store_latency_p95_ms,
+            snapshot.recall_latency_p50_ms,
+            snapshot.recall_latency_p95_ms,
+            snapshot.recall_latency_p99_ms,
+            snapshot.active_sessions,
+            snapshot.uptime_seconds
+        )
+    }
+
+    /// Calculate percentage of recall operations completing within target SLA (e.g. 50ms).
+    pub fn calculate_sla_adherence(&self, target_max_ms: f64) -> f64 {
+        let samples: Vec<f64> = self
+            .recall_latencies
+            .read()
+            .map(|d| d.iter().copied().collect())
+            .unwrap_or_default();
+        if samples.is_empty() {
+            return 100.0;
+        }
+        let within_sla = samples.iter().filter(|&&ms| ms <= target_max_ms).count();
+        (within_sla as f64 / samples.len() as f64) * 100.0
+    }
 }
 
 #[cfg(test)]

@@ -1,17 +1,97 @@
 //! Hierarchical Memory Tree: Summary Facts -> Detailed Sub-Facts -> Source Citations.
 
-use crate::memory::types::MemoryType;
+pub use crate::memory::types::FactCitation;
+use crate::memory::types::{MemoryRecord, MemoryType};
+use crate::storage::MemoryStore;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Source citation linking a fact to an exact interaction or document.
+/// A node in the hierarchical fact tree with recursive children and citations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FactCitation {
-    pub source_id: String,
-    pub source_type: String, // "session_observation", "file", "url", "user_prompt"
-    pub snippet: String,
-    pub timestamp: DateTime<Utc>,
+pub struct FactTreeNode {
+    pub record: MemoryRecord,
+    pub children: Vec<FactTreeNode>,
+    pub depth: usize,
+}
+
+impl FactTreeNode {
+    pub fn new(record: MemoryRecord, depth: usize) -> Self {
+        Self {
+            record,
+            children: Vec::new(),
+            depth,
+        }
+    }
+
+    /// Render tree as a formatted outline string.
+    pub fn render(&self) -> String {
+        let indent = "  ".repeat(self.depth);
+        let mut out = format!(
+            "{}- [{}] {} (importance: {:.1})\n",
+            indent, self.record.memory_type, self.record.content, self.record.importance
+        );
+        for cite in &self.record.citations {
+            out.push_str(&format!(
+                "{}  * [cite: {}] \"{}\"\n",
+                indent, cite.source_type, cite.snippet
+            ));
+        }
+        for child in &self.children {
+            out.push_str(&child.render());
+        }
+        out
+    }
+}
+
+/// Recursively load a hierarchical fact tree from any MemoryStore up to max_depth.
+pub async fn get_fact_tree(
+    store: &dyn MemoryStore,
+    root_id: Uuid,
+    max_depth: usize,
+) -> anyhow::Result<Option<FactTreeNode>> {
+    let root = match store.get(root_id).await? {
+        Some(r) => r,
+        None => return Ok(None),
+    };
+
+    let mut tree_root = FactTreeNode::new(root, 0);
+    if max_depth > 0 {
+        populate_children(store, &mut tree_root, max_depth).await?;
+    }
+
+    Ok(Some(tree_root))
+}
+
+async fn populate_children(
+    store: &dyn MemoryStore,
+    node: &mut FactTreeNode,
+    remaining_depth: usize,
+) -> anyhow::Result<()> {
+    if remaining_depth == 0 {
+        return Ok(());
+    }
+
+    let all_memories = store.list(&[], None, None, usize::MAX).await?;
+    let children: Vec<MemoryRecord> = all_memories
+        .into_iter()
+        .filter(|m| m.parent_fact_id == Some(node.record.id))
+        .collect();
+
+    for child in children {
+        let mut child_node = FactTreeNode::new(child, node.depth + 1);
+        if remaining_depth > 1 {
+            Box::pin(populate_children(
+                store,
+                &mut child_node,
+                remaining_depth - 1,
+            ))
+            .await?;
+        }
+        node.children.push(child_node);
+    }
+
+    Ok(())
 }
 
 /// A fine-grained sub-fact providing specific context to a parent summary fact.

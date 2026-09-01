@@ -7,16 +7,25 @@ pub mod checkpoint;
 pub mod compaction;
 pub mod consolidation;
 pub mod contradiction;
+pub mod expansion;
 pub mod graph_traversal;
 pub mod hierarchical;
 pub mod resolution;
 pub mod retrieval;
 pub mod scoring;
+pub mod streaming;
+pub mod temporal;
 pub mod triage;
 
 pub use checkpoint::{CheckpointManager, ConsolidationCheckpoint};
+pub use expansion::QueryExpander;
 pub use graph_traversal::{GraphTraversalEngine, KnowledgePath};
 pub use hierarchical::{FactCitation, HierarchicalFact, SubFact};
+pub use streaming::StreamingConsolidationPipeline;
+pub use temporal::{
+    extract_temporal_boundaries, filter_by_validity, resolve_temporal_conflict, TemporalResolution,
+    TemporalWindow,
+};
 
 use crate::config::RememConfig;
 use crate::memory::types::{KnowledgeGraphUpdate, MemoryRecord, MemoryResult};

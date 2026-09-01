@@ -58,128 +58,7 @@ impl SqliteStore {
 
     /// Initialize the database schema synchronously before sharing the connection.
     fn init_schema(conn: &Connection) -> anyhow::Result<()> {
-        conn.execute_batch(
-            "
-            CREATE TABLE IF NOT EXISTS memories (
-                id              TEXT PRIMARY KEY,
-                content         TEXT NOT NULL,
-                importance      REAL NOT NULL DEFAULT 5.0,
-                tags            TEXT NOT NULL DEFAULT '[]',
-                memory_type     TEXT NOT NULL DEFAULT 'fact',
-                created_at      TEXT NOT NULL,
-                updated_at      TEXT NOT NULL,
-                decay_score     REAL NOT NULL DEFAULT 1.0,
-                source_session  TEXT,
-                ttl_days        INTEGER,
-                archived        INTEGER NOT NULL DEFAULT 0,
-                store_id        TEXT,
-                path            TEXT,
-                observation_kind TEXT
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
-            CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance DESC);
-            CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_memories_session ON memories(source_session);
-
-            -- FTS5 virtual table for full-text search
-            CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-                content,
-                tags,
-                content='memories',
-                content_rowid='rowid'
-            );
-
-            -- Triggers to keep FTS index in sync
-            CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
-                INSERT INTO memories_fts(rowid, content, tags)
-                VALUES (new.rowid, new.content, new.tags);
-            END;
-
-            CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
-                INSERT INTO memories_fts(memories_fts, rowid, content, tags)
-                VALUES ('delete', old.rowid, old.content, old.tags);
-            END;
-
-            CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
-                INSERT INTO memories_fts(memories_fts, rowid, content, tags)
-                VALUES ('delete', old.rowid, old.content, old.tags);
-                INSERT INTO memories_fts(rowid, content, tags)
-                VALUES (new.rowid, new.content, new.tags);
-            END;
-
-            -- Knowledge graph triples
-            CREATE TABLE IF NOT EXISTS knowledge_graph (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                subject     TEXT NOT NULL,
-                predicate   TEXT NOT NULL,
-                object      TEXT NOT NULL,
-                memory_id   TEXT REFERENCES memories(id) ON DELETE CASCADE,
-                created_at  TEXT NOT NULL,
-                UNIQUE(subject, predicate, object)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_kg_subject ON knowledge_graph(subject);
-            CREATE INDEX IF NOT EXISTS idx_kg_object ON knowledge_graph(object);
-
-            -- Sessions table
-            CREATE TABLE IF NOT EXISTS sessions (
-                id              TEXT PRIMARY KEY,
-                project         TEXT NOT NULL,
-                started_at      TEXT NOT NULL,
-                ended_at        TEXT,
-                consolidated    INTEGER NOT NULL DEFAULT 0,
-                memory_count    INTEGER NOT NULL DEFAULT 0
-            );
-
-            -- Session Summaries
-            CREATE TABLE IF NOT EXISTS session_summaries (
-                session_id      TEXT PRIMARY KEY,
-                project         TEXT NOT NULL,
-                summary         TEXT NOT NULL,
-                files_touched   TEXT NOT NULL DEFAULT '[]',
-                key_decisions   TEXT NOT NULL DEFAULT '[]',
-                timestamp       TEXT NOT NULL
-            );
-            
-            -- Session Logs
-            CREATE TABLE IF NOT EXISTS session_logs (
-                id               TEXT PRIMARY KEY,
-                parent_id        TEXT REFERENCES session_logs(id),
-                session_id       TEXT NOT NULL,
-                observation_type TEXT NOT NULL,
-                content          TEXT NOT NULL,
-                timestamp        TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_session_logs_session ON session_logs(session_id);
-            
-            -- Memory Stores
-            CREATE TABLE IF NOT EXISTS memory_stores (
-                id              TEXT PRIMARY KEY,
-                name            TEXT NOT NULL,
-                description     TEXT,
-                created_at      TEXT NOT NULL,
-                archived_at     TEXT
-            );
-
-            -- Memory Versions
-            CREATE TABLE IF NOT EXISTS memory_versions (
-                id              TEXT PRIMARY KEY,
-                store_id        TEXT NOT NULL,
-                memory_id       TEXT NOT NULL,
-                operation       TEXT NOT NULL,
-                content         TEXT NOT NULL,
-                content_sha256  TEXT NOT NULL,
-                created_at      TEXT NOT NULL
-            );
-            ",
-        )?;
-
-        // Apply schema migrations for existing databases
-        let _ = conn.execute("ALTER TABLE memories ADD COLUMN store_id TEXT", []);
-        let _ = conn.execute("ALTER TABLE memories ADD COLUMN path TEXT", []);
-        let _ = conn.execute("ALTER TABLE memories ADD COLUMN observation_kind TEXT", []);
-
+        crate::storage::migrations::migrate_up(conn)?;
         Ok(())
     }
 
@@ -222,6 +101,54 @@ impl SqliteStore {
             None
         };
 
+        let parent_fact_id: Option<Uuid> = if row.as_ref().column_count() > 14 {
+            row.get::<_, Option<String>>(14)
+                .ok()
+                .flatten()
+                .and_then(|s| Uuid::parse_str(&s).ok())
+        } else {
+            None
+        };
+        let hierarchy_level: u32 = if row.as_ref().column_count() > 15 {
+            row.get::<_, i64>(15).unwrap_or(0) as u32
+        } else {
+            0
+        };
+        let citations: Vec<crate::memory::types::FactCitation> = if row.as_ref().column_count() > 16
+        {
+            row.get::<_, Option<String>>(16)
+                .ok()
+                .flatten()
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let valid_from: Option<DateTime<Utc>> = if row.as_ref().column_count() > 17 {
+            row.get::<_, Option<String>>(17)
+                .ok()
+                .flatten()
+                .and_then(|s| {
+                    DateTime::parse_from_rfc3339(&s)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&Utc))
+                })
+        } else {
+            None
+        };
+        let valid_to: Option<DateTime<Utc>> = if row.as_ref().column_count() > 18 {
+            row.get::<_, Option<String>>(18)
+                .ok()
+                .flatten()
+                .and_then(|s| {
+                    DateTime::parse_from_rfc3339(&s)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&Utc))
+                })
+        } else {
+            None
+        };
+
         Ok(MemoryRecord {
             id: Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()),
             content,
@@ -241,6 +168,11 @@ impl SqliteStore {
             ttl_days,
             store_id,
             path,
+            parent_fact_id,
+            hierarchy_level,
+            citations,
+            valid_from,
+            valid_to,
         })
     }
 
@@ -271,9 +203,15 @@ impl SqliteStore {
     }
 
     fn insert_inner(conn: &Connection, record: &MemoryRecord) -> anyhow::Result<()> {
+        let parent_str = record.parent_fact_id.map(|id| id.to_string());
+        let citations_json =
+            serde_json::to_string(&record.citations).unwrap_or_else(|_| "[]".to_string());
+        let valid_from_str = record.valid_from.map(|dt| dt.to_rfc3339());
+        let valid_to_str = record.valid_to.map(|dt| dt.to_rfc3339());
+
         conn.execute(
-            "INSERT INTO memories (id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days, store_id, path, observation_kind)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT INTO memories (id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days, store_id, path, observation_kind, parent_fact_id, hierarchy_level, citations, valid_from, valid_to)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 record.id.to_string(),
                 record.content,
@@ -288,6 +226,11 @@ impl SqliteStore {
                 record.store_id,
                 record.path,
                 record.observation_kind.as_ref().map(|k| k.to_string()),
+                parent_str,
+                record.hierarchy_level as i64,
+                citations_json,
+                valid_from_str,
+                valid_to_str,
             ],
         )?;
 
@@ -295,13 +238,36 @@ impl SqliteStore {
             Self::insert_version_inner(conn, store_id, &record.id, "insert", &record.content)?;
         }
 
+        // Record immutable audit entry
+        let audit_id = Uuid::new_v4().to_string();
+        let now_str = Utc::now().to_rfc3339();
+        let _ = conn.execute(
+            "INSERT INTO audit_log (id, actor, action, memory_id, old_value, new_value, timestamp)
+             VALUES (?1, 'system', 'insert', ?2, NULL, ?3, ?4)",
+            params![audit_id, record.id.to_string(), record.content, now_str],
+        );
+
         Ok(())
     }
 
     fn update_inner(conn: &Connection, record: &MemoryRecord) -> anyhow::Result<()> {
+        let parent_str = record.parent_fact_id.map(|id| id.to_string());
+        let citations_json =
+            serde_json::to_string(&record.citations).unwrap_or_else(|_| "[]".to_string());
+        let valid_from_str = record.valid_from.map(|dt| dt.to_rfc3339());
+        let valid_to_str = record.valid_to.map(|dt| dt.to_rfc3339());
+
+        let old_content: Option<String> = conn
+            .query_row(
+                "SELECT content FROM memories WHERE id = ?1",
+                params![record.id.to_string()],
+                |r| r.get(0),
+            )
+            .ok();
+
         conn.execute(
-            "UPDATE memories SET content = ?1, importance = ?2, tags = ?3, memory_type = ?4, updated_at = ?5, decay_score = ?6, store_id = ?7, path = ?8, observation_kind = ?9
-             WHERE id = ?10",
+            "UPDATE memories SET content = ?1, importance = ?2, tags = ?3, memory_type = ?4, updated_at = ?5, decay_score = ?6, store_id = ?7, path = ?8, observation_kind = ?9, parent_fact_id = ?10, hierarchy_level = ?11, citations = ?12, valid_from = ?13, valid_to = ?14
+             WHERE id = ?15",
             params![
                 record.content,
                 record.importance as f64,
@@ -312,6 +278,11 @@ impl SqliteStore {
                 record.store_id,
                 record.path,
                 record.observation_kind.as_ref().map(|k| k.to_string()),
+                parent_str,
+                record.hierarchy_level as i64,
+                citations_json,
+                valid_from_str,
+                valid_to_str,
                 record.id.to_string(),
             ],
         )?;
@@ -319,6 +290,21 @@ impl SqliteStore {
         if let Some(store_id) = &record.store_id {
             Self::insert_version_inner(conn, store_id, &record.id, "update", &record.content)?;
         }
+
+        // Record immutable audit entry
+        let audit_id = Uuid::new_v4().to_string();
+        let now_str = Utc::now().to_rfc3339();
+        let _ = conn.execute(
+            "INSERT INTO audit_log (id, actor, action, memory_id, old_value, new_value, timestamp)
+             VALUES (?1, 'system', 'update', ?2, ?3, ?4, ?5)",
+            params![
+                audit_id,
+                record.id.to_string(),
+                old_content,
+                record.content,
+                now_str
+            ],
+        );
 
         Ok(())
     }
@@ -341,6 +327,17 @@ impl SqliteStore {
             "UPDATE memories SET archived = 1, updated_at = ?1 WHERE id = ?2",
             params![Utc::now().to_rfc3339(), id.to_string()],
         )?;
+
+        if rows > 0 {
+            let audit_id = Uuid::new_v4().to_string();
+            let now_str = Utc::now().to_rfc3339();
+            let _ = conn.execute(
+                "INSERT INTO audit_log (id, actor, action, memory_id, old_value, new_value, timestamp)
+                 VALUES (?1, 'system', 'archive', ?2, NULL, NULL, ?3)",
+                params![audit_id, id.to_string(), now_str],
+            );
+        }
+
         Ok(rows > 0)
     }
 
@@ -439,10 +436,29 @@ impl MemoryStore for SqliteStore {
 
     async fn delete(&self, id: Uuid) -> anyhow::Result<bool> {
         let conn = self.conn.lock().await;
+        let old_content: Option<String> = conn
+            .query_row(
+                "SELECT content FROM memories WHERE id = ?1",
+                params![id.to_string()],
+                |r| r.get(0),
+            )
+            .ok();
+
         let rows = conn.execute(
             "DELETE FROM memories WHERE id = ?1",
             params![id.to_string()],
         )?;
+
+        if rows > 0 {
+            let audit_id = Uuid::new_v4().to_string();
+            let now_str = Utc::now().to_rfc3339();
+            let _ = conn.execute(
+                "INSERT INTO audit_log (id, actor, action, memory_id, old_value, new_value, timestamp)
+                 VALUES (?1, 'system', 'delete', ?2, ?3, NULL, ?4)",
+                params![audit_id, id.to_string(), old_content, now_str],
+            );
+        }
+
         Ok(rows > 0)
     }
 
@@ -650,51 +666,13 @@ impl MemoryStore for SqliteStore {
     async fn list_by_session(&self, session_id: &str) -> anyhow::Result<Vec<MemoryRecord>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days
+            "SELECT id, content, importance, tags, memory_type, created_at, updated_at, decay_score, source_session, ttl_days, archived, store_id, path, observation_kind, parent_fact_id, hierarchy_level, citations, valid_from, valid_to
              FROM memories WHERE archived = 0 AND source_session = ?1 ORDER BY created_at ASC",
         )?;
-        let rows = stmt.query_map(params![session_id], |row| {
-            let tags_json: String = row.get(3)?;
-            let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
-            let mt_str: String = row.get(4)?;
-            let memory_type: MemoryType = mt_str.parse().unwrap_or(MemoryType::Observation);
-
-            let created_at_str: String = row.get(5)?;
-            let updated_at_str: String = row.get(6)?;
-
-            let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
-            let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
-
-            let id_str: String = row.get(0)?;
-            let id = Uuid::parse_str(&id_str).unwrap_or_default();
-            let source_session: Option<String> = row.get(8)?;
-
-            Ok(MemoryRecord {
-                id,
-                content: row.get(1)?,
-                importance: row.get(2)?,
-                tags,
-                memory_type,
-                observation_kind: None,
-                created_at,
-                updated_at,
-                decay_score: row.get(7)?,
-                embedding: None,
-                source_session,
-                ttl_days: row.get(9)?,
-                store_id: None,
-                path: None,
-            })
-        })?;
-
-        let mut records = Vec::new();
-        for r in rows {
-            records.push(r?);
-        }
+        let records = stmt
+            .query_map(params![session_id], Self::row_to_record)?
+            .filter_map(|r| r.ok())
+            .collect();
         Ok(records)
     }
 
@@ -1244,6 +1222,268 @@ impl SqliteStore {
             consolidated: row.get::<_, i32>(4)? != 0,
             memory_count: row.get::<_, i64>(5)? as usize,
         })
+    }
+
+    // ── Batch Operations with Single Transaction ─────────────────────────
+
+    /// Atomically insert a batch of memories in a single transaction.
+    pub async fn batch_store(&self, records: &[MemoryRecord]) -> anyhow::Result<Vec<Uuid>> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        let mut ids = Vec::with_capacity(records.len());
+        for record in records {
+            Self::insert_inner(&tx, record)?;
+            ids.push(record.id);
+        }
+        tx.commit()?;
+        Ok(ids)
+    }
+
+    /// Atomically update a batch of memories in a single transaction.
+    pub async fn batch_update(&self, records: &[MemoryRecord]) -> anyhow::Result<usize> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        let mut count = 0;
+        for record in records {
+            Self::update_inner(&tx, record)?;
+            count += 1;
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Atomically delete a batch of memories in a single transaction.
+    pub async fn batch_delete(&self, ids: &[Uuid]) -> anyhow::Result<usize> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        let mut count = 0;
+        for id in ids {
+            let old_content: Option<String> = tx
+                .query_row(
+                    "SELECT content FROM memories WHERE id = ?1",
+                    params![id.to_string()],
+                    |r| r.get(0),
+                )
+                .ok();
+
+            let rows = tx.execute(
+                "DELETE FROM memories WHERE id = ?1",
+                params![id.to_string()],
+            )?;
+            if rows > 0 {
+                count += 1;
+                let audit_id = Uuid::new_v4().to_string();
+                let now_str = Utc::now().to_rfc3339();
+                let _ = tx.execute(
+                    "INSERT INTO audit_log (id, actor, action, memory_id, old_value, new_value, timestamp)
+                     VALUES (?1, 'system', 'delete', ?2, ?3, NULL, ?4)",
+                    params![audit_id, id.to_string(), old_content, now_str],
+                );
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    // ── Audit Log Management ─────────────────────────────────────────────
+
+    /// Retrieve audit trail entries, optionally filtered by memory_id.
+    pub async fn get_audit_trail(
+        &self,
+        memory_id: Option<Uuid>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<crate::storage::audit::AuditEntry>> {
+        let conn = self.conn.lock().await;
+        let mut sql = String::from(
+            "SELECT id, actor, action, memory_id, old_value, new_value, timestamp FROM audit_log WHERE 1=1"
+        );
+        let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+        if let Some(mid) = memory_id {
+            sql.push_str(" AND memory_id = ?");
+            params_vec.push(Box::new(mid.to_string()));
+        }
+
+        sql.push_str(" ORDER BY timestamp DESC LIMIT ?");
+        params_vec.push(Box::new(limit as i64));
+
+        let mut stmt = conn.prepare(&sql)?;
+        let entries = stmt
+            .query_map(rusqlite::params_from_iter(params_vec), |row| {
+                let id_str: String = row.get(0)?;
+                let mid_str: Option<String> = row.get(3)?;
+                let ts_str: String = row.get(6)?;
+                Ok(crate::storage::audit::AuditEntry {
+                    id: Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()),
+                    actor: row.get(1)?,
+                    action: row.get(2)?,
+                    memory_id: mid_str.and_then(|s| Uuid::parse_str(&s).ok()),
+                    old_value: row.get(4)?,
+                    new_value: row.get(5)?,
+                    timestamp: DateTime::parse_from_rfc3339(&ts_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(entries)
+    }
+
+    /// Prune audit logs older than the retention threshold.
+    pub async fn prune_audit_logs(&self, retention_days: u32) -> anyhow::Result<usize> {
+        let conn = self.conn.lock().await;
+        let cutoff = (Utc::now() - chrono::Duration::days(retention_days as i64)).to_rfc3339();
+        let rows = conn.execute(
+            "DELETE FROM audit_log WHERE timestamp < ?1",
+            params![cutoff],
+        )?;
+        Ok(rows)
+    }
+
+    // ── Dead Letter Queue (DLQ) Persistence ──────────────────────────────
+
+    /// Push an operation to the dead letter events table.
+    pub async fn push_dead_letter(
+        &self,
+        operation: &str,
+        payload: &serde_json::Value,
+        error_message: &str,
+    ) -> anyhow::Result<Uuid> {
+        let conn = self.conn.lock().await;
+        let id = Uuid::new_v4();
+        let now = Utc::now().to_rfc3339();
+        let payload_str = serde_json::to_string(payload)?;
+
+        conn.execute(
+            "INSERT INTO dead_letter_events (id, operation, payload, error_message, retry_count, status, created_at)
+             VALUES (?1, ?2, ?3, ?4, 0, 'pending', ?5)",
+            params![id.to_string(), operation, payload_str, error_message, now],
+        )?;
+
+        Ok(id)
+    }
+
+    /// List dead letter events with a status filter.
+    pub async fn list_dead_letters(
+        &self,
+        status: Option<&str>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<crate::storage::event_log::DeadLetterRecord>> {
+        let conn = self.conn.lock().await;
+        let mut sql = String::from(
+            "SELECT id, operation, payload, error_message, retry_count, status, created_at, last_retried_at FROM dead_letter_events WHERE 1=1"
+        );
+        let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+        if let Some(st) = status {
+            sql.push_str(" AND status = ?");
+            params_vec.push(Box::new(st.to_string()));
+        }
+
+        sql.push_str(" ORDER BY created_at DESC LIMIT ?");
+        params_vec.push(Box::new(limit as i64));
+
+        let mut stmt = conn.prepare(&sql)?;
+        let records = stmt
+            .query_map(rusqlite::params_from_iter(params_vec), |row| {
+                let id_str: String = row.get(0)?;
+                let payload_str: String = row.get(2)?;
+                let created_str: String = row.get(6)?;
+                let last_retry_str: Option<String> = row.get(7)?;
+
+                Ok(crate::storage::event_log::DeadLetterRecord {
+                    id: Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()),
+                    timestamp: DateTime::parse_from_rfc3339(&created_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                    operation: row.get(1)?,
+                    payload: serde_json::from_str(&payload_str).unwrap_or_default(),
+                    error_message: row.get(3)?,
+                    retry_count: row.get::<_, i64>(4)? as usize,
+                    status: row.get(5)?,
+                    last_retried_at: last_retry_str.and_then(|s| {
+                        DateTime::parse_from_rfc3339(&s)
+                            .map(|dt| dt.with_timezone(&Utc))
+                            .ok()
+                    }),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(records)
+    }
+
+    /// Mark a dead letter record as resolved.
+    pub async fn resolve_dead_letter(&self, id: Uuid) -> anyhow::Result<bool> {
+        let conn = self.conn.lock().await;
+        let rows = conn.execute(
+            "UPDATE dead_letter_events SET status = 'resolved' WHERE id = ?1",
+            params![id.to_string()],
+        )?;
+        Ok(rows > 0)
+    }
+
+    // ── Persistent L2 Embedding Cache ────────────────────────────────────
+
+    /// Look up a cached embedding vector by content SHA-256 and model name.
+    pub async fn get_cached_embedding(
+        &self,
+        content_hash: &str,
+        model: &str,
+    ) -> anyhow::Result<Option<Vec<f32>>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT embedding_bytes FROM embedding_cache WHERE content_hash = ?1 AND model = ?2",
+        )?;
+
+        let blob_opt: Option<Vec<u8>> = stmt
+            .query_row(params![content_hash, model], |row| row.get(0))
+            .optional()?;
+
+        if let Some(blob) = blob_opt {
+            let _ = conn.execute(
+                "UPDATE embedding_cache SET last_accessed_at = ?1 WHERE content_hash = ?2 AND model = ?3",
+                params![Utc::now().to_rfc3339(), content_hash, model],
+            );
+            if blob.len() % 4 == 0 {
+                let floats: Vec<f32> = blob
+                    .chunks_exact(4)
+                    .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                    .collect();
+                return Ok(Some(floats));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Store an embedding vector into the persistent L2 embedding cache.
+    pub async fn put_cached_embedding(
+        &self,
+        content_hash: &str,
+        model: &str,
+        embedding: &[f32],
+    ) -> anyhow::Result<()> {
+        let conn = self.conn.lock().await;
+        let mut bytes = Vec::with_capacity(embedding.len() * 4);
+        for f in embedding {
+            bytes.extend_from_slice(&f.to_le_bytes());
+        }
+        let now = Utc::now().to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO embedding_cache (content_hash, embedding_bytes, model, created_at, last_accessed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(content_hash) DO UPDATE SET
+                embedding_bytes = excluded.embedding_bytes,
+                last_accessed_at = excluded.last_accessed_at",
+            params![content_hash, bytes, model, now, now],
+        )?;
+
+        Ok(())
     }
 }
 

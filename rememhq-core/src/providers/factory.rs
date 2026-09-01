@@ -100,64 +100,91 @@ fn try_provider(kind: &ProviderKind) -> Option<Arc<dyn Provider>> {
 }
 
 fn try_provider_chain(chain: &[ProviderKind]) -> Arc<dyn Provider> {
-    for (i, kind) in chain.iter().enumerate() {
-        match try_provider(kind) {
-            Some(p) => return p,
-            None if i == 0 => {
-                tracing::warn!("Failed to initialise configured provider. Trying fallbacks…");
-            }
-            None => {}
+    let mut providers = Vec::new();
+    for kind in chain {
+        if let Some(p) = try_provider(kind) {
+            providers.push(p);
         }
     }
+
+    if !providers.is_empty() {
+        if providers.len() == 1 {
+            return providers.remove(0);
+        } else {
+            return Arc::new(crate::providers::failover::ProviderChain::new(providers));
+        }
+    }
+
     tracing::warn!("No valid reasoning API keys found. Falling back to MockProvider.");
     Arc::new(MockProvider)
 }
 
 fn auto_detect_provider() -> Arc<dyn Provider> {
+    let mut providers = Vec::new();
+
     if let Ok(k) = std::env::var("ANTHROPIC_API_KEY") {
         if !k.trim().is_empty() {
             if let Some(p) = try_provider(&ProviderKind::Anthropic) {
-                return p;
+                providers.push(p);
             }
         }
     }
     if let Ok(k) = std::env::var("OPENAI_API_KEY") {
         if !k.trim().is_empty() {
             if let Some(p) = try_provider(&ProviderKind::OpenAI) {
-                return p;
+                providers.push(p);
             }
         }
     }
     if let Ok(k) = std::env::var("GOOGLE_API_KEY") {
         if !k.trim().is_empty() {
             if let Some(p) = try_provider(&ProviderKind::Google) {
-                return p;
+                providers.push(p);
             }
         }
     }
     if let Ok(k) = std::env::var("LLAMA_API_BASE") {
         if !k.trim().is_empty() {
-            return Arc::new(LocalProvider::new(None));
+            providers.push(Arc::new(LocalProvider::new(None)));
         }
     }
     if let Ok(k) = std::env::var("OLLAMA_API_BASE") {
         if !k.trim().is_empty() {
-            return Arc::new(LocalProvider::new(None));
+            providers.push(Arc::new(LocalProvider::new(None)));
         }
     }
-    tracing::warn!("No reasoning API keys set. Falling back to MockProvider.");
-    Arc::new(MockProvider)
+
+    if !providers.is_empty() {
+        if providers.len() == 1 {
+            providers.remove(0)
+        } else {
+            Arc::new(crate::providers::failover::ProviderChain::new(providers))
+        }
+    } else {
+        tracing::warn!("No reasoning API keys set. Falling back to MockProvider.");
+        Arc::new(MockProvider)
+    }
 }
 
 fn fallback_embedding() -> Arc<dyn EmbeddingProvider> {
+    let mut embeddings_list: Vec<Arc<dyn EmbeddingProvider>> = Vec::new();
     if std::env::var("OPENAI_API_KEY").is_ok() {
         if let Ok(p) = OpenAIEmbeddings::new(None, None) {
-            return Arc::new(p);
+            embeddings_list.push(Arc::new(p));
         }
     }
     if std::env::var("GOOGLE_API_KEY").is_ok() {
         if let Ok(p) = GoogleEmbeddings::new(None) {
-            return Arc::new(p);
+            embeddings_list.push(Arc::new(p));
+        }
+    }
+    if !embeddings_list.is_empty() {
+        if embeddings_list.len() == 1 {
+            return embeddings_list.remove(0);
+        } else {
+            return Arc::new(crate::providers::failover::EmbeddingChain::new(
+                embeddings_list,
+            ));
         }
     }
     tracing::warn!("Falling back to MockEmbeddings.");
@@ -181,14 +208,15 @@ fn try_local_embeddings() -> Arc<dyn EmbeddingProvider> {
 }
 
 fn auto_detect_embeddings() -> Arc<dyn EmbeddingProvider> {
+    let mut list: Vec<Arc<dyn EmbeddingProvider>> = Vec::new();
     if std::env::var("OPENAI_API_KEY").is_ok() {
         if let Ok(p) = OpenAIEmbeddings::new(None, None) {
-            return Arc::new(p);
+            list.push(Arc::new(p));
         }
     }
     if std::env::var("GOOGLE_API_KEY").is_ok() {
         if let Ok(p) = GoogleEmbeddings::new(None) {
-            return Arc::new(p);
+            list.push(Arc::new(p));
         }
     }
     // Try local model files
@@ -198,13 +226,22 @@ fn auto_detect_embeddings() -> Arc<dyn EmbeddingProvider> {
         std::env::var("REMEM_LOCAL_VOCAB_PATH").unwrap_or_else(|_| "models/vocab.txt".to_string());
     if std::path::Path::new(&model_path).exists() && std::path::Path::new(&vocab_path).exists() {
         if let Ok(p) = LocalEmbeddings::new(&model_path, &vocab_path) {
-            return Arc::new(p);
+            list.push(Arc::new(p));
         }
     }
-    tracing::warn!(
-        "No embedding API keys or local model files found. Falling back to MockEmbeddings."
-    );
-    Arc::new(MockEmbeddings::new(768))
+
+    if !list.is_empty() {
+        if list.len() == 1 {
+            list.remove(0)
+        } else {
+            Arc::new(crate::providers::failover::EmbeddingChain::new(list))
+        }
+    } else {
+        tracing::warn!(
+            "No embedding API keys or local model files found. Falling back to MockEmbeddings."
+        );
+        Arc::new(MockEmbeddings::new(768))
+    }
 }
 
 #[cfg(test)]

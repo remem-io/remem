@@ -2600,6 +2600,7 @@ dependencies = [
  "libremem-sys",
  "ndarray",
  "notify",
+ "regex",
  "reqwest",
  "rusqlite",
  "serde",

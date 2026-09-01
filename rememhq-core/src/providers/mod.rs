@@ -4,6 +4,7 @@ pub mod anthropic;
 pub mod cache;
 pub mod embeddings;
 pub mod factory;
+pub mod failover;
 pub mod google;
 pub mod local;
 pub mod mock;
@@ -12,6 +13,9 @@ pub mod pool;
 pub mod resiliency;
 
 pub use cache::{CacheStats, EmbeddingCache};
+pub use failover::{
+    EmbeddingChain, KeyRotator, ProviderChain, ProviderMetrics, RequestDeduplicator,
+};
 pub use pool::{CostSummary, CostTracker, ProviderPool};
 pub use resiliency::{CircuitBreaker, CircuitState};
 

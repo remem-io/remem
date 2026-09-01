@@ -1,4 +1,7 @@
+pub mod fine_tuning;
 pub mod validator;
+
+pub use fine_tuning::{FineTuningExporter, FineTuningMessage, FineTuningRole, FineTuningSample};
 
 use crate::providers::{ChatMessage, ChatResponse, ChatRole, Provider, Tool, ToolCall};
 use async_trait::async_trait;

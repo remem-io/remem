@@ -128,6 +128,15 @@ impl std::str::FromStr for MemoryType {
     }
 }
 
+/// Source citation linking a fact to an exact interaction, file, or document.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct FactCitation {
+    pub source_id: String,
+    pub source_type: String, // "session_observation", "file", "url", "user_prompt"
+    pub snippet: String,
+    pub timestamp: DateTime<Utc>,
+}
+
 /// A single memory record stored in remem.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MemoryRecord {
@@ -163,6 +172,21 @@ pub struct MemoryRecord {
     /// The file-like path for the memory within the store (e.g., "preferences.txt").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// Optional parent fact ID for hierarchical memory trees.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_fact_id: Option<Uuid>,
+    /// Hierarchy depth level (0 = root summary, 1 = sub-fact, 2 = detailed fact).
+    #[serde(default)]
+    pub hierarchy_level: u32,
+    /// Provenance citations linking this fact to source observations or files.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub citations: Vec<FactCitation>,
+    /// Beginning of validity window for temporal reasoning.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub valid_from: Option<DateTime<Utc>>,
+    /// End of validity window for temporal reasoning.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub valid_to: Option<DateTime<Utc>>,
 }
 
 impl MemoryRecord {
@@ -184,6 +208,11 @@ impl MemoryRecord {
             ttl_days: None,
             store_id: None,
             path: None,
+            parent_fact_id: None,
+            hierarchy_level: 0,
+            citations: Vec::new(),
+            valid_from: None,
+            valid_to: None,
         }
     }
 
@@ -221,6 +250,45 @@ impl MemoryRecord {
     pub fn with_observation_kind(mut self, kind: ObservationKind) -> Self {
         self.observation_kind = Some(kind);
         self
+    }
+
+    /// Builder-style: set hierarchical parent fact and level.
+    pub fn with_hierarchy(mut self, parent_id: Option<Uuid>, level: u32) -> Self {
+        self.parent_fact_id = parent_id;
+        self.hierarchy_level = level;
+        self
+    }
+
+    /// Builder-style: attach citations.
+    pub fn with_citations(mut self, citations: Vec<FactCitation>) -> Self {
+        self.citations = citations;
+        self
+    }
+
+    /// Builder-style: set temporal validity window.
+    pub fn with_validity(
+        mut self,
+        valid_from: Option<DateTime<Utc>>,
+        valid_to: Option<DateTime<Utc>>,
+    ) -> Self {
+        self.valid_from = valid_from;
+        self.valid_to = valid_to;
+        self
+    }
+
+    /// Check if this memory is currently valid at a given timestamp.
+    pub fn is_valid_at(&self, timestamp: DateTime<Utc>) -> bool {
+        if let Some(from) = self.valid_from {
+            if timestamp < from {
+                return false;
+            }
+        }
+        if let Some(to) = self.valid_to {
+            if timestamp >= to {
+                return false;
+            }
+        }
+        true
     }
 }
 
