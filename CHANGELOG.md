@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.17] - 2026-09-01
+
+### Added
+- **Distributed Storage & Resiliency Engines**:
+  - `PostgresStore` and `DuckDbStore` enterprise backends implementing the `MemoryStore` trait.
+  - `ReplicaManager` with dynamic health checking and automated read/write replica failover routing.
+  - `RemoteVectorClient` supporting Qdrant, Milvus, Weaviate, and Generic HTTP clusters with INT8 quantization and local fallback.
+  - Multi-provider failover chains (`ProviderChain`, `EmbeddingChain`), `KeyRotator`, and `RequestDeduplicator`.
+  - `DeadLetterQueue` and `DeadLetterWorker` for background error isolation and retry workflows.
+  - Database schema migration framework (`SchemaMigrationManager`) tracking versioned migrations v1–v6 with SHA-256 integrity verification.
+- **Enterprise Reasoning & Temporal Capabilities**:
+  - `StreamingConsolidationPipeline` with 100-observation chunked processing and interrupt-safe checkpoint recovery.
+  - Hierarchical memory trees (`FactTreeNode`) with parent-fact relationships and structured outline generation.
+  - Temporal reasoning (`valid_from`, `valid_to`, `resolve_temporal_conflict`, `filter_by_validity`).
+  - `QueryExpander` with LRU query caching and Reciprocal Rank Fusion (RRF).
+- **Security, Compliance & Telemetry**:
+  - Transparent envelope encryption (`EnvelopeCipher`) with SHA-256 key derivation, random nonces, HMAC authentication tags, and key rotation.
+  - `PiiPolicyEngine` (Mask, Redact, Reject) and reversible `PiiTokenVault` for auditing.
+  - `TenantContext` directory sandboxing and `TenantQuotaManager` rate limiting.
+  - Immutable audit trail (`AuditEntry`, `AuditRetentionPolicy`) in SQLite.
+  - `WebhookDispatcher` with HMAC-SHA256 signature verification headers.
+  - Prometheus metrics exposition (`render_prometheus`) and SLA adherence tracking.
+  - `FineTuningExporter` generating JSONL instruction fine-tuning datasets for LLMs.
+
 ## [0.1.16] - 2026-08-31
 
 ### Added
