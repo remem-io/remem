@@ -1428,7 +1428,7 @@ impl SqliteStore {
 
     // ── Persistent L2 Embedding Cache ────────────────────────────────────
 
-    /// Look up a cached embedding vector by content SHA-256 and model name.
+    /// Retrieve a cached embedding vector by content SHA-256 hash and model name.
     pub async fn get_cached_embedding(
         &self,
         content_hash: &str,
@@ -1450,8 +1450,8 @@ impl SqliteStore {
             );
             if blob.len() % 4 == 0 {
                 let floats: Vec<f32> = blob
-                    .chunks_exact(4)
-                    .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                    .chunks(4)
+                    .filter_map(|chunk| chunk.try_into().ok().map(f32::from_le_bytes))
                     .collect();
                 return Ok(Some(floats));
             }
