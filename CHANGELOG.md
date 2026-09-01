@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.18] - 2026-09-01
+
+### Added
+- **TUI Live Telemetry, Token Economy & Cost Dashboard (`Mode::Telemetry`)**:
+  - Dedicated interactive Telemetry & Cost Dashboard view in `remem tui` accessible via <kbd>7</kbd> or <kbd>T</kbd>.
+  - Real-time LLM cost estimation in USD ($) and prompt vs. completion token consumption breakdowns.
+  - Live embedding cache hit/miss ratio gauges (`[████████░░] 84.9%`) and HNSW vector index health monitoring.
+  - Rolling operation latency percentile distributions ($p_{50}$, $p_{95}$, $p_{99}$) for Store and Recall execution pipelines.
+- **REST API Modularization & Enterprise Routing**:
+  - Modularized `rememhq-api` architecture with dedicated handlers (`health`, `memories`, `sessions`), models, router, cursor-based pagination, and OpenAPI specification generators.
+  - Full `/metrics` Prometheus scrape endpoint exposition.
+  - Configurable CORS allowed origin policies via `REMEM_CORS_ORIGIN`.
+- **Configuration Engine Refactoring**:
+  - Refactored `rememhq-core/src/config/` into modular submodules (`models.rs`, `defaults.rs`, `mod.rs`) with runtime validation, environment overrides, and preset configurations.
+
 ## [0.1.17] - 2026-09-01
 
 ### Added
