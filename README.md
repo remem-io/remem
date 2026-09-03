@@ -257,6 +257,10 @@ remem models pull nomic-embed
 # Pull a local reasoning model (GGUF — serve with llama.cpp/Ollama)
 remem models pull phi-3-mini
 
+# One-command local inference server for a downloaded GGUF model
+# (requires `llama-server` on PATH — https://github.com/ggml-org/llama.cpp)
+remem models serve phi-3-mini
+
 # Bulk import memories from a JSONL file
 remem import data.jsonl
 

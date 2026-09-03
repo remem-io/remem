@@ -16,11 +16,16 @@ see "Adding a model" below if you're extending it.
 
 ### Optional (local reasoning only)
 - **phi-3-mini-4k-instruct** (~2.4GB GGUF, Q4_K_M) — local reasoning model.
-  remem only downloads the weights; you still need a llama.cpp-compatible
-  server (`llama-server`, Ollama, LM Studio, ...) to actually serve
-  completions from it.
+  remem downloads the weights and can launch a local inference server for
+  you; either way you need a llama.cpp-compatible runtime (`llama-server`,
+  Ollama, LM Studio, ...) to actually serve completions from it.
   - Download: `remem models pull phi-3-mini`
-  - Serve: `llama-server -m ~/.remem/models/phi-3-mini-4k-instruct-q4.gguf`
+  - Serve (one command): `remem models serve phi-3-mini`
+    — starts `llama-server`, waits for it to become healthy, and prints
+    the `REMEM_PROVIDER` / `LLAMA_API_BASE` values to export. Requires
+    `llama-server` on `PATH` (from [llama.cpp](https://github.com/ggml-org/llama.cpp));
+    point `REMEM_LLAMA_SERVER_BIN` at it otherwise.
+  - Serve (manual): `llama-server -m ~/.remem/models/phi-3-mini-4k-instruct-q4.gguf`
   - Enables: `REMEM_PROVIDER=local` reasoning (`LLAMA_API_BASE` /
     `OLLAMA_API_BASE`) — see [`docs/PROVIDERS.md`](../docs/PROVIDERS.md)
 
@@ -42,6 +47,14 @@ request returns immediately (`202 Accepted`) — a multi-gigabyte download
 would otherwise exceed the API's request timeout. Poll `GET /v1/models`
 to see when a model's `status` becomes `"installed"`.
 
+`remem models serve` is deliberately **CLI-only**, with no REST
+equivalent: it spawns and owns an OS process on whatever machine runs the
+command, which is a meaningfully different (and riskier) thing for a
+remote HTTP endpoint to trigger than downloading a file — it doesn't fit
+`rememhq-api`'s bearer-token-only security model. Run it locally, then
+point a `rememhq-api` instance (local or remote) at it via
+`LLAMA_API_BASE`.
+
 ## Adding a model
 
 Add a `ModelSpec` entry to `KNOWN_MODELS` in
@@ -57,9 +70,11 @@ Both the CLI (`remem models pull|list`) and the REST API
 a new entry is immediately available in both.
 
 ## Status
-Local embeddings (ONNX, via `libremem`) and local reasoning (GGUF, via an
-OpenAI-compatible local server) are both supported today — see
+Local embeddings (ONNX, via `libremem`) and local reasoning (GGUF, served
+by `llama-server` — either launched with `remem models serve` or run
+manually) are both supported today — see
 [`docs/PROVIDERS.md`](../docs/PROVIDERS.md). What's not yet implemented:
 GPU-accelerated local inference (ONNX Runtime + CUDA/TensorRT/MPS), a
-device manager/scheduler, model provenance verification (checksums), and
-VLM/image-embedding support.
+device manager/scheduler across multiple concurrently-served models,
+model provenance verification (checksums), and VLM/image-embedding
+support.

@@ -7,9 +7,10 @@
 //!   via the `libremem` C++ FFI bridge. Currently: `nomic-embed`.
 //! - [`ModelKind::LocalLlm`] — a single-file GGUF model intended for a
 //!   llama.cpp-compatible server (`llama-server`, Ollama, LM Studio, ...).
-//!   remem itself only downloads the weights; running inference against
-//!   them is handled by [`crate::providers::local::LocalProvider`] talking
-//!   to `LLAMA_API_BASE` / `OLLAMA_API_BASE`. Currently: `phi-3-mini`.
+//!   remem can launch (see [`serve`]) or download the weights for one;
+//!   either way, actually talking to it for reasoning is handled by
+//!   [`crate::providers::local::LocalProvider`] via `LLAMA_API_BASE` /
+//!   `OLLAMA_API_BASE`. Currently: `phi-3-mini`.
 //!
 //! All models are downloaded from Hugging Face and placed under
 //! `default_models_dir()` (default: `~/.remem/models/`).
@@ -19,6 +20,8 @@ use std::path::{Path, PathBuf};
 use futures_util::StreamExt;
 use serde::Serialize;
 use tokio::io::AsyncWriteExt;
+
+pub mod serve;
 
 /// What a [`ModelSpec`] is used for, and therefore what artifacts it needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

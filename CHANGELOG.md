@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `rememhq_core::models::install_status()` — shared install-state check
   (`not_installed` / `partially_installed` / `installed`) used by both the
   CLI (`remem models list`) and the new REST endpoints, so they can't drift.
+- **`remem models serve <id>`**: one-command local inference. Locates a
+  `llama-server` binary (`llama.cpp`; override with `REMEM_LLAMA_SERVER_BIN`),
+  spawns it against a downloaded GGUF model, polls its `/health` endpoint
+  until ready (failing fast if the model isn't downloaded or no binary is
+  found, rather than spinning to a timeout), and prints the
+  `REMEM_PROVIDER` / `LLAMA_API_BASE` values to export — closing the loop
+  from "download weights" to "actually running local LLM inference"
+  through the existing `LocalProvider`. Ctrl+C stops the server cleanly.
+  New module: `rememhq_core::models::serve`. Deliberately CLI-only (see
+  `models/README.md` for why there's no REST equivalent).
 
 ### Changed
 - `ModelSpec` fields renamed from the embedding-only `onnx_*`/`vocab_*` to

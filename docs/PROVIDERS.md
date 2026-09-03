@@ -57,10 +57,19 @@ export REMEM_LOCAL_VOCAB_PATH=~/.remem/models/vocab.txt
 ```
 
 For local reasoning, remem can also pull GGUF weights for you (it does not
-run them itself — point it at a llama.cpp-compatible server after):
+run inference itself — either let it launch a server for you, or point it
+at one you're already running):
 
 ```bash
 remem models pull phi-3-mini
+
+# One-command: downloads are already done above, this starts + health-checks
+# llama-server and prints the env vars to export.
+remem models serve phi-3-mini
+# requires `llama-server` (https://github.com/ggml-org/llama.cpp) on PATH,
+# or REMEM_LLAMA_SERVER_BIN pointed at your build
+
+# — or start it yourself —
 llama-server -m ~/.remem/models/phi-3-mini-4k-instruct-q4.gguf --port 8080
 # then export LLAMA_API_BASE=http://localhost:8080/v1 as above
 ```
