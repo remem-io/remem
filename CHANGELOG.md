@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Local LLM model in the model registry**: `rememhq-core::models::KNOWN_MODELS`
+  now supports `ModelKind::LocalLlm` (single-file GGUF) alongside the
+  existing `ModelKind::Embedding` (ONNX + vocab) kind, and ships
+  `phi-3-mini` (Phi-3-mini-4k-instruct, Q4_K_M GGUF) as the first entry —
+  closing the gap where `remem models pull phi-3-mini` was documented but
+  unimplemented.
+- **`GET /v1/models` / `POST /v1/models/pull` REST endpoints**: list known
+  local models with install status, and trigger a download by id. Pulls run
+  in a background task and return `202 Accepted` immediately, since a
+  multi-gigabyte download would otherwise exceed the API's request
+  timeout — poll `GET /v1/models` for completion.
+- `rememhq_core::models::install_status()` — shared install-state check
+  (`not_installed` / `partially_installed` / `installed`) used by both the
+  CLI (`remem models list`) and the new REST endpoints, so they can't drift.
+
+### Changed
+- `ModelSpec` fields renamed from the embedding-only `onnx_*`/`vocab_*` to
+  kind-agnostic `primary_*`/`secondary_*` (`secondary_*` is `None` for
+  single-file models). `PullResult` fields renamed to match. Both are
+  internal APIs with a single call site (`rememhq-cli`), updated alongside.
+
 ## [0.1.18] - 2026-09-01
 
 ### Added

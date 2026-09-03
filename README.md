@@ -248,11 +248,14 @@ remem tui --companion codex
 # Ensure REMEM_PROVIDER is set to anthropic, openai, gemini, or local
 remem agent
 
-# List downloaded local models
+# List known local models and their install status
 remem models list
 
-# Pull a local model for offline use
-remem models pull nomic-embed-text
+# Pull the local embedding model (ONNX)
+remem models pull nomic-embed
+
+# Pull a local reasoning model (GGUF — serve with llama.cpp/Ollama)
+remem models pull phi-3-mini
 
 # Bulk import memories from a JSONL file
 remem import data.jsonl
