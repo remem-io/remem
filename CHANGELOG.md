@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Local LLM model in the model registry**: `rememhq-core::models::KNOWN_MODELS`
+  now supports `ModelKind::LocalLlm` (single-file GGUF) alongside the
+  existing `ModelKind::Embedding` (ONNX + vocab) kind, and ships
+  `phi-3-mini` (Phi-3-mini-4k-instruct, Q4_K_M GGUF) as the first entry —
+  closing the gap where `remem models pull phi-3-mini` was documented but
+  unimplemented.
+- **`GET /v1/models` / `POST /v1/models/pull` REST endpoints**: list known
+  local models with install status, and trigger a download by id. Pulls run
+  in a background task and return `202 Accepted` immediately, since a
+  multi-gigabyte download would otherwise exceed the API's request
+  timeout — poll `GET /v1/models` for completion.
+- `rememhq_core::models::install_status()` — shared install-state check
+  (`not_installed` / `partially_installed` / `installed`) used by both the
+  CLI (`remem models list`) and the new REST endpoints, so they can't drift.
+- **`remem models serve <id>`**: one-command local inference. Locates a
+  `llama-server` binary (`llama.cpp`; override with `REMEM_LLAMA_SERVER_BIN`),
+  spawns it against a downloaded GGUF model, polls its `/health` endpoint
+  until ready (failing fast if the model isn't downloaded or no binary is
+  found, rather than spinning to a timeout), and prints the
+  `REMEM_PROVIDER` / `LLAMA_API_BASE` values to export — closing the loop
+  from "download weights" to "actually running local LLM inference"
+  through the existing `LocalProvider`. Ctrl+C stops the server cleanly.
+  New module: `rememhq_core::models::serve`. Deliberately CLI-only (see
+  `models/README.md` for why there's no REST equivalent).
+
+### Fixed
+- **`LocalProvider` silently dropped token usage** on every call
+  (`complete()` and `chat()` both always returned `usage: None`), even
+  though llama.cpp-server/Ollama return the same `usage: {prompt_tokens,
+  completion_tokens, total_tokens}` shape OpenAI's API does — and which
+  `OpenAIProvider` already parses. Concretely: the `[Tokens: ... ]` line
+  the CLI agent prints after each turn (`rememhq-cli/src/agent.rs`,
+  gated on `response.usage.is_some()`) and 0.1.18's Token Economy & Cost
+  Dashboard both went silently blank for `REMEM_PROVIDER=local`. Fixed by
+  parsing `usage` in both methods the same way `OpenAIProvider` does.
+- **`estimate_cost()` billed local/mock inference at a fake fallback rate.**
+  `CostTracker::record_usage()` → `estimate_cost()` matches cost-per-token
+  by model name substring (`"gpt-4o"`, `"claude-3-5-sonnet"`, ...); any
+  unrecognized name — which every local model name is, `phi-3-mini`
+  included — fell through to a `(1.00, 3.00)` "fallback baseline" rate
+  per million tokens. Once cost tracking is wired into the live reasoning
+  path (see note below — it isn't yet), that would have shown a nonzero,
+  invented dollar cost for inference that actually costs nothing.
+  `estimate_cost` now takes `provider` as well as `model` and returns
+  `0.0` unconditionally for `"local"`/`"mock"`, rather than needing a new
+  model-name pattern added every time a model is added to the registry.
+
+### Changed
+- `ModelSpec` fields renamed from the embedding-only `onnx_*`/`vocab_*` to
+  kind-agnostic `primary_*`/`secondary_*` (`secondary_*` is `None` for
+  single-file models). `PullResult` fields renamed to match. Both are
+  internal APIs with a single call site (`rememhq-cli`), updated alongside.
+
+### Known gap (not fixed here)
+- **`CostTracker::record_usage()` isn't actually called from the live
+  reasoning pipeline.** Every call site that gets a `TokenUsage` back from
+  a provider — `reasoning/scoring.rs`, `consolidation.rs`,
+  `contradiction.rs`, `expansion.rs`, `compaction.rs` — destructures it as
+  `let (response, _usage) = provider.complete(...)` and discards it; none
+  of these free functions currently have a `CostTracker` (or engine/pool
+  reference) to record into. `CostSummary`/`estimate_cost` are tested in
+  isolation (`providers/pool.rs`) but, as far as this branch's tracing
+  found, the only place a `TokenUsage` actually reaches the user today is
+  the one CLI-agent chat loop (`rememhq-cli/src/agent.rs`) that prints it
+  inline — the 0.1.18 Telemetry & Cost Dashboard's cost/token panels read
+  from `pool.cost_tracker.summary()`, which will show all-zero regardless
+  of provider until something calls `record_usage()`. Wiring that up
+  touches ~8 call sites' return types plus whatever calls them, which is
+  more than this fix-sized commit should carry blind (no compiler
+  available in this environment to verify a change that size) — flagging
+  it here as the natural next increment instead.
+
 ## [0.1.18] - 2026-09-01
 
 ### Added

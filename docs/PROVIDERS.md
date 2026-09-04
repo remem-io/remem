@@ -56,6 +56,29 @@ export REMEM_LOCAL_MODEL_PATH=~/.remem/models/nomic-embed-text.onnx
 export REMEM_LOCAL_VOCAB_PATH=~/.remem/models/vocab.txt
 ```
 
+For local reasoning, remem can also pull GGUF weights for you (it does not
+run inference itself — either let it launch a server for you, or point it
+at one you're already running):
+
+```bash
+remem models pull phi-3-mini
+
+# One-command: downloads are already done above, this starts + health-checks
+# llama-server and prints the env vars to export.
+remem models serve phi-3-mini
+# requires `llama-server` (https://github.com/ggml-org/llama.cpp) on PATH,
+# or REMEM_LLAMA_SERVER_BIN pointed at your build
+
+# — or start it yourself —
+llama-server -m ~/.remem/models/phi-3-mini-4k-instruct-q4.gguf --port 8080
+# then export LLAMA_API_BASE=http://localhost:8080/v1 as above
+```
+
+`remem models list` shows every known model and whether it's installed;
+the same information is available over REST via `GET /v1/models`, and
+`POST /v1/models/pull` (`{"model": "phi-3-mini"}`) triggers a download —
+see [`models/README.md`](../models/README.md) for details.
+
 ## Provider-Aware Model Defaults
 
 When `REMEM_PROVIDER` is set, remem automatically picks the appropriate

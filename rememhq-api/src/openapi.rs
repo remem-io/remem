@@ -74,7 +74,9 @@ pub async fn swagger_ui_handler() -> Html<&'static str> {
         routes::memories::get_memory,
         routes::memories::query_knowledge,
         routes::memories::get_entity_context,
-        routes::memories::get_stats
+        routes::memories::get_stats,
+        routes::models::list_models,
+        routes::models::pull_model
     ),
     components(
         schemas(
@@ -85,6 +87,9 @@ pub async fn swagger_ui_handler() -> Html<&'static str> {
             StoreResponse,
             ErrorResponse,
             TelemetryResponse,
+            ModelInfo,
+            PullModelRequest,
+            PullModelResponse,
             MemoryRecord,
             MemoryResult,
             MemoryType,

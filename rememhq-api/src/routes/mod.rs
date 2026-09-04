@@ -2,4 +2,5 @@
 
 pub mod memories;
 pub mod memory_stores;
+pub mod models;
 pub mod sessions;

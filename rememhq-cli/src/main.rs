@@ -290,6 +290,15 @@ enum ModelAction {
     },
     /// List downloaded models
     List,
+    /// Serve a downloaded local-LLM model via a llama.cpp-compatible server
+    /// (requires `llama-server` on PATH, or REMEM_LLAMA_SERVER_BIN set)
+    Serve {
+        /// Model name (e.g., "phi-3-mini")
+        name: String,
+        /// Port to bind the local inference server on
+        #[arg(long, default_value = "8080")]
+        port: u16,
+    },
 }
 
 #[tokio::main]
@@ -495,6 +504,8 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Models { action } => match action {
             ModelAction::Pull { name } => {
+                use rememhq_core::models::ModelKind;
+
                 let spec = rememhq_core::models::find_model(&name).ok_or_else(|| {
                     let known: Vec<&str> = rememhq_core::models::KNOWN_MODELS
                         .iter()
@@ -517,21 +528,47 @@ async fn main() -> anyhow::Result<()> {
 
                 let result = rememhq_core::models::pull_model(spec, &dest).await?;
 
-                if result.onnx_downloaded {
-                    println!("  ✓ Downloaded {}", spec.onnx_filename);
+                if result.primary_downloaded {
+                    println!("  ✓ Downloaded {}", spec.primary_filename);
                 } else {
-                    println!("  ✓ {} already present (skipped)", spec.onnx_filename);
+                    println!("  ✓ {} already present (skipped)", spec.primary_filename);
                 }
-                if result.vocab_downloaded {
-                    println!("  ✓ Downloaded {}", spec.vocab_filename);
-                } else {
-                    println!("  ✓ {} already present (skipped)", spec.vocab_filename);
+                if let Some(secondary_filename) = spec.secondary_filename {
+                    if result.secondary_downloaded {
+                        println!("  ✓ Downloaded {}", secondary_filename);
+                    } else {
+                        println!("  ✓ {} already present (skipped)", secondary_filename);
+                    }
                 }
 
-                println!("\nModel ready. Set environment variables to use it:");
-                println!("  REMEM_PROVIDER=local \\");
-                println!("  REMEM_LOCAL_MODEL_PATH={} \\", result.onnx_path.display());
-                println!("  REMEM_LOCAL_VOCAB_PATH={}", result.vocab_path.display());
+                println!("\nModel ready.");
+                match spec.kind {
+                    ModelKind::Embedding => {
+                        println!("Set environment variables to use it:");
+                        println!("  REMEM_PROVIDER=local \\");
+                        println!(
+                            "  REMEM_LOCAL_MODEL_PATH={} \\",
+                            result.primary_path.display()
+                        );
+                        if let Some(secondary_path) = &result.secondary_path {
+                            println!("  REMEM_LOCAL_VOCAB_PATH={}", secondary_path.display());
+                        }
+                    }
+                    ModelKind::LocalLlm => {
+                        println!("Serve it with a llama.cpp-compatible runtime, e.g.:");
+                        println!(
+                            "  llama-server -m {} --port 8080",
+                            result.primary_path.display()
+                        );
+                        println!("\nThen point remem at it:");
+                        println!("  REMEM_PROVIDER=local \\");
+                        println!("  LLAMA_API_BASE=http://localhost:8080/v1");
+                        println!(
+                            "\n(Or import {} into Ollama and set OLLAMA_API_BASE instead.)",
+                            spec.primary_filename
+                        );
+                    }
+                }
 
                 Ok(())
             }
@@ -541,18 +578,88 @@ async fn main() -> anyhow::Result<()> {
                 println!("Known models (model dir: {}):\n", dest.display());
 
                 for spec in rememhq_core::models::KNOWN_MODELS {
-                    let onnx_present = dest.join(spec.onnx_filename).exists();
-                    let vocab_present = dest.join(spec.vocab_filename).exists();
-                    let status = match (onnx_present, vocab_present) {
-                        (true, true) => "✓ installed",
-                        (true, false) => "⚠ onnx present, vocab missing",
-                        (false, true) => "⚠ vocab present, onnx missing",
-                        (false, false) => "  not installed",
+                    let status = rememhq_core::models::install_status(spec, &dest);
+                    let kind = match spec.kind {
+                        rememhq_core::models::ModelKind::Embedding => "embedding",
+                        rememhq_core::models::ModelKind::LocalLlm => "local-llm",
                     };
-                    println!("  {:14} {}  —  {}", spec.id, status, spec.description);
+                    println!(
+                        "  {:14} [{:10}] {:22} —  {}",
+                        spec.id,
+                        kind,
+                        status.label(),
+                        spec.description
+                    );
                 }
 
                 println!("\nTo install a model run:  remem models pull <id>");
+                Ok(())
+            }
+
+            ModelAction::Serve { name, port } => {
+                use rememhq_core::models::{serve, ModelKind};
+
+                let spec = rememhq_core::models::find_model(&name).ok_or_else(|| {
+                    let known: Vec<&str> = rememhq_core::models::KNOWN_MODELS
+                        .iter()
+                        .map(|m| m.id)
+                        .collect();
+                    anyhow::anyhow!(
+                        "Unknown model '{}'. Available models: {}",
+                        name,
+                        known.join(", ")
+                    )
+                })?;
+
+                if spec.kind != ModelKind::LocalLlm {
+                    anyhow::bail!(
+                        "'{}' is an embedding model, not a local-LLM model — nothing to serve. \
+                         (It's used directly via REMEM_LOCAL_MODEL_PATH, no server needed.)",
+                        spec.id
+                    );
+                }
+
+                let dest = rememhq_core::models::default_models_dir();
+                let model_path = dest.join(spec.primary_filename);
+
+                let opts = serve::ServeOptions {
+                    port,
+                    ..Default::default()
+                };
+
+                let binary = serve::find_server_binary().unwrap_or_else(|| "llama-server".into());
+                println!(
+                    "Starting {} ({}) via {} on port {}...",
+                    spec.id,
+                    model_path.display(),
+                    binary,
+                    port
+                );
+                println!("(this can take a while on first load — waiting for /health)");
+
+                let mut server = serve::spawn(&model_path, &opts).await?;
+
+                println!("\n✓ {} is ready at {}", spec.id, server.api_base());
+                println!("\nTo use it with remem, in another terminal:");
+                println!("  export REMEM_PROVIDER=local");
+                println!("  export LLAMA_API_BASE={}", server.api_base());
+                println!("  remem doctor --ping");
+                println!("\nPress Ctrl+C to stop the server.");
+
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {
+                        println!("\nStopping {}...", spec.id);
+                    }
+                    status = server.wait() => {
+                        match status {
+                            Ok(s) => println!("\n{} exited on its own: {}", spec.id, s),
+                            Err(e) => println!("\n{} error while running: {}", spec.id, e),
+                        }
+                        return Ok(());
+                    }
+                }
+
+                server.stop().await?;
                 Ok(())
             }
         },

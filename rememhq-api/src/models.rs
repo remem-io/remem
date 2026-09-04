@@ -132,6 +132,38 @@ pub struct TelemetryResponse {
     pub cache_stats: rememhq_core::providers::CacheStats,
 }
 
+/// A known local model and whether it's downloaded yet.
+///
+/// `kind` is `"embedding"` (ONNX + vocab, used for local embeddings) or
+/// `"local_llm"` (single-file GGUF, served via a llama.cpp-compatible
+/// runtime). `status` is one of `"not_installed"`, `"partially_installed"`,
+/// or `"installed"`.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ModelInfo {
+    pub id: String,
+    pub description: String,
+    pub kind: String,
+    pub approx_bytes: u64,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema, Validate)]
+pub struct PullModelRequest {
+    /// Short model id, e.g. `"nomic-embed"` or `"phi-3-mini"`. See `GET /v1/models`.
+    #[validate(length(min = 1, message = "model cannot be empty"))]
+    pub model: String,
+}
+
+/// `status` is `"already_installed"` if every artifact was already on disk,
+/// or `"downloading"` if a background download was just started — poll
+/// `GET /v1/models` to see when it completes.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct PullModelResponse {
+    pub model: String,
+    pub status: String,
+    pub detail: String,
+}
+
 pub fn default_8() -> usize {
     8
 }

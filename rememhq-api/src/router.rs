@@ -86,6 +86,8 @@ pub fn build_app(
             "/v1/memory_stores/{store_id}/memories/{path_or_id}/versions",
             get(routes::memory_stores::list_memory_versions),
         )
+        .route("/v1/models", get(routes::models::list_models))
+        .route("/v1/models/pull", post(routes::models::pull_model))
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
         .layer(TimeoutLayer::with_status_code(
             axum::http::StatusCode::REQUEST_TIMEOUT,
