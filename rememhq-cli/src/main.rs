@@ -530,12 +530,18 @@ async fn main() -> anyhow::Result<()> {
 
                 if result.primary_downloaded {
                     println!("  ✓ Downloaded {}", spec.primary_filename);
+                    if spec.primary_sha256.is_some() {
+                        println!("  ✓ Checksum verified (sha256)");
+                    }
                 } else {
                     println!("  ✓ {} already present (skipped)", spec.primary_filename);
                 }
                 if let Some(secondary_filename) = spec.secondary_filename {
                     if result.secondary_downloaded {
                         println!("  ✓ Downloaded {}", secondary_filename);
+                        if spec.secondary_sha256.is_some() {
+                            println!("  ✓ Checksum verified (sha256)");
+                        }
                     } else {
                         println!("  ✓ {} already present (skipped)", secondary_filename);
                     }
