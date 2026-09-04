@@ -137,6 +137,17 @@ impl ReasoningEngine {
             crate::providers::ProviderPool::default_pool()
                 .unwrap_or_else(|_| crate::providers::ProviderPool::new(10).unwrap()),
         );
+        // Every reasoning operation (scoring, consolidation, contradiction
+        // detection, guided retrieval, compaction, entity resolution) takes
+        // `provider: &dyn Provider`, and AgentHarness / the eval loop get
+        // their provider by cloning `engine.provider` — so wrapping it once
+        // here, at the single point every one of them ultimately gets it
+        // from, gives all of them token/cost tracking for free, with no
+        // changes needed to any of those call sites.
+        let provider: Arc<dyn Provider> = Arc::new(crate::providers::CostTrackingProvider::new(
+            provider,
+            pool.cost_tracker.clone(),
+        ));
         Self {
             config,
             provider,
