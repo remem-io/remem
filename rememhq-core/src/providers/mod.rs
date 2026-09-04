@@ -11,6 +11,7 @@ pub mod mock;
 pub mod openai;
 pub mod pool;
 pub mod resiliency;
+pub mod tracking;
 
 pub use cache::{CacheStats, EmbeddingCache};
 pub use failover::{
@@ -18,6 +19,7 @@ pub use failover::{
 };
 pub use pool::{CostSummary, CostTracker, ProviderPool};
 pub use resiliency::{CircuitBreaker, CircuitState};
+pub use tracking::CostTrackingProvider;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
