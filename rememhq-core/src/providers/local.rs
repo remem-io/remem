@@ -103,6 +103,7 @@ struct ChatMessage {
 #[derive(Deserialize)]
 struct ChatResponse {
     choices: Vec<Choice>,
+    usage: Option<UsageJson>,
 }
 
 #[derive(Deserialize)]
@@ -113,6 +114,20 @@ struct Choice {
 #[derive(Deserialize)]
 struct ResponseMessage {
     content: Option<String>,
+}
+
+/// `usage` block returned by OpenAI-compatible APIs (llama.cpp server,
+/// Ollama, LM Studio, ...) — same shape as OpenAI's, so mirrors
+/// `OpenAIProvider`'s parsing rather than introducing a new one. Fields
+/// are optional because not every local runtime populates all three
+/// (llama-server omits `total_tokens` unless it's derivable, for
+/// instance), so each is defaulted to 0 rather than dropping the whole
+/// usage block.
+#[derive(Deserialize)]
+struct UsageJson {
+    prompt_tokens: Option<usize>,
+    completion_tokens: Option<usize>,
+    total_tokens: Option<usize>,
 }
 
 impl LocalProvider {
@@ -167,8 +182,13 @@ impl Provider for LocalProvider {
             .first()
             .and_then(|c| c.message.content.clone())
             .unwrap_or_default();
+        let usage = resp.usage.map(|u| crate::providers::TokenUsage {
+            prompt_tokens: u.prompt_tokens.unwrap_or(0),
+            completion_tokens: u.completion_tokens.unwrap_or(0),
+            total_tokens: u.total_tokens.unwrap_or(0),
+        });
 
-        Ok((text, None))
+        Ok((text, usage))
     }
 
     async fn chat(
@@ -289,13 +309,69 @@ impl Provider for LocalProvider {
             tool_call_id: None,
         };
 
+        let usage = resp.get("usage").map(|u| crate::providers::TokenUsage {
+            prompt_tokens: u["prompt_tokens"].as_u64().unwrap_or(0) as usize,
+            completion_tokens: u["completion_tokens"].as_u64().unwrap_or(0) as usize,
+            total_tokens: u["total_tokens"].as_u64().unwrap_or(0) as usize,
+        });
+
         Ok(crate::providers::ChatResponse {
             message: msg,
-            usage: None,
+            usage,
         })
     }
 
     fn name(&self) -> &str {
         "local"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `complete()`'s ChatResponse/UsageJson deserialize a llama.cpp-server /
+    // Ollama-shaped JSON body — same `usage` shape OpenAI's API uses. These
+    // test that deserialization directly (no live server needed) rather
+    // than the HTTP call itself, matching this crate's existing providers
+    // tests (none of which spin up a mock server either).
+
+    #[test]
+    fn test_complete_response_parses_usage() {
+        let raw = r#"{
+            "choices": [{"message": {"content": "hello"}}],
+            "usage": {"prompt_tokens": 12, "completion_tokens": 5, "total_tokens": 17}
+        }"#;
+        let parsed: ChatResponse = serde_json::from_str(raw).unwrap();
+        assert_eq!(
+            parsed.choices[0].message.content.as_deref(),
+            Some("hello")
+        );
+        let usage = parsed.usage.expect("usage block should be present");
+        assert_eq!(usage.prompt_tokens, Some(12));
+        assert_eq!(usage.completion_tokens, Some(5));
+        assert_eq!(usage.total_tokens, Some(17));
+    }
+
+    #[test]
+    fn test_complete_response_missing_usage_is_none() {
+        // Some minimal local servers omit `usage` entirely — must not fail
+        // to parse the rest of the response when that happens.
+        let raw = r#"{"choices": [{"message": {"content": "hi"}}]}"#;
+        let parsed: ChatResponse = serde_json::from_str(raw).unwrap();
+        assert!(parsed.usage.is_none());
+    }
+
+    #[test]
+    fn test_usage_json_partial_fields_stay_optional() {
+        // Some runtimes omit individual usage fields (e.g. total_tokens);
+        // `complete`/`chat` default each missing field to 0 rather than
+        // dropping the whole usage block — this just confirms parsing
+        // doesn't require every field to be present.
+        let raw = r#"{"prompt_tokens": 8, "completion_tokens": 3}"#;
+        let usage: UsageJson = serde_json::from_str(raw).unwrap();
+        assert_eq!(usage.prompt_tokens, Some(8));
+        assert_eq!(usage.completion_tokens, Some(3));
+        assert_eq!(usage.total_tokens, None);
     }
 }

@@ -33,6 +33,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   New module: `rememhq_core::models::serve`. Deliberately CLI-only (see
   `models/README.md` for why there's no REST equivalent).
 
+### Fixed
+- **`LocalProvider` silently dropped token usage** on every call
+  (`complete()` and `chat()` both always returned `usage: None`), even
+  though llama.cpp-server/Ollama return the same `usage: {prompt_tokens,
+  completion_tokens, total_tokens}` shape OpenAI's API does — and which
+  `OpenAIProvider` already parses. Concretely: the `[Tokens: ... ]` line
+  the CLI agent prints after each turn (`rememhq-cli/src/agent.rs`,
+  gated on `response.usage.is_some()`) and 0.1.18's Token Economy & Cost
+  Dashboard both went silently blank for `REMEM_PROVIDER=local`. Fixed by
+  parsing `usage` in both methods the same way `OpenAIProvider` does.
+
 ### Changed
 - `ModelSpec` fields renamed from the embedding-only `onnx_*`/`vocab_*` to
   kind-agnostic `primary_*`/`secondary_*` (`secondary_*` is `None` for
