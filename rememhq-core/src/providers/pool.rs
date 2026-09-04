@@ -50,7 +50,7 @@ impl CostTracker {
             *map.entry(provider.to_string()).or_insert(0) += 1;
         }
 
-        let cost_usd = estimate_cost(model, prompt, completion);
+        let cost_usd = estimate_cost(provider, model, prompt, completion);
         let cost_micro = (cost_usd * 1_000_000.0) as u64;
         self.cost_micros.fetch_add(cost_micro, Ordering::Relaxed);
 
@@ -81,7 +81,24 @@ impl CostTracker {
 }
 
 /// Calculate estimated API cost for standard frontier models.
-pub fn estimate_cost(model: &str, prompt_tokens: usize, completion_tokens: usize) -> f64 {
+///
+/// `provider` is checked first: local (`llama.cpp`/Ollama/LM Studio via
+/// `LocalProvider`) and `mock` inference are always free regardless of
+/// which model string they report, since that's a property of *where*
+/// the model runs, not which architecture it is — a hardcoded model-name
+/// check would need updating every time a new local model id is added to
+/// the registry (see `rememhq_core::models::KNOWN_MODELS`); a
+/// provider check doesn't.
+pub fn estimate_cost(
+    provider: &str,
+    model: &str,
+    prompt_tokens: usize,
+    completion_tokens: usize,
+) -> f64 {
+    if matches!(provider.to_lowercase().as_str(), "local" | "mock") {
+        return 0.0;
+    }
+
     let model_lower = model.to_lowercase();
     let (prompt_rate_per_m, comp_rate_per_m) = match model_lower.as_str() {
         // OpenAI
@@ -185,6 +202,36 @@ mod tests {
         assert!(summary.estimated_cost_usd > 0.0);
         assert_eq!(summary.usage_by_provider.get("openai"), Some(&1));
         assert_eq!(summary.usage_by_provider.get("anthropic"), Some(&1));
+    }
+
+    #[test]
+    fn test_local_provider_is_always_free() {
+        // Before this was fixed, an unrecognized model name (which
+        // "phi-3-mini" and any custom REMEM_LOCAL_MODEL_NAME both are, to
+        // this frontier-model pricing table) fell through to a nonzero
+        // "fallback baseline" rate — silently inventing a dollar cost for
+        // inference that actually costs nothing.
+        assert_eq!(estimate_cost("local", "phi-3-mini", 10_000, 5_000), 0.0);
+        assert_eq!(
+            estimate_cost("local", "some-custom-gguf-name", 10_000, 5_000),
+            0.0
+        );
+        // Provider match should be case-insensitive, like the model match below it.
+        assert_eq!(estimate_cost("Local", "phi-3-mini", 100, 100), 0.0);
+    }
+
+    #[test]
+    fn test_mock_provider_is_always_free() {
+        assert_eq!(estimate_cost("mock", "mock", 10_000, 5_000), 0.0);
+    }
+
+    #[test]
+    fn test_unrecognized_cloud_model_still_gets_fallback_pricing() {
+        // Only local/mock are free; a genuinely unrecognized *cloud*
+        // model should still fall back to the baseline estimate rather
+        // than silently becoming free too.
+        let cost = estimate_cost("openai", "some-future-gpt-model", 1_000_000, 0);
+        assert!(cost > 0.0);
     }
 
     #[tokio::test]

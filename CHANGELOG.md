@@ -43,12 +43,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gated on `response.usage.is_some()`) and 0.1.18's Token Economy & Cost
   Dashboard both went silently blank for `REMEM_PROVIDER=local`. Fixed by
   parsing `usage` in both methods the same way `OpenAIProvider` does.
+- **`estimate_cost()` billed local/mock inference at a fake fallback rate.**
+  `CostTracker::record_usage()` → `estimate_cost()` matches cost-per-token
+  by model name substring (`"gpt-4o"`, `"claude-3-5-sonnet"`, ...); any
+  unrecognized name — which every local model name is, `phi-3-mini`
+  included — fell through to a `(1.00, 3.00)` "fallback baseline" rate
+  per million tokens. Once cost tracking is wired into the live reasoning
+  path (see note below — it isn't yet), that would have shown a nonzero,
+  invented dollar cost for inference that actually costs nothing.
+  `estimate_cost` now takes `provider` as well as `model` and returns
+  `0.0` unconditionally for `"local"`/`"mock"`, rather than needing a new
+  model-name pattern added every time a model is added to the registry.
 
 ### Changed
 - `ModelSpec` fields renamed from the embedding-only `onnx_*`/`vocab_*` to
   kind-agnostic `primary_*`/`secondary_*` (`secondary_*` is `None` for
   single-file models). `PullResult` fields renamed to match. Both are
   internal APIs with a single call site (`rememhq-cli`), updated alongside.
+
+### Known gap (not fixed here)
+- **`CostTracker::record_usage()` isn't actually called from the live
+  reasoning pipeline.** Every call site that gets a `TokenUsage` back from
+  a provider — `reasoning/scoring.rs`, `consolidation.rs`,
+  `contradiction.rs`, `expansion.rs`, `compaction.rs` — destructures it as
+  `let (response, _usage) = provider.complete(...)` and discards it; none
+  of these free functions currently have a `CostTracker` (or engine/pool
+  reference) to record into. `CostSummary`/`estimate_cost` are tested in
+  isolation (`providers/pool.rs`) but, as far as this branch's tracing
+  found, the only place a `TokenUsage` actually reaches the user today is
+  the one CLI-agent chat loop (`rememhq-cli/src/agent.rs`) that prints it
+  inline — the 0.1.18 Telemetry & Cost Dashboard's cost/token panels read
+  from `pool.cost_tracker.summary()`, which will show all-zero regardless
+  of provider until something calls `record_usage()`. Wiring that up
+  touches ~8 call sites' return types plus whatever calls them, which is
+  more than this fix-sized commit should carry blind (no compiler
+  available in this environment to verify a change that size) — flagging
+  it here as the natural next increment instead.
 
 ## [0.1.18] - 2026-09-01
 
