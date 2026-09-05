@@ -55,6 +55,27 @@ remote HTTP endpoint to trigger than downloading a file — it doesn't fit
 point a `rememhq-api` instance (local or remote) at it via
 `LLAMA_API_BASE`.
 
+## Checksum verification
+
+`ModelSpec` can carry an expected SHA-256 for each artifact
+(`primary_sha256` / `secondary_sha256`). When one's set, `remem models
+pull` hashes the download and verifies it before moving the file into
+place — a mismatch deletes the download and fails with an error rather
+than silently leaving a corrupted or tampered-with file where `remem
+models list`/`GET /v1/models` would otherwise just report it as
+installed (they only check that the file exists, not its contents).
+`phi-3-mini` has a confirmed hash today; `nomic-embed` deliberately
+doesn't yet — see the comment on its `ModelSpec` entry for why (short
+version: its upstream file has had several differently-sized revisions,
+and a wrong hardcoded hash would hard-fail every legitimate download of
+the model required for local embeddings, which is worse than not
+verifying it at all).
+
+When adding a model with a known hash, get it from the artifact's actual
+Hugging Face blob page (shows the file's Git LFS `SHA256:` directly) —
+not a third-party mirror/re-upload, which can differ even for the "same"
+model.
+
 ## Adding a model
 
 Add a `ModelSpec` entry to `KNOWN_MODELS` in
@@ -75,6 +96,6 @@ by `llama-server` — either launched with `remem models serve` or run
 manually) are both supported today — see
 [`docs/PROVIDERS.md`](../docs/PROVIDERS.md). What's not yet implemented:
 GPU-accelerated local inference (ONNX Runtime + CUDA/TensorRT/MPS), a
-device manager/scheduler across multiple concurrently-served models,
-model provenance verification (checksums), and VLM/image-embedding
-support.
+device manager/scheduler across multiple concurrently-served models, and
+VLM/image-embedding support. Model provenance verification exists (see
+above) but isn't complete — `nomic-embed`'s hash is still unconfirmed.

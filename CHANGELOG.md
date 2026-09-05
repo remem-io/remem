@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Model provenance verification (SHA-256)**: `ModelSpec` now carries an
+  optional expected checksum per artifact; `remem models pull` (and
+  `POST /v1/models/pull`, which calls the same code) hashes each download
+  and verifies it before moving the file into place, deleting it and
+  failing loudly on a mismatch instead of leaving a corrupted or
+  tampered-with file where install-status checks would report it as fine
+  (they only check the file exists). `phi-3-mini`'s hash is confirmed
+  (checked directly against its Hugging Face blob page); `nomic-embed`'s
+  is deliberately left unverified — its upstream file has had several
+  differently-sized revisions, and a wrong hardcoded hash would hard-fail
+  every legitimate download of the model that's actually required for
+  local embeddings. See `models/README.md` for the full reasoning and how
+  to fill it in once confirmed.
 - **Local LLM model in the model registry**: `rememhq-core::models::KNOWN_MODELS`
   now supports `ModelKind::LocalLlm` (single-file GGUF) alongside the
   existing `ModelKind::Embedding` (ONNX + vocab) kind, and ships
