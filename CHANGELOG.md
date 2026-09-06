@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Persistent inference audit log** (`inference_logs` table, migration
+  v7): a durable, per-call record of every LLM inference call — which
+  provider/model handled it, a SHA-256 hash of the prompt (never the
+  prompt itself), token usage, latency, and — unlike `CostTracker`,
+  which only has something to show for successful calls — the error
+  message when a call fails. This is the `inference_logs` item from the
+  original local-inference design doc's Observability section
+  (`request_id, model_id, prompt_hash, latency_ms, tokens_in, tokens_out,
+  error`); `id` here doubles as the request id.
+  - New `storage::inference_log` module (`InferenceLogEntry`,
+    `InferenceLogRetentionPolicy`), and `SqliteStore::{insert_inference_log,
+    get_inference_logs, prune_inference_logs}` — deliberately mirroring
+    `storage::audit`/`audit_log`'s existing structure and method shapes
+    closely, rather than inventing a parallel convention for what's
+    conceptually the same kind of thing (an immutable per-event trail).
+  - `CostTrackingProvider` (see the cost-tracking entry from the last
+    PR) now also takes an optional `SqliteStore` and writes one of these
+    after every call it wraps, success or failure — same insertion
+    point as before (`ReasoningEngine::new()`), so this needed no new
+    call sites either, just widening the one that already existed.
+  - **Known gap, not fixed here**: while building this, found that
+    `prune_audit_logs()` — the mature, already-shipped analog of the
+    `prune_inference_logs()` this adds — is itself never called from
+    anywhere in the codebase. No CLI command, no scheduled task, nothing
+    prunes `audit_log` today; it grows unbounded despite
+    `AuditRetentionPolicy` existing. `prune_inference_logs()` added here
+    has the exact same gap by design (matching the pattern it mirrors),
+    so `inference_logs` will also grow unbounded until something calls
+    it. Flagging both rather than silently building a third unwired
+    pruning method on top of an already-unwired one.
+
 - **`remem models serve` now auto-detects GPU offload and runs
   concurrent request slots**, instead of always defaulting to `-ngl 0`
   (CPU-only) and llama-server's own single-slot default. On Apple

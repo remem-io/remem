@@ -3,6 +3,7 @@
 pub mod audit;
 pub mod backend;
 pub mod event_log;
+pub mod inference_log;
 pub mod migrations;
 pub mod quantization;
 pub mod remote_vector;
@@ -18,6 +19,7 @@ pub use backend::{
 pub use event_log::{
     DeadLetterQueue, DeadLetterRecord, EventKind, EventLog, EventMetadata, SessionEvent,
 };
+pub use inference_log::{InferenceLogEntry, InferenceLogRetentionPolicy};
 pub use migrations::{check_status, migrate_down, migrate_up, MigrationStatus};
 pub use quantization::QuantizedVector;
 pub use remote_vector::{RemoteVectorClient, RemoteVectorConfig, RemoteVectorEngine};

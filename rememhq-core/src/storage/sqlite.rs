@@ -1342,6 +1342,93 @@ impl SqliteStore {
         Ok(rows)
     }
 
+    // ── Inference Log Management ─────────────────────────────────────────
+
+    /// Record one inference call (success or failure). Errors from this
+    /// insert are the caller's to decide how to handle — logging a call
+    /// should never be allowed to fail the call itself, so
+    /// `CostTrackingProvider` (the one production caller) treats a
+    /// failure here as best-effort and only warns.
+    pub async fn insert_inference_log(&self, entry: &crate::storage::InferenceLogEntry) -> anyhow::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "INSERT INTO inference_logs (id, provider, model, prompt_hash, prompt_tokens, completion_tokens, latency_ms, error, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                entry.id.to_string(),
+                entry.provider,
+                entry.model,
+                entry.prompt_hash,
+                entry.prompt_tokens.map(|v| v as i64),
+                entry.completion_tokens.map(|v| v as i64),
+                entry.latency_ms as i64,
+                entry.error,
+                entry.timestamp.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve recent inference log entries, most recent first, optionally
+    /// filtered to a single model.
+    pub async fn get_inference_logs(
+        &self,
+        model: Option<&str>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<crate::storage::InferenceLogEntry>> {
+        let conn = self.conn.lock().await;
+        let mut sql = String::from(
+            "SELECT id, provider, model, prompt_hash, prompt_tokens, completion_tokens, latency_ms, error, timestamp FROM inference_logs WHERE 1=1"
+        );
+        let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+        if let Some(m) = model {
+            sql.push_str(" AND model = ?");
+            params_vec.push(Box::new(m.to_string()));
+        }
+
+        sql.push_str(" ORDER BY timestamp DESC LIMIT ?");
+        params_vec.push(Box::new(limit as i64));
+
+        let mut stmt = conn.prepare(&sql)?;
+        let entries = stmt
+            .query_map(rusqlite::params_from_iter(params_vec), |row| {
+                let id_str: String = row.get(0)?;
+                let ts_str: String = row.get(8)?;
+                let prompt_tokens: Option<i64> = row.get(4)?;
+                let completion_tokens: Option<i64> = row.get(5)?;
+                let latency_ms: i64 = row.get(6)?;
+                Ok(crate::storage::InferenceLogEntry {
+                    id: Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4()),
+                    provider: row.get(1)?,
+                    model: row.get(2)?,
+                    prompt_hash: row.get(3)?,
+                    prompt_tokens: prompt_tokens.map(|v| v as usize),
+                    completion_tokens: completion_tokens.map(|v| v as usize),
+                    latency_ms: latency_ms as u64,
+                    error: row.get(7)?,
+                    timestamp: DateTime::parse_from_rfc3339(&ts_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(entries)
+    }
+
+    /// Prune inference logs older than the retention threshold.
+    pub async fn prune_inference_logs(&self, retention_days: u32) -> anyhow::Result<usize> {
+        let conn = self.conn.lock().await;
+        let cutoff = (Utc::now() - chrono::Duration::days(retention_days as i64)).to_rfc3339();
+        let rows = conn.execute(
+            "DELETE FROM inference_logs WHERE timestamp < ?1",
+            params![cutoff],
+        )?;
+        Ok(rows)
+    }
+
     // ── Dead Letter Queue (DLQ) Persistence ──────────────────────────────
 
     /// Push an operation to the dead letter events table.
@@ -1666,5 +1753,122 @@ mod tests {
 
         let res_and = store.search_fts("AND", 10).await.unwrap();
         assert!(res_and.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_insert_and_get_inference_logs() {
+        let store = SqliteStore::open_in_memory().unwrap();
+
+        let ok_entry = crate::storage::InferenceLogEntry::new(
+            "local",
+            "phi-3-mini",
+            crate::storage::InferenceLogEntry::hash_prompt("hello"),
+            Some(10),
+            Some(5),
+            120,
+            None,
+        );
+        let err_entry = crate::storage::InferenceLogEntry::new(
+            "anthropic",
+            "claude-3-5-sonnet",
+            crate::storage::InferenceLogEntry::hash_prompt("hi"),
+            None,
+            None,
+            3000,
+            Some("timeout".to_string()),
+        );
+        store.insert_inference_log(&ok_entry).await.unwrap();
+        store.insert_inference_log(&err_entry).await.unwrap();
+
+        let all = store.get_inference_logs(None, 10).await.unwrap();
+        assert_eq!(all.len(), 2);
+        // Most recent first — err_entry was inserted second.
+        assert_eq!(all[0].model, "claude-3-5-sonnet");
+        assert_eq!(all[0].error.as_deref(), Some("timeout"));
+        assert!(all[0].prompt_tokens.is_none());
+        assert_eq!(all[1].model, "phi-3-mini");
+        assert_eq!(all[1].prompt_tokens, Some(10));
+        assert_eq!(all[1].completion_tokens, Some(5));
+        assert_eq!(all[1].latency_ms, 120);
+        assert!(all[1].error.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_inference_logs_filters_by_model() {
+        let store = SqliteStore::open_in_memory().unwrap();
+
+        store
+            .insert_inference_log(&crate::storage::InferenceLogEntry::new(
+                "local", "phi-3-mini", "h1", Some(1), Some(1), 10, None,
+            ))
+            .await
+            .unwrap();
+        store
+            .insert_inference_log(&crate::storage::InferenceLogEntry::new(
+                "openai", "gpt-4o-mini", "h2", Some(1), Some(1), 10, None,
+            ))
+            .await
+            .unwrap();
+
+        let filtered = store
+            .get_inference_logs(Some("phi-3-mini"), 10)
+            .await
+            .unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].model, "phi-3-mini");
+    }
+
+    #[tokio::test]
+    async fn test_get_inference_logs_respects_limit() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        for i in 0..5 {
+            store
+                .insert_inference_log(&crate::storage::InferenceLogEntry::new(
+                    "local",
+                    "phi-3-mini",
+                    format!("h{i}"),
+                    Some(1),
+                    Some(1),
+                    10,
+                    None,
+                ))
+                .await
+                .unwrap();
+        }
+
+        let limited = store.get_inference_logs(None, 2).await.unwrap();
+        assert_eq!(limited.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_prune_inference_logs_removes_old_entries_only() {
+        let store = SqliteStore::open_in_memory().unwrap();
+
+        // Insert directly with a backdated timestamp — InferenceLogEntry::new()
+        // always stamps "now", so a raw INSERT is the only way to test pruning
+        // without sleeping in a test.
+        {
+            let conn = store.conn.lock().await;
+            let old_ts = (Utc::now() - chrono::Duration::days(60)).to_rfc3339();
+            conn.execute(
+                "INSERT INTO inference_logs (id, provider, model, prompt_hash, prompt_tokens, completion_tokens, latency_ms, error, timestamp)
+                 VALUES (?1, 'local', 'phi-3-mini', 'old', 1, 1, 10, NULL, ?2)",
+                params![Uuid::new_v4().to_string(), old_ts],
+            )
+            .unwrap();
+        }
+        store
+            .insert_inference_log(&crate::storage::InferenceLogEntry::new(
+                "local", "phi-3-mini", "recent", Some(1), Some(1), 10, None,
+            ))
+            .await
+            .unwrap();
+
+        let pruned = store.prune_inference_logs(30).await.unwrap();
+        assert_eq!(pruned, 1, "only the 60-day-old entry should be pruned");
+
+        let remaining = store.get_inference_logs(None, 10).await.unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].prompt_hash, "recent");
     }
 }
