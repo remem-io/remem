@@ -19,6 +19,25 @@ use tokio::process::{Child, Command};
 /// Default port `remem models serve` binds to when none is given.
 pub const DEFAULT_PORT: u16 = 8080;
 
+/// Default concurrent request slots (`--parallel`). remem's own
+/// reasoning pipeline can have several provider calls in flight at once
+/// (see `ProviderPool`'s semaphore, default 20) — llama-server's own
+/// default of 1 slot would serialize every one of them regardless of
+/// that, so this picks something greater than 1 without assuming the
+/// abundant memory a cloud API doesn't need to worry about (each slot
+/// multiplies KV-cache memory usage).
+pub const DEFAULT_PARALLEL_SLOTS: u32 = 2;
+
+/// `-ngl` value used when GPU acceleration is auto-detected: large
+/// enough that llama.cpp offloads every layer that fits, rather than
+/// remem trying to calculate an exact number itself. llama.cpp clamps
+/// this to what actually fits and falls back to CPU for the rest, so
+/// there's no failure mode from guessing too high — only from guessing
+/// too low (leaving a capable GPU under-used) or defaulting to `0`
+/// unconditionally (leaving it unused entirely, the previous behavior
+/// this replaces).
+const OFFLOAD_ALL_LAYERS: u32 = 999;
+
 /// How long to wait for the server's `/health` endpoint before giving up.
 const READY_TIMEOUT: Duration = Duration::from_secs(120);
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -82,6 +101,40 @@ fn which_on_path(name: &str) -> Option<String> {
     None
 }
 
+/// Best-effort guess at whether this machine likely has GPU acceleration
+/// available to llama.cpp — used only to pick a friendlier *default* for
+/// `-ngl` (see [`resolve_gpu_layers`]); an explicit `--gpu-layers`
+/// always overrides it regardless. Getting this wrong in either
+/// direction only costs performance, never correctness: an
+/// over-optimistic `999` gets clamped down by llama.cpp to whatever
+/// actually fits (with the excess quietly staying on CPU), and an
+/// under-optimistic `0` just leaves a capable GPU idle.
+fn likely_has_gpu_acceleration() -> bool {
+    if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        // Apple Silicon — llama.cpp's official builds enable the Metal
+        // backend by default, and it's present on every such Mac (unlike
+        // NVIDIA/CUDA below, where the GPU itself might not be there).
+        return true;
+    }
+    // Linux/Windows: `nvidia-smi` on PATH is a reasonable signal an
+    // NVIDIA GPU and its driver are present, without needing to link
+    // against CUDA (or parse its output — its mere presence is enough).
+    which_on_path("nvidia-smi").is_some()
+}
+
+/// Resolve how many layers to offload to GPU (`-ngl`): `explicit` if
+/// given (including `Some(0)`, to force CPU-only on GPU-capable
+/// hardware), otherwise a guess from [`likely_has_gpu_acceleration`].
+pub fn resolve_gpu_layers(explicit: Option<u32>) -> u32 {
+    explicit.unwrap_or_else(|| {
+        if likely_has_gpu_acceleration() {
+            OFFLOAD_ALL_LAYERS
+        } else {
+            0
+        }
+    })
+}
+
 /// Options for [`spawn`].
 #[derive(Debug, Clone)]
 pub struct ServeOptions {
@@ -89,8 +142,11 @@ pub struct ServeOptions {
     pub host: String,
     /// Context window size, passed as `-c`.
     pub ctx_size: u32,
-    /// Layers offloaded to GPU, passed as `-ngl`. `0` keeps everything on CPU.
-    pub gpu_layers: u32,
+    /// Layers offloaded to GPU, passed as `-ngl`. `None` auto-detects
+    /// (see [`resolve_gpu_layers`]); `Some(0)` forces CPU-only.
+    pub gpu_layers: Option<u32>,
+    /// Concurrent request slots, passed as `--parallel`.
+    pub parallel_slots: u32,
 }
 
 impl Default for ServeOptions {
@@ -99,7 +155,8 @@ impl Default for ServeOptions {
             port: DEFAULT_PORT,
             host: "127.0.0.1".to_string(),
             ctx_size: 4096,
-            gpu_layers: 0,
+            gpu_layers: None,
+            parallel_slots: DEFAULT_PARALLEL_SLOTS,
         }
     }
 }
@@ -126,6 +183,8 @@ pub async fn spawn(model_path: &Path, opts: &ServeOptions) -> anyhow::Result<Loc
         )
     })?;
 
+    let resolved_gpu_layers = resolve_gpu_layers(opts.gpu_layers);
+
     let child = Command::new(&binary)
         .arg("-m")
         .arg(model_path)
@@ -136,7 +195,9 @@ pub async fn spawn(model_path: &Path, opts: &ServeOptions) -> anyhow::Result<Loc
         .arg("-c")
         .arg(opts.ctx_size.to_string())
         .arg("-ngl")
-        .arg(opts.gpu_layers.to_string())
+        .arg(resolved_gpu_layers.to_string())
+        .arg("--parallel")
+        .arg(opts.parallel_slots.to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -203,7 +264,33 @@ mod tests {
         let opts = ServeOptions::default();
         assert_eq!(opts.port, DEFAULT_PORT);
         assert_eq!(opts.host, "127.0.0.1");
-        assert_eq!(opts.gpu_layers, 0, "CPU by default");
+        assert_eq!(opts.gpu_layers, None, "auto-detect by default");
+        assert_eq!(opts.parallel_slots, DEFAULT_PARALLEL_SLOTS);
+    }
+
+    #[test]
+    fn test_resolve_gpu_layers_explicit_zero_forces_cpu() {
+        // Some(0) must win even on hardware likely_has_gpu_acceleration()
+        // would say yes to — explicit --gpu-layers 0 is how a person
+        // forces CPU-only, and auto-detection must never override it.
+        assert_eq!(resolve_gpu_layers(Some(0)), 0);
+    }
+
+    #[test]
+    fn test_resolve_gpu_layers_explicit_value_always_wins() {
+        assert_eq!(resolve_gpu_layers(Some(17)), 17);
+        assert_eq!(resolve_gpu_layers(Some(999)), 999);
+    }
+
+    #[test]
+    fn test_resolve_gpu_layers_auto_detect_is_deterministic() {
+        // Can't assert a specific true/false outcome without knowing the
+        // test runner's hardware, but the same machine must always
+        // resolve the same way within one run.
+        let a = resolve_gpu_layers(None);
+        let b = resolve_gpu_layers(None);
+        assert_eq!(a, b);
+        assert!(a == 0 || a == OFFLOAD_ALL_LAYERS);
     }
 
     #[test]

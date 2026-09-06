@@ -24,7 +24,14 @@ see "Adding a model" below if you're extending it.
     — starts `llama-server`, waits for it to become healthy, and prints
     the `REMEM_PROVIDER` / `LLAMA_API_BASE` values to export. Requires
     `llama-server` on `PATH` (from [llama.cpp](https://github.com/ggml-org/llama.cpp));
-    point `REMEM_LLAMA_SERVER_BIN` at it otherwise.
+    point `REMEM_LLAMA_SERVER_BIN` at it otherwise. GPU offload
+    (`-ngl`) is auto-detected — Apple Silicon, or a machine with
+    `nvidia-smi` on `PATH`, offloads as many layers as fit; pass
+    `--gpu-layers 0` to force CPU-only, or a specific number to override
+    the guess either way. Runs `--parallel 2` slots by default so a
+    local server can actually make use of remem's own concurrent
+    reasoning calls instead of serializing them behind llama-server's
+    single-slot default — override with `--parallel <n>`.
   - Serve (manual): `llama-server -m ~/.remem/models/phi-3-mini-4k-instruct-q4.gguf`
   - Enables: `REMEM_PROVIDER=local` reasoning (`LLAMA_API_BASE` /
     `OLLAMA_API_BASE`) — see [`docs/PROVIDERS.md`](../docs/PROVIDERS.md)

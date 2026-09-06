@@ -298,6 +298,19 @@ enum ModelAction {
         /// Port to bind the local inference server on
         #[arg(long, default_value = "8080")]
         port: u16,
+        /// Layers to offload to GPU (-ngl). Auto-detected if not set:
+        /// Apple Silicon or a machine with `nvidia-smi` on PATH offloads
+        /// as many layers as fit, otherwise CPU-only. Pass 0 to force
+        /// CPU-only even on GPU-capable hardware.
+        #[arg(long)]
+        gpu_layers: Option<u32>,
+        /// Concurrent request slots (--parallel). remem's own reasoning
+        /// pipeline can have several provider calls in flight at once;
+        /// the default here (2) lets a local server actually make use
+        /// of that instead of serializing everything behind
+        /// llama-server's own single-slot default.
+        #[arg(long, default_value = "2")]
+        parallel: u32,
     },
 }
 
@@ -602,7 +615,12 @@ async fn main() -> anyhow::Result<()> {
                 Ok(())
             }
 
-            ModelAction::Serve { name, port } => {
+            ModelAction::Serve {
+                name,
+                port,
+                gpu_layers,
+                parallel,
+            } => {
                 use rememhq_core::models::{serve, ModelKind};
 
                 let spec = rememhq_core::models::find_model(&name).ok_or_else(|| {
@@ -630,16 +648,31 @@ async fn main() -> anyhow::Result<()> {
 
                 let opts = serve::ServeOptions {
                     port,
+                    gpu_layers,
+                    parallel_slots: parallel,
                     ..Default::default()
                 };
 
                 let binary = serve::find_server_binary().unwrap_or_else(|| "llama-server".into());
+                let resolved_gpu_layers = serve::resolve_gpu_layers(gpu_layers);
                 println!(
                     "Starting {} ({}) via {} on port {}...",
                     spec.id,
                     model_path.display(),
                     binary,
                     port
+                );
+                println!(
+                    "GPU layers: {} ({}) · Parallel slots: {}",
+                    resolved_gpu_layers,
+                    if gpu_layers.is_some() {
+                        "explicit"
+                    } else if resolved_gpu_layers > 0 {
+                        "auto-detected"
+                    } else {
+                        "CPU-only, no GPU detected"
+                    },
+                    parallel
                 );
                 println!("(this can take a while on first load — waiting for /health)");
 
