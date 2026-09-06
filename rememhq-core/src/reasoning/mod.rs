@@ -142,11 +142,14 @@ impl ReasoningEngine {
         // `provider: &dyn Provider`, and AgentHarness / the eval loop get
         // their provider by cloning `engine.provider` — so wrapping it once
         // here, at the single point every one of them ultimately gets it
-        // from, gives all of them token/cost tracking for free, with no
-        // changes needed to any of those call sites.
+        // from, gives all of them token/cost tracking (in-memory,
+        // `pool.cost_tracker`) and a persistent per-call audit trail
+        // (`inference_logs`, via `store`) for free, with no changes needed
+        // to any of those call sites.
         let provider: Arc<dyn Provider> = Arc::new(crate::providers::CostTrackingProvider::new(
             provider,
             pool.cost_tracker.clone(),
+            Some(store.clone()),
         ));
         Self {
             config,
