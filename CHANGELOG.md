@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`remem models serve` now auto-detects GPU offload and runs
+  concurrent request slots**, instead of always defaulting to `-ngl 0`
+  (CPU-only) and llama-server's own single-slot default. On Apple
+  Silicon, or a machine with `nvidia-smi` on `PATH`, it now offloads as
+  many layers as fit (`-ngl 999`, which llama.cpp clamps to what
+  actually fits) rather than leaving a capable GPU completely idle by
+  default — `--gpu-layers <n>` (including `0`, to force CPU-only)
+  overrides the guess. Also now passes `--parallel 2` by default: remem's
+  own `ProviderPool` allows several concurrent provider calls in flight
+  (semaphore-limited, default 20), which a single-slot local server was
+  serializing regardless — `--parallel <n>` overrides this too. New
+  `rememhq_core::models::serve::resolve_gpu_layers()` (explicit override
+  wins, otherwise a hardware-based guess) is the one place this decision
+  gets made, called by both `spawn()` and the CLI's own status line so
+  they can't disagree about what was actually used.
+
 - **Model provenance verification (SHA-256)**: `ModelSpec` now carries an
   optional expected checksum per artifact; `remem models pull` (and
   `POST /v1/models/pull`, which calls the same code) hashes each download
