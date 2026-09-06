@@ -256,6 +256,28 @@ pub fn get_migrations() -> Vec<Migration> {
                 DROP TABLE IF EXISTS embedding_cache;
             ",
         },
+        Migration {
+            version: 7,
+            name: "inference_logs",
+            up_sql: "
+                CREATE TABLE IF NOT EXISTS inference_logs (
+                    id                  TEXT PRIMARY KEY,
+                    provider            TEXT NOT NULL,
+                    model               TEXT NOT NULL,
+                    prompt_hash         TEXT NOT NULL,
+                    prompt_tokens       INTEGER,
+                    completion_tokens   INTEGER,
+                    latency_ms          INTEGER NOT NULL,
+                    error               TEXT,
+                    timestamp           TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_inference_logs_timestamp ON inference_logs(timestamp DESC);
+                CREATE INDEX IF NOT EXISTS idx_inference_logs_model ON inference_logs(model);
+            ",
+            down_sql: "
+                DROP TABLE IF EXISTS inference_logs;
+            ",
+        },
     ]
 }
 
