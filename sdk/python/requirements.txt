@@ -18,7 +18,7 @@ idna==3.19
     # via
     #   anyio
     #   httpx
-pydantic==2.13.4
+pydantic==2.13.5
     # via rememhq (pyproject.toml)
 pydantic-core==2.48.0
     # via pydantic
