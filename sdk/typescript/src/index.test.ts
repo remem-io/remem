@@ -136,11 +136,18 @@ describe("Memory.recall()", () => {
   afterEach(() => mock.restoreAll());
 
   it("returns an array of MemoryResults", async () => {
-    mockFetch([memoryResult("A"), memoryResult("B")]);
+    mockFetch({ data: [memoryResult("A"), memoryResult("B")], next_cursor: null });
     const m = new Memory({ project: "test", baseUrl: BASE });
     const results = await m.recall("query");
     assert.equal(results.length, 2);
     assert.equal(results[0].content, "A");
+  });
+
+  it("accepts a bare-array response shape too", async () => {
+    mockFetch([memoryResult("A")]);
+    const m = new Memory({ project: "test", baseUrl: BASE });
+    const results = await m.recall("query");
+    assert.equal(results.length, 1);
   });
 
   it("encodes q, limit, and filter_tags as query params", async () => {
@@ -183,7 +190,7 @@ describe("Memory.search()", () => {
   afterEach(() => mock.restoreAll());
 
   it("returns results array", async () => {
-    mockFetch([memoryResult()]);
+    mockFetch({ data: [memoryResult()], next_cursor: null });
     const m = new Memory({ project: "test", baseUrl: BASE });
     const results = await m.search("deploy");
     assert.equal(results.length, 1);
