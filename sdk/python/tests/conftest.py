@@ -22,17 +22,25 @@ def mock_memory_data():
 
 @pytest.fixture
 def mock_recall_response():
-    """Sample recall response structure."""
-    return [
-        {
-            "id": "00000000-0000-0000-0000-000000000001",
-            "content": "Alice is a software engineer",
-            "importance": 7.5,
-            "tags": ["bio"],
-            "memory_type": "fact",
-            "created_at": "2026-01-01T00:00:00Z",
-            "source_session": None,
-            "similarity": 0.95,
-            "reasoning": "Directly relevant to query about profession",
-        }
-    ]
+    """Sample recall response structure.
+
+    Matches the real API's ``PaginatedResponse<MemoryResult>`` envelope
+    (see rememhq-api/src/models.rs) — a ``data`` array plus a
+    ``next_cursor``, not a bare JSON array.
+    """
+    return {
+        "data": [
+            {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "content": "Alice is a software engineer",
+                "importance": 7.5,
+                "tags": ["bio"],
+                "memory_type": "fact",
+                "created_at": "2026-01-01T00:00:00Z",
+                "source_session": None,
+                "similarity": 0.95,
+                "reasoning": "Directly relevant to query about profession",
+            }
+        ],
+        "next_cursor": None,
+    }
