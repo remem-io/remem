@@ -45,6 +45,22 @@ export type {
   TelemetryResponse,
 } from "./types.js";
 
+/**
+ * Normalize a list-endpoint response body into a plain array.
+ *
+ * The REST API returns paginated endpoints (`/recall`, `/search`) as
+ * `{ data: [...], next_cursor: ... }` (see `PaginatedResponse` in
+ * rememhq-api/src/models.rs). Some non-paginated list endpoints return
+ * a bare JSON array. Handle both so callers don't have to know which
+ * shape a given endpoint uses.
+ */
+function unwrapItems<T>(payload: unknown): T[] {
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    return ((payload as { data?: T[] }).data ?? []) as T[];
+  }
+  return (payload ?? []) as T[];
+}
+
 export class Memory {
   private baseUrl: string;
   private headers: Record<string, string>;
@@ -104,7 +120,7 @@ export class Memory {
     if (options.since) params.set("since", options.since);
     if (options.memory_type) params.set("memory_type", options.memory_type);
 
-    return this.request("GET", `/v1/memories/recall?${params}`) as Promise<MemoryResult[]>;
+    return unwrapItems<MemoryResult>(await this.request("GET", `/v1/memories/recall?${params}`));
   }
 
   /**
@@ -115,7 +131,7 @@ export class Memory {
     if (options.limit) params.set("limit", String(options.limit));
     if (options.filter_tags?.length) params.set("filter_tags", options.filter_tags.join(","));
 
-    return this.request("GET", `/v1/memories/search?${params}`) as Promise<MemoryResult[]>;
+    return unwrapItems<MemoryResult>(await this.request("GET", `/v1/memories/search?${params}`));
   }
 
   /**
@@ -211,7 +227,9 @@ export class StoreMemoriesClient {
   constructor(private memory: Memory) {}
 
   async list(storeId: string): Promise<MemoryResult[]> {
-    return (this.memory as any).request("GET", `/v1/memory_stores/${storeId}/memories`) as Promise<MemoryResult[]>;
+    return unwrapItems<MemoryResult>(
+      await (this.memory as any).request("GET", `/v1/memory_stores/${storeId}/memories`)
+    );
   }
 
   async create(storeId: string, path: string, content: string): Promise<MemoryResult> {
@@ -227,7 +245,9 @@ export class StoreMemoriesClient {
   }
 
   async listVersions(storeId: string, pathOrId: string): Promise<MemoryVersionRecord[]> {
-    return (this.memory as any).request("GET", `/v1/memory_stores/${storeId}/memories/${pathOrId}/versions`) as Promise<MemoryVersionRecord[]>;
+    return unwrapItems<MemoryVersionRecord>(
+      await (this.memory as any).request("GET", `/v1/memory_stores/${storeId}/memories/${pathOrId}/versions`)
+    );
   }
 }
 
@@ -245,7 +265,7 @@ export class MemoryStoresClient {
   }
 
   async list(): Promise<MemoryStoreRecord[]> {
-    return (this.memory as any).request("GET", "/v1/memory_stores") as Promise<MemoryStoreRecord[]>;
+    return unwrapItems<MemoryStoreRecord>(await (this.memory as any).request("GET", "/v1/memory_stores"));
   }
 
   async get(storeId: string): Promise<MemoryStoreRecord> {
