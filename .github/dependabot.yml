@@ -47,6 +47,15 @@ updates:
     labels: ["dependencies", "ci"]
     commit-message:
       prefix: "chore(ci):"
+    ignore:
+      # This pin selects the Rust version the MSRV job builds against
+      # (nightly.yml's `msrv` job), not "the version of the action" --
+      # Dependabot's github-actions scanner can't tell the difference
+      # and will otherwise keep proposing bumps to it forever, which
+      # defeats the point of a fixed minimum-supported-version check.
+      # Bump it manually, in step with Cargo.toml's `rust-version`.
+      - dependency-name: "dtolnay/rust-toolchain"
+        versions: [">= 0"]
 
   # Docker
   - package-ecosystem: "docker"
