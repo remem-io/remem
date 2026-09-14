@@ -21,6 +21,20 @@ from rememhq.models import (
 )
 
 
+def _unwrap_items(payload: object) -> list:
+    """Normalize a list-endpoint response body into a plain list.
+
+    The REST API returns paginated endpoints (``/recall``, ``/search``) as
+    ``{"data": [...], "next_cursor": ...}`` (see ``PaginatedResponse`` in
+    rememhq-api). Some non-paginated list endpoints return a bare JSON
+    array. Handle both so callers don't have to know which shape a given
+    endpoint uses.
+    """
+    if isinstance(payload, dict):
+        return payload.get("data", [])
+    return payload
+
+
 class Memory:
     """Async client for remem — reasoning memory layer for AI agents.
 
@@ -117,7 +131,7 @@ class Memory:
 
         resp = await self._client.get("/v1/memories/recall", params=params)
         resp.raise_for_status()
-        return [MemoryResult.model_validate(r) for r in resp.json()]
+        return [MemoryResult.model_validate(r) for r in _unwrap_items(resp.json())]
 
     async def search(
         self,
@@ -133,7 +147,7 @@ class Memory:
 
         resp = await self._client.get("/v1/memories/search", params=params)
         resp.raise_for_status()
-        return [MemoryResult.model_validate(r) for r in resp.json()]
+        return [MemoryResult.model_validate(r) for r in _unwrap_items(resp.json())]
 
     async def update(
         self,
@@ -233,7 +247,7 @@ class StoreMemoriesClient:
     async def list(self, store_id: str | UUID) -> list[MemoryResult]:
         resp = await self._client.get(f"/v1/memory_stores/{store_id}/memories")
         resp.raise_for_status()
-        return [MemoryResult.model_validate(r) for r in resp.json()]
+        return [MemoryResult.model_validate(r) for r in _unwrap_items(resp.json())]
 
     async def create(self, store_id: str | UUID, path: str, content: str) -> MemoryResult:
         resp = await self._client.post(
@@ -259,7 +273,7 @@ class StoreMemoriesClient:
     async def list_versions(self, store_id: str | UUID, path_or_id: str | UUID) -> list[MemoryVersionRecord]:
         resp = await self._client.get(f"/v1/memory_stores/{store_id}/memories/{path_or_id}/versions")
         resp.raise_for_status()
-        return [MemoryVersionRecord.model_validate(r) for r in resp.json()]
+        return [MemoryVersionRecord.model_validate(r) for r in _unwrap_items(resp.json())]
 
 
 class MemoryStoresClient:
@@ -278,7 +292,7 @@ class MemoryStoresClient:
     async def list(self) -> list[MemoryStoreRecord]:
         resp = await self._client.get("/v1/memory_stores")
         resp.raise_for_status()
-        return [MemoryStoreRecord.model_validate(r) for r in resp.json()]
+        return [MemoryStoreRecord.model_validate(r) for r in _unwrap_items(resp.json())]
 
     async def get(self, store_id: str | UUID) -> MemoryStoreRecord:
         resp = await self._client.get(f"/v1/memory_stores/{store_id}")
@@ -323,6 +337,7 @@ class SyncMemory:
             headers=headers,
             timeout=config.timeout,
         )
+        self.stores = SyncMemoryStoresClient(self._client)
 
     def store(
         self,
@@ -368,9 +383,103 @@ class SyncMemory:
 
         resp = self._client.get("/v1/memories/recall", params=params)
         resp.raise_for_status()
-        data = resp.json()
-        items = data.get("data", data) if isinstance(data, dict) else data
-        return [MemoryResult.model_validate(r) for r in items]
+        return [MemoryResult.model_validate(r) for r in _unwrap_items(resp.json())]
+
+    def search(
+        self,
+        query: str,
+        *,
+        limit: int = 20,
+        filter_tags: list[str] | None = None,
+    ) -> list[MemoryResult]:
+        """Hybrid vector + keyword search without LLM re-ranking (synchronous)."""
+        params: dict = {"q": query, "limit": limit}
+        if filter_tags:
+            params["filter_tags"] = ",".join(filter_tags)
+
+        resp = self._client.get("/v1/memories/search", params=params)
+        resp.raise_for_status()
+        return [MemoryResult.model_validate(r) for r in _unwrap_items(resp.json())]
+
+    def update(
+        self,
+        id: UUID | str,
+        *,
+        content: str | None = None,
+        importance: float | None = None,
+        tags: list[str] | None = None,
+    ) -> dict:
+        """Update an existing memory (synchronous)."""
+        payload: dict = {}
+        if content is not None:
+            payload["content"] = content
+        if importance is not None:
+            payload["importance"] = importance
+        if tags is not None:
+            payload["tags"] = tags
+
+        resp = self._client.patch(f"/v1/memories/{id}", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+    def forget(
+        self,
+        id: UUID | str,
+        *,
+        mode: ForgetMode = ForgetMode.DELETE,
+    ) -> dict:
+        """Delete, decay, or archive a memory (synchronous)."""
+        resp = self._client.delete(f"/v1/memories/{id}", params={"mode": mode.value})
+        resp.raise_for_status()
+        return resp.json()
+
+    def consolidate(
+        self,
+        session_id: str,
+        *,
+        model: str | None = None,
+    ) -> ConsolidationReport:
+        """Trigger consolidation over a session's working memory (synchronous)."""
+        payload: dict = {}
+        if model:
+            payload["model"] = model
+
+        resp = self._client.post(f"/v1/sessions/{session_id}/consolidate", json=payload)
+        resp.raise_for_status()
+        return ConsolidationReport.model_validate(resp.json())
+
+    def decay(self, factor: float = 0.9) -> dict:
+        """Apply importance-weighted decay to all active memories (synchronous)."""
+        resp = self._client.post("/v1/memories/decay", json={"factor": factor})
+        resp.raise_for_status()
+        return resp.json()
+
+    def compact_context(
+        self,
+        conversation_text: str,
+        *,
+        focus_areas: list[str] | None = None,
+    ) -> CompactResponse:
+        """Compact a conversation trace to save context window tokens (synchronous)."""
+        payload: dict = {"conversation_text": conversation_text}
+        if focus_areas is not None:
+            payload["focus_areas"] = focus_areas
+
+        resp = self._client.post("/v1/memories/compact", json=payload)
+        resp.raise_for_status()
+        return CompactResponse.model_validate(resp.json())
+
+    def get_health(self) -> dict:
+        """Check the health status of the memory backend (synchronous)."""
+        resp = self._client.get("/health")
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_telemetry(self) -> dict:
+        """Fetch server telemetry, performance percentiles, and cost metering (synchronous)."""
+        resp = self._client.get("/v1/telemetry/metrics")
+        resp.raise_for_status()
+        return resp.json()
 
     def close(self) -> None:
         self._client.close()
@@ -380,3 +489,67 @@ class SyncMemory:
 
     def __exit__(self, *args) -> None:
         self.close()
+
+
+class SyncStoreMemoriesClient:
+    def __init__(self, client: httpx.Client):
+        self._client = client
+
+    def list(self, store_id: str | UUID) -> list[MemoryResult]:
+        resp = self._client.get(f"/v1/memory_stores/{store_id}/memories")
+        resp.raise_for_status()
+        return [MemoryResult.model_validate(r) for r in _unwrap_items(resp.json())]
+
+    def create(self, store_id: str | UUID, path: str, content: str) -> MemoryResult:
+        resp = self._client.post(
+            f"/v1/memory_stores/{store_id}/memories",
+            json={"path": path, "content": content},
+        )
+        resp.raise_for_status()
+        return MemoryResult.model_validate(resp.json())
+
+    def get(self, store_id: str | UUID, path_or_id: str | UUID) -> MemoryResult:
+        resp = self._client.get(f"/v1/memory_stores/{store_id}/memories/{path_or_id}")
+        resp.raise_for_status()
+        return MemoryResult.model_validate(resp.json())
+
+    def update(self, store_id: str | UUID, path_or_id: str | UUID, content: str) -> MemoryResult:
+        resp = self._client.post(
+            f"/v1/memory_stores/{store_id}/memories/{path_or_id}",
+            json={"content": content},
+        )
+        resp.raise_for_status()
+        return MemoryResult.model_validate(resp.json())
+
+    def list_versions(self, store_id: str | UUID, path_or_id: str | UUID) -> list[MemoryVersionRecord]:
+        resp = self._client.get(f"/v1/memory_stores/{store_id}/memories/{path_or_id}/versions")
+        resp.raise_for_status()
+        return [MemoryVersionRecord.model_validate(r) for r in _unwrap_items(resp.json())]
+
+
+class SyncMemoryStoresClient:
+    def __init__(self, client: httpx.Client):
+        self._client = client
+        self.memories = SyncStoreMemoriesClient(client)
+
+    def create(self, name: str, description: str | None = None) -> MemoryStoreRecord:
+        payload = {"name": name}
+        if description:
+            payload["description"] = description
+        resp = self._client.post("/v1/memory_stores", json=payload)
+        resp.raise_for_status()
+        return MemoryStoreRecord.model_validate(resp.json())
+
+    def list(self) -> list[MemoryStoreRecord]:
+        resp = self._client.get("/v1/memory_stores")
+        resp.raise_for_status()
+        return [MemoryStoreRecord.model_validate(r) for r in _unwrap_items(resp.json())]
+
+    def get(self, store_id: str | UUID) -> MemoryStoreRecord:
+        resp = self._client.get(f"/v1/memory_stores/{store_id}")
+        resp.raise_for_status()
+        return MemoryStoreRecord.model_validate(resp.json())
+
+    def archive(self, store_id: str | UUID) -> None:
+        resp = self._client.post(f"/v1/memory_stores/{store_id}/archive")
+        resp.raise_for_status()

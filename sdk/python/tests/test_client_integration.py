@@ -114,15 +114,32 @@ class TestStore:
 class TestRecall:
     @pytest.mark.asyncio
     async def test_recall_returns_list(self):
+        """The real API wraps results in a PaginatedResponse envelope:
+        {"data": [...], "next_cursor": ...} — not a bare JSON array."""
         from rememhq import Memory
 
-        payload = [_memory_result("memory A"), _memory_result("memory B")]
+        payload = {
+            "data": [_memory_result("memory A"), _memory_result("memory B")],
+            "next_cursor": None,
+        }
         async with respx.mock(base_url=BASE) as mock:
             mock.get("/v1/memories/recall").mock(return_value=httpx.Response(200, json=payload))
             async with Memory(base_url=BASE) as m:
                 results = await m.recall("test query")
         assert len(results) == 2
         assert results[0].content == "memory A"
+
+    @pytest.mark.asyncio
+    async def test_recall_accepts_bare_list_response(self):
+        """Backwards-compatible with a bare-array response shape too."""
+        from rememhq import Memory
+
+        payload = [_memory_result("memory A")]
+        async with respx.mock(base_url=BASE) as mock:
+            mock.get("/v1/memories/recall").mock(return_value=httpx.Response(200, json=payload))
+            async with Memory(base_url=BASE) as m:
+                results = await m.recall("test query")
+        assert len(results) == 1
 
     @pytest.mark.asyncio
     async def test_recall_passes_query_params(self):
@@ -180,9 +197,10 @@ class TestRecall:
 class TestSearch:
     @pytest.mark.asyncio
     async def test_search_returns_list(self):
+        """search() hits the same PaginatedResponse-wrapped endpoint as recall()."""
         from rememhq import Memory
 
-        payload = [_memory_result()]
+        payload = {"data": [_memory_result()], "next_cursor": None}
         async with respx.mock(base_url=BASE) as mock:
             mock.get("/v1/memories/search").mock(return_value=httpx.Response(200, json=payload))
             async with Memory(base_url=BASE) as m:
