@@ -123,11 +123,20 @@ impl RememConfig {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
+    // Guards process-wide env vars (REMEM_PROVIDER, REMEM_REASONING_MODEL,
+    // REMEM_SCORING_MODEL) that this module's tests, and other test modules
+    // in this crate that also read/write REMEM_PROVIDER (providers::factory,
+    // models::serve), mutate via std::env::set_var/remove_var. cargo test
+    // runs tests in parallel by default within one binary, and env vars are
+    // process-global, so any two of these tests running concurrently without
+    // sharing this lock can interleave and read/write each other's values —
+    // this crate's version of the same race the rememhq-api crate guards
+    // against with its own ENV_TEST_LOCK in middleware::auth::tests.
+    pub(crate) static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn clear_env() {
         std::env::remove_var("REMEM_PROVIDER");
