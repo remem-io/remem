@@ -45,6 +45,7 @@ pub struct RecallQuery {
     #[validate(length(min = 1))]
     pub q: String,
     #[serde(default = "default_8")]
+    #[validate(range(max = 1000, message = "limit cannot exceed 1000"))]
     pub limit: usize,
     pub cursor: Option<String>,
     #[serde(default)]
@@ -58,6 +59,7 @@ pub struct SearchQuery {
     #[validate(length(min = 1))]
     pub q: String,
     #[serde(default = "default_20")]
+    #[validate(range(max = 1000, message = "limit cannot exceed 1000"))]
     pub limit: usize,
     pub cursor: Option<String>,
     #[serde(default)]
@@ -100,6 +102,7 @@ pub struct CompactResponse {
 #[derive(Debug, Clone, Deserialize, Validate)]
 pub struct ListQuery {
     #[serde(default = "default_20")]
+    #[validate(range(max = 1000, message = "limit cannot exceed 1000"))]
     pub limit: usize,
     pub cursor: Option<String>,
     #[serde(default)]

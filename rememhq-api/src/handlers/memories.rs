@@ -135,7 +135,7 @@ pub async fn recall_memories(
 
     let offset = decode_cursor(q.cursor);
     let limit = q.limit;
-    let fetch_limit = offset + limit;
+    let fetch_limit = offset.saturating_add(limit);
 
     let options = crate::middleware::auth::extract_provider_options(&headers);
     let results = engine
@@ -163,7 +163,7 @@ pub async fn recall_memories(
         .take(limit)
         .collect::<Vec<_>>();
     let next_cursor = if paginated.len() == limit {
-        Some(encode_cursor(offset + limit))
+        Some(encode_cursor(offset.saturating_add(limit)))
     } else {
         None
     };
@@ -214,7 +214,7 @@ pub async fn search_memories(
 
     let offset = decode_cursor(q.cursor);
     let limit = q.limit;
-    let fetch_limit = offset + limit;
+    let fetch_limit = offset.saturating_add(limit);
 
     let options = crate::middleware::auth::extract_provider_options(&headers);
     let results = engine
@@ -235,7 +235,7 @@ pub async fn search_memories(
         .take(limit)
         .collect::<Vec<_>>();
     let next_cursor = if paginated.len() == limit {
-        Some(encode_cursor(offset + limit))
+        Some(encode_cursor(offset.saturating_add(limit)))
     } else {
         None
     };
@@ -496,7 +496,7 @@ pub async fn list_memories(
                 .take(q.limit)
                 .collect::<Vec<_>>();
             let next_cursor = if paginated.len() == q.limit {
-                Some(encode_cursor(offset + q.limit))
+                Some(encode_cursor(offset.saturating_add(q.limit)))
             } else {
                 None
             };
@@ -532,5 +532,125 @@ pub async fn expire_memories(
                 error: format!("Failed to expire memories: {}", e),
             }),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::routing::get;
+    use axum::Router;
+    use rememhq_core::config::RememConfig;
+    use rememhq_core::memory::types::{MemoryRecord, MemoryType};
+    use rememhq_core::providers::mock::{MockEmbeddings, MockProvider};
+    use rememhq_core::providers::EmbeddingProvider;
+    use rememhq_core::reasoning::ReasoningEngine;
+    use rememhq_core::storage::sqlite::SqliteStore;
+    use rememhq_core::storage::vector::{HNSWVectorIndex, VectorIndex};
+    use tower::ServiceExt;
+
+    async fn engine_with_memories(count: usize) -> Arc<ReasoningEngine> {
+        let store = SqliteStore::open_in_memory().unwrap();
+        let index = HNSWVectorIndex::new(768, 100);
+        let provider = Arc::new(MockProvider);
+        let embeddings = Arc::new(MockEmbeddings::new(768));
+
+        for i in 0..count {
+            let record = MemoryRecord::new(format!("Alice test memory {i}"), MemoryType::Fact);
+            let embedding = embeddings.embed(&record.content, None).await.unwrap();
+            let mut record_with_emb = record.clone();
+            record_with_emb.embedding = Some(embedding.clone());
+            store.insert(&record_with_emb).await.unwrap();
+            index.add(record.id, &embedding).await.unwrap();
+        }
+
+        Arc::new(ReasoningEngine::new(
+            RememConfig::default(),
+            provider,
+            embeddings,
+            Arc::new(store),
+            Arc::new(index),
+            vec![],
+        ))
+    }
+
+    fn app(engine: Arc<ReasoningEngine>) -> Router {
+        Router::new()
+            .route("/v1/memories/recall", get(recall_memories))
+            .route("/v1/memories/search", get(search_memories))
+            .with_state(engine)
+    }
+
+    // Regression test: `limit` had no upper bound on the live /recall and
+    // /search handlers (only the query string `q` was validated), and
+    // `fetch_limit = offset + limit` was a plain, unchecked addition. A
+    // single request with an enormous attacker-controlled `limit` would
+    // flow straight into the vector index with no defense — the exact
+    // class of bug this crate already guards against elsewhere (see
+    // rememhq-mcp's MAX_TOOL_LIMIT, and the identical check that existed
+    // only in the dead code this handler was meant to replace).
+    #[tokio::test]
+    async fn test_oversized_recall_limit_is_rejected_with_400() {
+        let engine = engine_with_memories(1).await;
+        let app = app(engine);
+
+        let req = axum::http::Request::builder()
+            .uri("/v1/memories/recall?q=Alice&limit=999999999999")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_oversized_search_limit_is_rejected_with_400() {
+        let engine = engine_with_memories(1).await;
+        let app = app(engine);
+
+        let req = axum::http::Request::builder()
+            .uri("/v1/memories/search?q=Alice&limit=999999999999")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_recall_returns_paginated_envelope() {
+        // Regression test for the SDK-side bug fixed in #123/#124: this
+        // endpoint must return {"data": [...], "next_cursor": ...}, not a
+        // bare JSON array, since every first-party SDK deserializes it as
+        // PaginatedResponse<MemoryResult>.
+        let engine = engine_with_memories(3).await;
+        let app = app(engine);
+
+        let req = axum::http::Request::builder()
+            .uri("/v1/memories/recall?q=Alice&limit=2")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(res.into_body(), 10_000).await.unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(value.get("data").is_some(), "response must have a top-level 'data' array");
+        assert!(value.get("data").unwrap().is_array());
+        assert_eq!(value["data"].as_array().unwrap().len(), 2);
+        // 2 of 3 memories returned, so there must be a next_cursor to page further.
+        assert!(value.get("next_cursor").is_some());
+        assert!(!value["next_cursor"].is_null());
+    }
+
+    #[tokio::test]
+    async fn test_recall_rejects_empty_query() {
+        let engine = engine_with_memories(1).await;
+        let app = app(engine);
+
+        let req = axum::http::Request::builder()
+            .uri("/v1/memories/recall?q=")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }
