@@ -295,9 +295,7 @@ mod tests {
 
     #[test]
     fn test_find_server_binary_honors_env_override() {
-        // Serialized via an env-mutating test lock pattern would be ideal,
-        // but this crate doesn't expose one publicly; scope the mutation
-        // tightly and restore it immediately either way.
+        let _guard = crate::config::tests::ENV_TEST_LOCK.lock().unwrap();
         let prev = std::env::var("REMEM_LLAMA_SERVER_BIN").ok();
         std::env::set_var("REMEM_LLAMA_SERVER_BIN", "/opt/custom/llama-server");
         let found = find_server_binary();

@@ -250,6 +250,7 @@ mod tests {
 
     #[test]
     fn test_build_reasoning_provider_mock() {
+        let _guard = crate::config::tests::ENV_TEST_LOCK.lock().unwrap();
         let config = RememConfig::default();
         std::env::set_var("REMEM_PROVIDER", "mock");
         let provider = build_reasoning_provider(&config);
@@ -259,6 +260,7 @@ mod tests {
 
     #[test]
     fn test_build_embedding_provider_mock() {
+        let _guard = crate::config::tests::ENV_TEST_LOCK.lock().unwrap();
         let config = RememConfig::default();
         std::env::set_var("REMEM_EMBEDDING_PROVIDER", "mock");
         let embeddings = build_embedding_provider(&config);
