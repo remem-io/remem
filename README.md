@@ -220,6 +220,13 @@ remem serve --project my-project
 # Start the MCP server (stdio transport)
 remem mcp --project my-project
 
+# Check configuration, storage paths, and provider readiness — the
+# first thing to run after install or when something isn't working
+remem doctor
+
+# Also ping the configured LLM provider to verify the API key works
+remem doctor --ping
+
 # Store a memory
 remem store "The main branch is called 'main'"
 
@@ -228,6 +235,9 @@ remem recall "What is the main branch called?"
 
 # Search memories (no LLM re-ranking)
 remem search "main branch"
+
+# Forget (delete) a memory by ID
+remem forget <memory-id>
 
 # Show database statistics
 remem inspect
@@ -273,6 +283,8 @@ remem init all --project my-project
 # Initialize MCP config for a specific agent (e.g. claude-code, windsurf, roocode)
 remem init claude-code --project my-project
 ```
+
+`remem` also has commands for project and session management, agent-loop execution, knowledge-graph workflows, and direct agent-harness interaction, plus a recall-latency benchmark — run `remem --help` or `remem <command> --help` for the full list and options.
 
 ### Running Services from Source
 
