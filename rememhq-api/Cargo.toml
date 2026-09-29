@@ -27,7 +27,7 @@ async-trait = { workspace = true }
 dotenvy = "0.15.7"
 utoipa = { workspace = true }
 utoipa-axum = { workspace = true }
-validator = { version = "0.20.0", features = ["derive"] }
+validator = { version = "0.21.0", features = ["derive"] }
 base64 = "0.23"
 hmac = "0.12"
 sha2 = "0.10"
