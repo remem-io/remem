@@ -69,7 +69,7 @@ axum = "0.8"
 tower = { version = "0.5", features = ["full"] }
 tower-http = { version = "0.7.0", features = ["cors", "trace", "auth", "limit", "timeout"] }
 utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-axum = "0.2"
+utoipa-axum = "0.3"
 
 # Vector math
 ndarray = "0.17"
