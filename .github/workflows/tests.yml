@@ -53,7 +53,7 @@ jobs:
       - name: Generate coverage
         run: cargo llvm-cov --workspace --ignore-run-fail --lcov --output-path lcov.info
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@v6
         with:
           files: lcov.info
           fail_ci_if_error: false
